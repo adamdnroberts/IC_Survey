@@ -1,0 +1,28 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Large data files
+*.shp
+*.shx
+*.dbf
+*.prj
+*.geojson
+*.mbtiles
+*.csv
+*.rds
+
+# Large PDFs
+*.pdf
+
+# Survey data
+survey_responses.csv
+
+# Reference data
+references/
+
+#claude code
+.claude/
+CLAUDE.md
+00mun_simplified.geojson

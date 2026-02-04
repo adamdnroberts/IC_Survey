@@ -1,0 +1,13 @@
+name: IC_Survey
+title: IC_Survey
+username: adamdnroberts
+account: adamdnroberts
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 16478313
+bundleId: 11508486
+url: https://adamdnroberts.shinyapps.io/IC_Survey/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .claude/settings.local.json|00mun.shp|ballot_example.jpg|CLAUDE.md|create_municipality_graph.R|make_geojson_file.R|Morena_Party.png|power_analysis_simulation.R|power_analysis_simulation_less_treatments.R|power_graph.pdf|survey_responses.csv|references
