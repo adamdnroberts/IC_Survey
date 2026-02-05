@@ -85,6 +85,10 @@ ui <- fluidPage(
         margin-right: 8px;
         min-width: 20px;
       }
+      /* Remove numbering for municipality bucket lists */
+      .bucket-list .rank-list-container .rank-list-item::before {
+        content: none;
+      }
       .rank-list-container .rank-list-item:nth-child(1) {
         background-color: #e74c3c;
         color: #ffffff;
@@ -589,7 +593,7 @@ ui <- fluidPage(
             h5(strong("Your Municipality's Performance (Post-Treatment)")),
 
             p(
-              "After seeing the crime data, drag and drop the following municipalities to rank them on crime, from worst (top) to best (bottom):"
+              "After seeing the crime data, drag and drop the following municipalities to rank them on their handling of crime, from worst (top) to best (bottom):"
             ),
             uiOutput("municipality_ranking_post_ui"),
 
@@ -703,7 +707,9 @@ ui <- fluidPage(
             id = "page7",
             h4("Step 7: Select Reference Municipalities"),
 
-            p("Now we would like you to select some reference municipalities for comparison."),
+            p(
+              "Now we would like you to select some reference municipalities for comparison."
+            ),
             uiOutput("reference_instructions_text"),
             p(em(
               "(You can select multiple municipalities by clicking on them. Click again to deselect.)"
@@ -837,6 +843,19 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
+  # Helper function to find municipality's relative crime rating from bucket inputs
+  # Returns "worse", "same", "better", or NA if not ranked
+  find_bucket_category <- function(muni_label, prefix = "muni_rank_") {
+    categories <- c("worse", "same", "better")
+    for (cat in categories) {
+      bucket_contents <- input[[paste0(prefix, cat)]]
+      if (!is.null(bucket_contents) && muni_label %in% bucket_contents) {
+        return(cat)
+      }
+    }
+    return(NA_character_)
+  }
+
   # Reactive values
   selected_map_munis <- reactiveVal(character())
   found_municipality <- reactiveVal(NULL)
@@ -1016,7 +1035,10 @@ server <- function(input, output, session) {
       style = "background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px;",
       h5(icon("info-circle"), " Your Home Municipality:"),
       tags$p(
-        tags$span(home_muni, style = "color: #0072B2; font-size: 1.2em; font-weight: bold;")
+        tags$span(
+          home_muni,
+          style = "color: #0072B2; font-size: 1.2em; font-weight: bold;"
+        )
       )
     )
   })
@@ -1058,7 +1080,7 @@ server <- function(input, output, session) {
     )
   })
 
-  # Dynamic rank list for municipality crime ranking
+  # Dynamic bucket list for municipality crime ranking (relative to home)
   output$municipality_ranking_ui <- renderUI({
     home_id <- found_municipality()
     comp_munis <- comparison_municipalities()
@@ -1076,18 +1098,41 @@ server <- function(input, output, session) {
       filter(muni_id == home_id)
     home_label <- paste0(home_info$NOMGEO, ", ", home_info$NOM_ENT)
 
-    # Create labels: home municipality + comparison municipalities (with state)
+    # Create labels for comparison municipalities only
     comp_labels <- paste0(comp_munis$NOMGEO, ", ", comp_munis$NOM_ENT)
-    labels <- c(home_label, comp_labels)
 
-    rank_list(
-      text = NULL,
-      labels = labels,
-      input_id = "municipality_crime_ranking"
+    tagList(
+      p(
+        "Compared to ",
+        strong(home_info$NOMGEO),
+        ", how would you rate the local government's handling of crime in these other municipalities?"
+      ),
+      bucket_list(
+        header = NULL,
+        group_name = "muni_rank_bucket",
+        orientation = "horizontal",
+        add_rank_list(
+          text = "Worse at Handling Crime",
+          input_id = "muni_rank_worse"
+        ),
+        add_rank_list(
+          text = "Same at Handling Crime",
+          input_id = "muni_rank_same"
+        ),
+        add_rank_list(
+          text = "Better at Handling Crime",
+          input_id = "muni_rank_better"
+        ),
+        add_rank_list(
+          text = "Unranked",
+          labels = comp_labels,
+          input_id = "muni_rank_unranked"
+        )
+      )
     )
   })
 
-  # Dynamic rank list for post-treatment municipality crime ranking
+  # Dynamic bucket list for post-treatment municipality crime ranking (relative to home)
   output$municipality_ranking_post_ui <- renderUI({
     home_id <- found_municipality()
     comp_munis <- comparison_municipalities()
@@ -1105,14 +1150,37 @@ server <- function(input, output, session) {
       filter(muni_id == home_id)
     home_label <- paste0(home_info$NOMGEO, ", ", home_info$NOM_ENT)
 
-    # Create labels: home municipality + comparison municipalities (with state)
+    # Create labels for comparison municipalities only
     comp_labels <- paste0(comp_munis$NOMGEO, ", ", comp_munis$NOM_ENT)
-    labels <- c(home_label, comp_labels)
 
-    rank_list(
-      text = NULL,
-      labels = labels,
-      input_id = "municipality_crime_ranking_post"
+    tagList(
+      p(
+        "Compared to ",
+        strong(home_info$NOMGEO),
+        ", how would you rate the local government's handling of crime in these other municipalities?"
+      ),
+      bucket_list(
+        header = NULL,
+        group_name = "muni_rank_post_bucket",
+        orientation = "horizontal",
+        add_rank_list(
+          text = "Worse at Handling Crime",
+          input_id = "muni_rank_post_worse"
+        ),
+        add_rank_list(
+          text = "Same at Handling Crime",
+          input_id = "muni_rank_post_same"
+        ),
+        add_rank_list(
+          text = "Better at Handling Crime",
+          input_id = "muni_rank_post_better"
+        ),
+        add_rank_list(
+          text = "Unranked",
+          labels = comp_labels,
+          input_id = "muni_rank_post_unranked"
+        )
+      )
     )
   })
 
@@ -1138,11 +1206,13 @@ server <- function(input, output, session) {
           home_state,
           " that are governed by ",
           home_party,
-          ", as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP)."
+          ", as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP). [NOTE: CURRENT INFORMATION ABOUT MUNICIPALITY GOVERNED PARTY IS NOT ACCURATE.]"
         )
       ),
       p(
-        em("The values shown are z-scores, which indicate how many standard deviations each municipality's change is from the national average. Positive values indicate increases in robbery, negative values indicate decreases.")
+        em(
+          "The values shown are percent changes. Positive values indicate increases in robbery, negative values indicate decreases."
+        )
       )
     )
   })
@@ -1291,30 +1361,33 @@ server <- function(input, output, session) {
       comp_munis
     )
 
-    # Look up z-score change from data
+    # Look up pct_change from data
     muni_info <- all_munis %>%
       mutate(Cve..Municipio = as.numeric(muni_id)) %>%
       left_join(robo_data, by = "Cve..Municipio") %>%
       mutate(
-        z_score = ifelse(is.na(z_change), 0, z_change),
+        pct_change = ifelse(is.na(pct_change), 0, pct_change),
         is_home = ifelse(muni_id == home_id, "home", "comparison")
       )
 
-    # Sort by z-score
+    # Sort by pct_change
     muni_info <- muni_info %>%
-      arrange(z_score)
+      arrange(pct_change)
 
     plot_df <- data.frame(
       municipality = factor(muni_info$NOMGEO, levels = muni_info$NOMGEO),
-      z_score = muni_info$z_score,
+      pct_change = muni_info$pct_change,
       is_home = muni_info$is_home,
-      z_sign = ifelse(muni_info$z_score < 0, "negative", "positive")
+      pct_sign = ifelse(muni_info$pct_change < 0, "negative", "positive")
     )
 
     # Colorblind-friendly palette:
     # Fill: green (#009E73) for negative z-score (crime decreased), vermillion (#D55E00) for positive (crime increased)
     # Outline: blue (#0072B2) for home, orange (#E69F00) for comparison
-    ggplot(plot_df, aes(x = municipality, y = z_score, fill = z_sign, color = is_home)) +
+    ggplot(
+      plot_df,
+      aes(x = municipality, y = pct_change, fill = pct_sign, color = is_home)
+    ) +
       geom_col(linewidth = 1.5) +
       geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
       scale_fill_manual(
@@ -1327,7 +1400,7 @@ server <- function(input, output, session) {
         labels = c("home" = "Your Municipality", "comparison" = "Comparison"),
         name = "Municipality"
       ) +
-      labs(x = NULL, y = "Cambio en Robos (z-score)") +
+      labs(x = NULL, y = "Cambio en Robos (%)") +
       theme_minimal() +
       theme(
         axis.text.x = element_text(angle = 45, hjust = 1, size = 11),
@@ -1338,7 +1411,10 @@ server <- function(input, output, session) {
       ) +
       guides(
         fill = guide_legend(order = 1),
-        color = guide_legend(order = 2, override.aes = list(fill = NA, linewidth = 2))
+        color = guide_legend(
+          order = 2,
+          override.aes = list(fill = NA, linewidth = 2)
+        )
       )
   })
 
@@ -1986,20 +2062,8 @@ server <- function(input, output, session) {
         ranking <- input$issue_importance_ranking
         match("Educacion / Servicios de salud", ranking, nomatch = NA_integer_)
       },
-      # Priors - municipality crime ranking (1 = worst, 5 = best)
-      # Home municipality rank
-      Crime_Rank_Home = {
-        ranking <- input$municipality_crime_ranking
-        home_info <- d_geo %>%
-          st_drop_geometry() %>%
-          filter(muni_id == found_municipality())
-        if (is.null(ranking) || length(ranking) == 0 || nrow(home_info) == 0) {
-          NA_integer_
-        } else {
-          home_label <- paste0(home_info$NOMGEO, ", ", home_info$NOM_ENT)
-          match(home_label, ranking, nomatch = NA_integer_)
-        }
-      },
+      # Priors - municipality crime ranking relative to home
+      # (home is the fixed reference point)
       # Comparison municipality names (for reference)
       Comparison_Muni_1 = {
         comp <- comparison_municipalities()
@@ -2033,65 +2097,41 @@ server <- function(input, output, session) {
           paste0(comp$NOMGEO[4], ", ", comp$NOM_ENT[4])
         }
       },
-      # Comparison municipality ranks
+      # Comparison municipality crime categories (relative to home: "worse", "same", "better")
       Crime_Rank_Comp_1 = {
-        ranking <- input$municipality_crime_ranking
         comp <- comparison_municipalities()
-        if (
-          is.null(ranking) ||
-            length(ranking) == 0 ||
-            is.null(comp) ||
-            nrow(comp) < 1
-        ) {
-          NA_integer_
+        if (is.null(comp) || nrow(comp) < 1) {
+          NA_character_
         } else {
           comp_label <- paste0(comp$NOMGEO[1], ", ", comp$NOM_ENT[1])
-          match(comp_label, ranking, nomatch = NA_integer_)
+          find_bucket_category(comp_label, "muni_rank_")
         }
       },
       Crime_Rank_Comp_2 = {
-        ranking <- input$municipality_crime_ranking
         comp <- comparison_municipalities()
-        if (
-          is.null(ranking) ||
-            length(ranking) == 0 ||
-            is.null(comp) ||
-            nrow(comp) < 2
-        ) {
-          NA_integer_
+        if (is.null(comp) || nrow(comp) < 2) {
+          NA_character_
         } else {
           comp_label <- paste0(comp$NOMGEO[2], ", ", comp$NOM_ENT[2])
-          match(comp_label, ranking, nomatch = NA_integer_)
+          find_bucket_category(comp_label, "muni_rank_")
         }
       },
       Crime_Rank_Comp_3 = {
-        ranking <- input$municipality_crime_ranking
         comp <- comparison_municipalities()
-        if (
-          is.null(ranking) ||
-            length(ranking) == 0 ||
-            is.null(comp) ||
-            nrow(comp) < 3
-        ) {
-          NA_integer_
+        if (is.null(comp) || nrow(comp) < 3) {
+          NA_character_
         } else {
           comp_label <- paste0(comp$NOMGEO[3], ", ", comp$NOM_ENT[3])
-          match(comp_label, ranking, nomatch = NA_integer_)
+          find_bucket_category(comp_label, "muni_rank_")
         }
       },
       Crime_Rank_Comp_4 = {
-        ranking <- input$municipality_crime_ranking
         comp <- comparison_municipalities()
-        if (
-          is.null(ranking) ||
-            length(ranking) == 0 ||
-            is.null(comp) ||
-            nrow(comp) < 4
-        ) {
-          NA_integer_
+        if (is.null(comp) || nrow(comp) < 4) {
+          NA_character_
         } else {
           comp_label <- paste0(comp$NOMGEO[4], ", ", comp$NOM_ENT[4])
-          match(comp_label, ranking, nomatch = NA_integer_)
+          find_bucket_category(comp_label, "muni_rank_")
         }
       },
       Incumbent_Crime_Rating = ifelse(
@@ -2110,77 +2150,41 @@ server <- function(input, output, session) {
         NA_character_,
         input$incumbent_crime_rating_post
       ),
-      # Post-treatment municipality crime ranking
-      Crime_Rank_Home_Post = {
-        ranking <- input$municipality_crime_ranking_post
-        home_info <- d_geo %>%
-          st_drop_geometry() %>%
-          filter(muni_id == found_municipality())
-        if (is.null(ranking) || length(ranking) == 0 || nrow(home_info) == 0) {
-          NA_integer_
-        } else {
-          home_label <- paste0(home_info$NOMGEO, ", ", home_info$NOM_ENT)
-          match(home_label, ranking, nomatch = NA_integer_)
-        }
-      },
+      # Post-treatment municipality crime categories (relative to home: "worse", "same", "better")
       Crime_Rank_Comp_1_Post = {
-        ranking <- input$municipality_crime_ranking_post
         comp <- comparison_municipalities()
-        if (
-          is.null(ranking) ||
-            length(ranking) == 0 ||
-            is.null(comp) ||
-            nrow(comp) < 1
-        ) {
-          NA_integer_
+        if (is.null(comp) || nrow(comp) < 1) {
+          NA_character_
         } else {
           comp_label <- paste0(comp$NOMGEO[1], ", ", comp$NOM_ENT[1])
-          match(comp_label, ranking, nomatch = NA_integer_)
+          find_bucket_category(comp_label, "muni_rank_post_")
         }
       },
       Crime_Rank_Comp_2_Post = {
-        ranking <- input$municipality_crime_ranking_post
         comp <- comparison_municipalities()
-        if (
-          is.null(ranking) ||
-            length(ranking) == 0 ||
-            is.null(comp) ||
-            nrow(comp) < 2
-        ) {
-          NA_integer_
+        if (is.null(comp) || nrow(comp) < 2) {
+          NA_character_
         } else {
           comp_label <- paste0(comp$NOMGEO[2], ", ", comp$NOM_ENT[2])
-          match(comp_label, ranking, nomatch = NA_integer_)
+          find_bucket_category(comp_label, "muni_rank_post_")
         }
       },
       Crime_Rank_Comp_3_Post = {
-        ranking <- input$municipality_crime_ranking_post
         comp <- comparison_municipalities()
-        if (
-          is.null(ranking) ||
-            length(ranking) == 0 ||
-            is.null(comp) ||
-            nrow(comp) < 3
-        ) {
-          NA_integer_
+        if (is.null(comp) || nrow(comp) < 3) {
+          NA_character_
         } else {
           comp_label <- paste0(comp$NOMGEO[3], ", ", comp$NOM_ENT[3])
-          match(comp_label, ranking, nomatch = NA_integer_)
+          find_bucket_category(comp_label, "muni_rank_post_")
         }
       },
       Crime_Rank_Comp_4_Post = {
-        ranking <- input$municipality_crime_ranking_post
         comp <- comparison_municipalities()
-        if (
-          is.null(ranking) ||
-            length(ranking) == 0 ||
-            is.null(comp) ||
-            nrow(comp) < 4
-        ) {
-          NA_integer_
+        if (is.null(comp) || nrow(comp) < 4) {
+          NA_character_
         } else {
           comp_label <- paste0(comp$NOMGEO[4], ", ", comp$NOM_ENT[4])
-          match(comp_label, ranking, nomatch = NA_integer_)
+          find_bucket_category(comp_label, "muni_rank_post_")
         }
       },
       Party_Allegiance_Update = ifelse(

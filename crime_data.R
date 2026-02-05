@@ -1,7 +1,7 @@
 library(dplyr)
 
 # Load crime data
-#incidencia_delictiva <- read.csv("~/IC_Survey/crime_data_all_years.csv")
+incidencia_delictiva <- read.csv("crime_data_all_years.csv")
 
 # Define robbery subtypes
 robo_subtypes <- c(
@@ -29,8 +29,19 @@ delitos_robo <- incidencia_delictiva %>%
 robo_by_year <- delitos_robo %>%
   group_by(Cve..Municipio, Ano) %>%
   summarize(
-    robos = sum(Enero + Febrero + Marzo + Abril + Mayo + Junio +
-      Julio + Agosto + Septiembre + Octubre + Noviembre),
+    robos = sum(
+      Enero +
+        Febrero +
+        Marzo +
+        Abril +
+        Mayo +
+        Junio +
+        Julio +
+        Agosto +
+        Septiembre +
+        Octubre +
+        Noviembre
+    ),
     .groups = "drop"
   )
 
@@ -53,6 +64,12 @@ robo_data <- robo_2025 %>%
 # Calculate z-score of the change
 mean_change <- mean(robo_data$change, na.rm = TRUE)
 sd_change <- sd(robo_data$change, na.rm = TRUE)
+#symmetric percent change (0 if both years are 0)
+robo_data$pct_change <- ifelse(
+  robo_data$robos == 0 & robo_data$robos_2024 == 0,
+  0,
+  robo_data$change / ((robo_data$robos + robo_data$robos_2024) / 2) * 100
+)
 
 robo_data <- robo_data %>%
   mutate(
@@ -61,7 +78,3 @@ robo_data <- robo_data %>%
 
 # Save as RDS for use in app.R
 saveRDS(robo_data, "robo_2025.rds")
-cat("Saved robo_2025.rds with", nrow(robo_data), "municipalities\n")
-cat("Columns:", paste(names(robo_data), collapse = ", "), "\n")
-cat("Mean change:", round(mean_change, 2), "\n")
-cat("SD change:", round(sd_change, 2), "\n")
