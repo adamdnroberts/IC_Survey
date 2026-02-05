@@ -182,6 +182,23 @@ ui <- fluidPage(
               "Note: The map may take a few seconds to load."
             )),
 
+            # Confirmation section (shown after home municipality is found)
+            hidden(
+              div(
+                id = "home_confirmation_section",
+                hr(),
+                uiOutput("home_municipality_summary"),
+                h5("Is this correct?"),
+                p("If not, click Clear Map and search again."),
+                actionButton(
+                  "clear_map_btn",
+                  "Clear Map",
+                  icon = icon("refresh"),
+                  class = "btn-secondary"
+                )
+              )
+            ),
+
             hr(),
             fluidRow(
               column(
@@ -199,51 +216,11 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 2: Confirm Home Municipality
+        # Page 2: Political Views & Municipal Governance
         hidden(
           div(
             id = "page2",
-            h4("Step 2: Confirm Your Municipality"),
-
-            uiOutput("home_municipality_summary"),
-
-            h5("Is this correct?"),
-            p("If not, go back to the map to update your selection."),
-            actionButton(
-              "goto_page1_from_2_edit",
-              "← Back to Map",
-              icon = icon("map"),
-              class = "btn-secondary"
-            ),
-
-            hr(),
-            fluidRow(
-              column(
-                6,
-                actionButton(
-                  "goto_page1_from_2",
-                  "← Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
-                align = "right",
-                actionButton(
-                  "goto_page3_from_2",
-                  "Next →",
-                  class = "btn-primary btn-lg"
-                )
-              )
-            )
-          )
-        ),
-
-        # Page 3: Political Views & Your Municipality
-        hidden(
-          div(
-            id = "page3",
-            h4("Step 3: Your Municipality"),
+            h4("Step 2: Your Municipality"),
 
             # Political Party Allegiance
             h5(strong("Political Views")),
@@ -388,7 +365,40 @@ ui <- fluidPage(
 
             hr(),
 
-            h5(strong("Your Municipality's Performance")),
+            h5(strong("Municipal Governance")),
+
+            uiOutput("home_governing_party_ui"),
+
+            uiOutput("comparison_governing_parties_ui"),
+
+            hr(),
+            fluidRow(
+              column(
+                6,
+                actionButton(
+                  "goto_page1_from_2",
+                  "← Back",
+                  class = "btn-secondary btn-lg"
+                )
+              ),
+              column(
+                6,
+                align = "right",
+                actionButton(
+                  "goto_page3_from_2",
+                  "Next →",
+                  class = "btn-primary btn-lg"
+                )
+              )
+            )
+          )
+        ),
+
+        # Page 3: Your Municipality's Performance
+        hidden(
+          div(
+            id = "page3",
+            h4("Step 3: Your Municipality's Performance"),
 
             p(
               "Drag and drop the following municipalities to rank them on crime, from worst (top) to best (bottom):"
@@ -524,7 +534,7 @@ ui <- fluidPage(
                 6,
                 align = "right",
                 actionButton(
-                  "goto_page5",
+                  "goto_page5_from_4",
                   "Next →",
                   class = "btn-primary btn-lg"
                 )
@@ -911,6 +921,15 @@ server <- function(input, output, session) {
     show(paste0("page", current_page()))
   })
 
+  # Show/hide home confirmation section based on whether municipality is found
+  observe({
+    if (!is.null(found_municipality())) {
+      show("home_confirmation_section")
+    } else {
+      hide("home_confirmation_section")
+    }
+  })
+
   # Show/hide "Other" text inputs for party questions
   observeEvent(input$party_preference, {
     toggleElement(
@@ -955,10 +974,6 @@ server <- function(input, output, session) {
     current_page(1)
   })
 
-  observeEvent(input$goto_page1_from_2_edit, {
-    current_page(1)
-  })
-
   # Page 2 → Page 3
   observeEvent(input$goto_page3_from_2, {
     current_page(3)
@@ -980,7 +995,7 @@ server <- function(input, output, session) {
   })
 
   # Page 4 → Page 5
-  observeEvent(input$goto_page5, {
+  observeEvent(input$goto_page5_from_4, {
     current_page(5)
   })
 
@@ -999,7 +1014,7 @@ server <- function(input, output, session) {
     current_page(5)
   })
 
-  # Page 6 → Page 7 (Reference Selection)
+  # Page 6 → Page 7 (Reference Municipalities)
   observeEvent(input$goto_page7_from_6, {
     current_page(7)
   })
@@ -1019,7 +1034,20 @@ server <- function(input, output, session) {
     current_page(7)
   })
 
-  # Display home municipality summary on page 2
+  # Clear map button - resets the found municipality and map
+  observeEvent(input$clear_map_btn, {
+    found_municipality(NULL)
+    found_address_coords(NULL)
+    updateTextInput(session, "address", value = "")
+
+    # Reset map view and clear highlights
+    leafletProxy("map_page1") %>%
+      clearGroup("found_muni") %>%
+      clearGroup("address_marker") %>%
+      fitBounds(lng1 = -118.0, lat1 = 14.0, lng2 = -86.0, lat2 = 33.0)
+  })
+
+  # Display home municipality summary on page 1 confirmation section
   output$home_municipality_summary <- renderUI({
     home_muni <- if (!is.null(found_municipality())) {
       d_geo %>%
@@ -1197,6 +1225,27 @@ server <- function(input, output, session) {
     home_state <- home_info$NOM_ENT[1]
     home_party <- home_info$governing_party[1]
 
+    # Get the pct_change for home municipality
+    home_pct_change <- robo_data %>%
+      filter(Cve..Municipio == as.numeric(home_id)) %>%
+      pull(pct_change)
+    home_pct_change <- ifelse(length(home_pct_change) == 0 || is.na(home_pct_change), 0, home_pct_change)
+
+    # Create descriptive text for the change
+    if (home_pct_change > 0) {
+      change_text <- paste0(
+        "Robberies in ", home_name, " increased by ", round(abs(home_pct_change), 1), "% during this period."
+      )
+    } else if (home_pct_change < 0) {
+      change_text <- paste0(
+        "Robberies in ", home_name, " decreased by ", round(abs(home_pct_change), 1), "% during this period."
+      )
+    } else {
+      change_text <- paste0(
+        "Robberies in ", home_name, " remained unchanged during this period."
+      )
+    }
+
     tagList(
       h5(
         paste0(
@@ -1208,6 +1257,9 @@ server <- function(input, output, session) {
           home_party,
           ", as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP). [NOTE: CURRENT INFORMATION ABOUT MUNICIPALITY GOVERNED PARTY IS NOT ACCURATE.]"
         )
+      ),
+      p(
+        strong(change_text)
       ),
       p(
         em(
@@ -1255,6 +1307,80 @@ server <- function(input, output, session) {
         "Much more strongly" = "much_more"
       ),
       selected = character(0)
+    )
+  })
+
+  # Dynamic question about governing party of home municipality
+  output$home_governing_party_ui <- renderUI({
+    home_id <- found_municipality()
+
+    if (is.null(home_id)) {
+      return(p(em("Please find your home municipality first.")))
+    }
+
+    home_info <- d_geo %>%
+      st_drop_geometry() %>%
+      filter(muni_id == home_id)
+
+    home_name <- home_info$NOMGEO[1]
+
+    radioButtons(
+      "home_governing_party_belief",
+      paste0("Which party do you believe currently governs ", home_name, "?"),
+      choices = c(
+        "PAN" = "pan",
+        "PRI" = "pri",
+        "PRD" = "prd",
+        "PVEM" = "pvem",
+        "PT" = "pt",
+        "MC" = "mc",
+        "MORENA" = "morena",
+        "Coalition / Other" = "other",
+        "Don't know" = "dont_know"
+      ),
+      selected = character(0)
+    )
+  })
+
+  # Dynamic question about governing parties of comparison municipalities
+  output$comparison_governing_parties_ui <- renderUI({
+    home_id <- found_municipality()
+    comp_munis <- comparison_municipalities()
+
+    if (is.null(home_id) || is.null(comp_munis) || nrow(comp_munis) == 0) {
+      return(p(em("Comparison municipalities will appear after your home municipality is found.")))
+    }
+
+    party_choices <- c(
+      "PAN" = "pan",
+      "PRI" = "pri",
+      "PRD" = "prd",
+      "PVEM" = "pvem",
+      "PT" = "pt",
+      "MC" = "mc",
+      "MORENA" = "morena",
+      "Coalition / Other" = "other",
+      "Don't know" = "dont_know"
+    )
+
+    # Create a radio button question for each comparison municipality
+    radio_buttons_list <- lapply(seq_len(nrow(comp_munis)), function(i) {
+      muni_name <- comp_munis$NOMGEO[i]
+      muni_state <- comp_munis$NOM_ENT[i]
+      input_id <- paste0("comp_governing_party_", i)
+
+      radioButtons(
+        input_id,
+        paste0("Which party do you believe currently governs ", muni_name, ", ", muni_state, "?"),
+        choices = party_choices,
+        selected = character(0)
+      )
+    })
+
+    tagList(
+      h5(strong("Comparison Municipalities")),
+      p("For each of the following municipalities that will be used in comparison, please indicate which party you believe governs them:"),
+      radio_buttons_list
     )
   })
 
@@ -1555,7 +1681,7 @@ server <- function(input, output, session) {
     }
   })
 
-  # Municipality search - auto-select municipality on page 7
+  # Municipality search - auto-select municipality on page 6
   observeEvent(input$muni_search, {
     req(input$muni_search != "")
 
