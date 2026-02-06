@@ -22,6 +22,18 @@ set.seed(42) # For reproducibility during testing
 parties <- c("MORENA", "PAN", "PRI", "PRD", "PVEM", "PT", "MC")
 d_geo$governing_party <- sample(parties, nrow(d_geo), replace = TRUE)
 
+# Coalition definitions for treatment groups
+coalition_a <- c("MORENA", "PT", "PVEM")
+coalition_b <- c("PAN", "PRI", "PRD", "MC")
+
+get_opposite_parties <- function(party) {
+  if (party %in% coalition_a) coalition_b else coalition_a
+}
+
+get_coalition_label <- function(parties) {
+  paste(parties, collapse = "/")
+}
+
 party_radio_choice <- function(
   value,
   label,
@@ -117,6 +129,9 @@ ui <- fluidPage(
       });
       $(document).on('change', 'input[name=\"last_election_vote\"]', function() {
         Shiny.setInputValue('last_election_vote', $(this).val());
+      });
+      $(document).on('change', 'input[name=\"vote_intention_pre\"]', function() {
+        Shiny.setInputValue('vote_intention_pre', $(this).val());
       });
       $(document).on('keypress', '#address', function(e) {
         if (e.which == 13) {
@@ -417,6 +432,83 @@ ui <- fluidPage(
               value = 50
             ),
 
+            br(),
+
+            tags$div(
+              class = "form-group",
+              tags$label(
+                "Which party do you intend to vote for in the next municipal election?"
+              ),
+              tags$div(
+                id = "vote_intention_pre_group",
+                class = "party-radio-group",
+                party_radio_choice(
+                  "pan",
+                  "PAN (Partido Acción Nacional)",
+                  "PAN_logo.png",
+                  input_name = "vote_intention_pre"
+                ),
+                party_radio_choice(
+                  "pri",
+                  "PRI (Partido Revolucionario Institucional)",
+                  "PRI_logo.png",
+                  input_name = "vote_intention_pre"
+                ),
+                party_radio_choice(
+                  "prd",
+                  "PRD (Partido de la Revolución Democrática)",
+                  "PRD_logo.png",
+                  input_name = "vote_intention_pre"
+                ),
+                party_radio_choice(
+                  "pvem",
+                  "PVEM (Partido Verde Ecologista de México)",
+                  "PVEM_logo.png",
+                  input_name = "vote_intention_pre"
+                ),
+                party_radio_choice(
+                  "pt",
+                  "PT (Partido del Trabajo)",
+                  "PT_logo.png",
+                  input_name = "vote_intention_pre"
+                ),
+                party_radio_choice(
+                  "mc",
+                  "MC (Movimiento Ciudadano)",
+                  "Movimiento_Ciudadano_logo.png",
+                  input_name = "vote_intention_pre"
+                ),
+                party_radio_choice(
+                  "morena",
+                  "MORENA",
+                  "Morena_logo.png",
+                  input_name = "vote_intention_pre"
+                ),
+                party_radio_choice(
+                  "undecided",
+                  "Undecided",
+                  input_name = "vote_intention_pre"
+                ),
+                party_radio_choice(
+                  "will_not_vote",
+                  "Will not vote",
+                  input_name = "vote_intention_pre"
+                ),
+                party_radio_choice(
+                  "other",
+                  "Other",
+                  input_name = "vote_intention_pre"
+                )
+              )
+            ),
+            hidden(
+              textInput(
+                "vote_intention_pre_other",
+                "Please specify the party:",
+                placeholder = "Enter party name..."
+              )
+            ),
+
             hr(),
 
             # Importance of Issues, language loosely based on Mitofsky public opinion survey https://drive.google.com/file/d/1GPiJS0CDUoho_NRnb3M3T5rHq5dtiqLb/view
@@ -547,11 +639,34 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page5",
-            h4("Step 5: Review & Survey"),
+            h4("Step 5: Treatment Groups (Preview)"),
+            p(em("All four treatment conditions are shown below for preview purposes. In the final survey, respondents will be randomly assigned to one group.")),
 
-            uiOutput("treatment_description"),
+            # Group 1: Control (Agave)
+            wellPanel(
+              h5(strong("Group 1: Control")),
+              uiOutput("treatment_control_ui")
+            ),
 
-            plotOutput("treatment_histogram", height = "350px"),
+            # Group 2: Plain Information
+            wellPanel(
+              h5(strong("Group 2: Plain Information")),
+              uiOutput("treatment_plain_info_ui")
+            ),
+
+            # Group 3: Same-Party Comparison
+            wellPanel(
+              h5(strong("Group 3: Same-Party Comparison")),
+              uiOutput("treatment_same_party_ui"),
+              plotOutput("treatment_histogram", height = "350px")
+            ),
+
+            # Group 4: Opposite-Party Comparison
+            wellPanel(
+              h5(strong("Group 4: Opposite-Party Comparison")),
+              uiOutput("treatment_opposite_party_ui"),
+              plotOutput("treatment_histogram_opposite", height = "350px")
+            ),
 
             hr(),
             fluidRow(
@@ -589,10 +704,6 @@ ui <- fluidPage(
               max = 100,
               value = 50
             ),
-
-            br(),
-
-            uiOutput("vote_likelihood_ui"),
 
             br(),
 
@@ -872,6 +983,7 @@ server <- function(input, output, session) {
   found_address_coords <- reactiveVal(NULL)
   current_page <- reactiveVal(1)
   comparison_municipalities <- reactiveVal(NULL) # Stores comparison muni data for ranking & graph
+  comparison_municipalities_opposite <- reactiveVal(NULL) # Stores opposite-coalition comparison munis
 
   # Define the file path for saving responses
   responses_file <- "survey_responses.csv"
@@ -914,6 +1026,37 @@ server <- function(input, output, session) {
     comparison_municipalities(comp_munis)
   })
 
+  # Set opposite-coalition comparison municipalities when home municipality is found
+  observeEvent(found_municipality(), {
+    home_id <- found_municipality()
+    req(!is.null(home_id))
+
+    home_info <- d_geo %>%
+      st_drop_geometry() %>%
+      filter(muni_id == home_id)
+
+    home_state <- home_info$NOM_ENT[1]
+    home_party <- home_info$governing_party[1]
+    opposite_parties <- get_opposite_parties(home_party)
+
+    # Get comparison municipalities (same state, opposite coalition, excluding home)
+    comp_munis_opp <- d_geo %>%
+      st_drop_geometry() %>%
+      filter(
+        NOM_ENT == home_state,
+        governing_party %in% opposite_parties,
+        muni_id != home_id
+      ) %>%
+      select(muni_id, NOMGEO, NOM_ENT)
+
+    # Randomly select up to 4 comparison municipalities
+    if (nrow(comp_munis_opp) > 4) {
+      comp_munis_opp <- comp_munis_opp %>% slice_sample(n = 4)
+    }
+
+    comparison_municipalities_opposite(comp_munis_opp)
+  })
+
   # Show appropriate page
   observe({
     pages <- paste0("page", 1:9)
@@ -949,6 +1092,13 @@ server <- function(input, output, session) {
     toggleElement(
       "vote_intention_2027_other",
       condition = input$vote_intention_2027 == "other"
+    )
+  })
+
+  observeEvent(input$vote_intention_pre, {
+    toggleElement(
+      "vote_intention_pre_other",
+      condition = input$vote_intention_pre == "other"
     )
   })
 
@@ -1212,8 +1362,64 @@ server <- function(input, output, session) {
     )
   })
 
-  # Treatment description with dynamic municipality/state/party names
-  output$treatment_description <- renderUI({
+  # Helper: get robbery change text for home municipality
+  home_robbery_change_text <- reactive({
+    home_id <- found_municipality()
+    req(!is.null(home_id))
+
+    home_name <- d_geo %>%
+      st_drop_geometry() %>%
+      filter(muni_id == home_id) %>%
+      pull(NOMGEO) %>%
+      `[`(1)
+
+    home_pct_change <- robo_data %>%
+      filter(Cve..Municipio == as.numeric(home_id)) %>%
+      pull(pct_change)
+    home_pct_change <- ifelse(length(home_pct_change) == 0 || is.na(home_pct_change), 0, home_pct_change)
+
+    if (home_pct_change > 0) {
+      paste0("Robberies in ", home_name, " increased by ", round(abs(home_pct_change), 1), "% from 2024 to 2025.")
+    } else if (home_pct_change < 0) {
+      paste0("Robberies in ", home_name, " decreased by ", round(abs(home_pct_change), 1), "% from 2024 to 2025.")
+    } else {
+      paste0("Robberies in ", home_name, " remained unchanged from 2024 to 2025.")
+    }
+  })
+
+  # Plain information paragraph (shared by groups 2, 3, and 4)
+  plain_info_text <- paste0(
+    "Crime is a major issue in Mexico, and municipal police forces can do a lot to help reduce crime. ",
+    "Specifically, municipal forces can support higher-level operations and supply valuable information, ",
+    "respond first to criminal incidents, and patrol the streets and maintain public order. ",
+    "Decisions about funding and structure of municipal police forces are largely in the hands of municipal presidents. ",
+    "Therefore, municipal governments have some ability to control crime, although many factors that lead to crime ",
+    "are out of the government\u2019s hands."
+  )
+
+  # Group 1: Control (Agave)
+  output$treatment_control_ui <- renderUI({
+    p(
+      "Agave cultivation is a major industry in Mexico, and specialized farming techniques can do a lot ",
+      "to help improve plant health. Specifically, farmers can monitor for invasive pests, implement ",
+      "sustainable harvest cycles, and ensure proper soil drainage to protect the heart of the plant. ",
+      "Decisions about the timing and methods of these agricultural practices are largely in the hands ",
+      "of independent field managers. Therefore, plantation owners have some ability to protect their ",
+      "crops, although many weather patterns that affect agave growth are out of the owners\u2019 hands."
+    )
+  })
+
+  # Group 2: Plain Information
+  output$treatment_plain_info_ui <- renderUI({
+    change_text <- home_robbery_change_text()
+    tagList(
+      p(plain_info_text),
+      p(strong(change_text))
+    )
+  })
+
+  # Group 3: Same-Party Comparison
+  output$treatment_same_party_ui <- renderUI({
     home_id <- found_municipality()
     req(!is.null(home_id))
 
@@ -1224,42 +1430,59 @@ server <- function(input, output, session) {
     home_name <- home_info$NOMGEO[1]
     home_state <- home_info$NOM_ENT[1]
     home_party <- home_info$governing_party[1]
-
-    # Get the pct_change for home municipality
-    home_pct_change <- robo_data %>%
-      filter(Cve..Municipio == as.numeric(home_id)) %>%
-      pull(pct_change)
-    home_pct_change <- ifelse(length(home_pct_change) == 0 || is.na(home_pct_change), 0, home_pct_change)
-
-    # Create descriptive text for the change
-    if (home_pct_change > 0) {
-      change_text <- paste0(
-        "Robberies in ", home_name, " increased by ", round(abs(home_pct_change), 1), "% during this period."
-      )
-    } else if (home_pct_change < 0) {
-      change_text <- paste0(
-        "Robberies in ", home_name, " decreased by ", round(abs(home_pct_change), 1), "% during this period."
-      )
-    } else {
-      change_text <- paste0(
-        "Robberies in ", home_name, " remained unchanged during this period."
-      )
-    }
+    change_text <- home_robbery_change_text()
 
     tagList(
-      h5(
+      p(plain_info_text),
+      p(strong(change_text)),
+      p(
         paste0(
-          "The following graph shows the change in robbery rates from 2024 to 2025 (January-November) for ",
+          "The following graph shows the change in robbery rates from 2024 to 2025 for ",
           home_name,
           " and a sample of other municipalities in ",
           home_state,
           " that are governed by ",
           home_party,
-          ", as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP). [NOTE: CURRENT INFORMATION ABOUT MUNICIPALITY GOVERNED PARTY IS NOT ACCURATE.]"
+          ", as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
         )
       ),
       p(
-        strong(change_text)
+        em(
+          "The values shown are percent changes. Positive values indicate increases in robbery, negative values indicate decreases."
+        )
+      )
+    )
+  })
+
+  # Group 4: Opposite-Party Comparison
+  output$treatment_opposite_party_ui <- renderUI({
+    home_id <- found_municipality()
+    req(!is.null(home_id))
+
+    home_info <- d_geo %>%
+      st_drop_geometry() %>%
+      filter(muni_id == home_id)
+
+    home_name <- home_info$NOMGEO[1]
+    home_state <- home_info$NOM_ENT[1]
+    home_party <- home_info$governing_party[1]
+    opposite_parties <- get_opposite_parties(home_party)
+    opposite_label <- get_coalition_label(opposite_parties)
+    change_text <- home_robbery_change_text()
+
+    tagList(
+      p(plain_info_text),
+      p(strong(change_text)),
+      p(
+        paste0(
+          "The following graph shows the change in robbery rates from 2024 to 2025 for ",
+          home_name,
+          " and a sample of other municipalities in ",
+          home_state,
+          " that are governed by ",
+          opposite_label,
+          ", as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
+        )
       ),
       p(
         em(
@@ -1446,32 +1669,6 @@ server <- function(input, output, session) {
     )
   })
 
-  # Dynamic vote likelihood question with incumbent party
-  output$vote_likelihood_ui <- renderUI({
-    home_id <- found_municipality()
-
-    incumbent_party <- if (is.null(home_id)) {
-      "the incumbent party"
-    } else {
-      d_geo %>%
-        st_drop_geometry() %>%
-        filter(muni_id == home_id) %>%
-        pull(governing_party)
-    }
-
-    sliderInput(
-      "vote_likelihood",
-      paste0(
-        "How likely would you be to vote for a ",
-        incumbent_party,
-        " candidate in the upcoming municipal elections?"
-      ),
-      min = 0,
-      max = 100,
-      value = 50
-    )
-  })
-
   # Treatment histogram
   output$treatment_histogram <- renderPlot({
     home_id <- found_municipality()
@@ -1545,6 +1742,77 @@ server <- function(input, output, session) {
   })
 
   outputOptions(output, "treatment_histogram", suspendWhenHidden = FALSE)
+
+  # Treatment histogram for opposite-party comparisons
+  output$treatment_histogram_opposite <- renderPlot({
+    home_id <- found_municipality()
+    comp_munis <- comparison_municipalities_opposite()
+    req(!is.null(home_id), !is.null(comp_munis))
+
+    # Combine home municipality with opposite-coalition comparison municipalities
+    all_munis <- bind_rows(
+      d_geo %>%
+        st_drop_geometry() %>%
+        filter(muni_id == home_id) %>%
+        select(muni_id, NOMGEO),
+      comp_munis
+    )
+
+    # Look up pct_change from data
+    muni_info <- all_munis %>%
+      mutate(Cve..Municipio = as.numeric(muni_id)) %>%
+      left_join(robo_data, by = "Cve..Municipio") %>%
+      mutate(
+        pct_change = ifelse(is.na(pct_change), 0, pct_change),
+        is_home = ifelse(muni_id == home_id, "home", "comparison")
+      )
+
+    # Sort by pct_change
+    muni_info <- muni_info %>%
+      arrange(pct_change)
+
+    plot_df <- data.frame(
+      municipality = factor(muni_info$NOMGEO, levels = muni_info$NOMGEO),
+      pct_change = muni_info$pct_change,
+      is_home = muni_info$is_home,
+      pct_sign = ifelse(muni_info$pct_change < 0, "negative", "positive")
+    )
+
+    ggplot(
+      plot_df,
+      aes(x = municipality, y = pct_change, fill = pct_sign, color = is_home)
+    ) +
+      geom_col(linewidth = 1.5) +
+      geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+      scale_fill_manual(
+        values = c("negative" = "#009E73", "positive" = "#D55E00"),
+        labels = c("negative" = "Decreased", "positive" = "Increased"),
+        name = "Crime Change"
+      ) +
+      scale_color_manual(
+        values = c("home" = "#0072B2", "comparison" = "#E69F00"),
+        labels = c("home" = "Your Municipality", "comparison" = "Comparison"),
+        name = "Municipality"
+      ) +
+      labs(x = NULL, y = "Cambio en Robos (%)") +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 11),
+        axis.title.y = element_text(size = 12),
+        panel.grid.major.x = element_blank(),
+        legend.position = "bottom",
+        legend.box = "horizontal"
+      ) +
+      guides(
+        fill = guide_legend(order = 1),
+        color = guide_legend(
+          order = 2,
+          override.aes = list(fill = NA, linewidth = 2)
+        )
+      )
+  })
+
+  outputOptions(output, "treatment_histogram_opposite", suspendWhenHidden = FALSE)
 
   # Display zoom to home button
   output$home_muni_info <- renderUI({
@@ -2267,8 +2535,18 @@ server <- function(input, output, session) {
         input$incumbent_crime_rating
       ),
       Turnout_Likelihood_Pre = input$turnout_likelihood_pre,
+      Vote_Intention_Pre = ifelse(
+        is.null(input$vote_intention_pre) || input$vote_intention_pre == "",
+        NA_character_,
+        input$vote_intention_pre
+      ),
+      Vote_Intention_Pre_Other = ifelse(
+        is.null(input$vote_intention_pre_other) ||
+          input$vote_intention_pre_other == "",
+        NA_character_,
+        input$vote_intention_pre_other
+      ),
       # Treatment outcomes
-      Vote_Likelihood = input$vote_likelihood,
       Turnout_Likelihood = input$turnout_likelihood,
       Incumbent_Crime_Rating_Post = ifelse(
         is.null(input$incumbent_crime_rating_post) ||

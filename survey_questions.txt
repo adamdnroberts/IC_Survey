@@ -1,0 +1,265 @@
+IC Survey — Full Question List
+==============================
+
+=====================================
+PAGE 1: Find Your Municipality
+=====================================
+
+1. Enter your address to find your home municipality:
+   - Type: Text input
+   - Placeholder: "e.g., Av. Yucatán 147, Roma Nte., Cuauhtémoc, CDMX"
+
+
+=====================================
+PAGE 2: Your Municipality
+=====================================
+
+--- Political Views ---
+
+2. Which political party do you most identify with?
+   - Type: Radio buttons with party logos
+   - Options:
+     * PAN (Partido Acción Nacional)
+     * PRI (Partido Revolucionario Institucional)
+     * PRD (Partido de la Revolución Democrática)
+     * PVEM (Partido Verde Ecologista de México)
+     * PT (Partido del Trabajo)
+     * MC (Movimiento Ciudadano)
+     * MORENA
+     * None / Independent
+     * Other
+
+3. [If "Other" selected] Please specify the party:
+   - Type: Text input
+
+4. How strongly do you identify with this party?
+   - Type: Radio buttons
+   - Options:
+     * Not strongly at all
+     * Not very strongly
+     * Somewhat strongly
+     * Very strongly
+
+5. Which party did you vote for in the last municipal election?
+   - Type: Radio buttons with party logos
+   - Options:
+     * PAN (Partido Acción Nacional)
+     * PRI (Partido Revolucionario Institucional)
+     * PRD (Partido de la Revolución Democrática)
+     * PVEM (Partido Verde Ecologista de México)
+     * PT (Partido del Trabajo)
+     * MC (Movimiento Ciudadano)
+     * MORENA
+     * Did not vote
+     * Don't remember
+     * Other
+
+6. [If "Other" selected] Please specify the party:
+   - Type: Text input
+
+--- Municipal Governance ---
+
+7. Which party do you believe currently governs [home municipality name]?
+   - Type: Radio buttons
+   - Options:
+     * PAN
+     * PRI
+     * PRD
+     * PVEM
+     * PT
+     * MC
+     * MORENA
+     * Coalition / Other
+     * Don't know
+
+8. Which party do you believe currently governs [comparison municipality name], [state]?
+   - Type: Radio buttons (repeated for each comparison municipality, up to 4)
+   - Options: Same as above
+
+
+=====================================
+PAGE 3: Your Municipality's Performance
+=====================================
+
+9. Compared to [home municipality], how would you rate the local government's handling of crime in these other municipalities?
+   - Type: Drag-and-drop bucket list
+   - Instruction: "Drag and drop the following municipalities to rank them on crime, from worst (top) to best (bottom)"
+   - Buckets:
+     * Worse at Handling Crime
+     * Same at Handling Crime
+     * Better at Handling Crime
+     * Unranked (starting position)
+   - Items: Up to 4 comparison municipalities (dynamically selected)
+
+10. How well do you think the [incumbent party] government in your municipality handles crime?
+    - Type: Radio buttons
+    - Options:
+      * Very poorly
+      * Poorly
+      * Neither well nor poorly
+      * Well
+      * Very well
+
+11. How likely are you to vote in the 2027 local elections?
+    - Type: Slider (0–100, default 50)
+
+12. Which party do you intend to vote for in the next municipal election?
+    - Type: Radio buttons with party logos
+    - Options:
+      * PAN (Partido Acción Nacional)
+      * PRI (Partido Revolucionario Institucional)
+      * PRD (Partido de la Revolución Democrática)
+      * PVEM (Partido Verde Ecologista de México)
+      * PT (Partido del Trabajo)
+      * MC (Movimiento Ciudadano)
+      * MORENA
+      * Undecided
+      * Will not vote
+      * Other
+
+13. [If "Other" selected] Please specify the party:
+    - Type: Text input
+
+14. Drag to rank the following issues in order of importance (top = most important):
+    - Type: Drag-and-drop rank list
+    - Items:
+      * Delincuencia
+      * Economia / Inflacion
+      * Corrupción
+      * Desempleo / Bajos salarios
+      * Educacion / Servicios de salud
+
+
+=====================================
+PAGE 4: About You
+=====================================
+
+15. What is your age?
+    - Type: Numeric input (18–120)
+
+16. What is your gender?
+    - Type: Dropdown
+    - Options:
+      * Male
+      * Female
+      * Non-binary
+      * Other
+      * Prefer not to say
+
+17. Do you identify as indigenous?
+    - Type: Dropdown
+    - Options:
+      * Yes
+      * No
+      * Prefer not to say
+
+18. To ensure you are reading each question carefully, please select 'Somewhat agree' below.
+    - Type: Radio buttons (attention check)
+    - Options:
+      * Strongly disagree
+      * Somewhat disagree
+      * Neither agree nor disagree
+      * Somewhat agree
+      * Strongly agree
+
+
+=====================================
+PAGE 5: Treatment Groups (Preview)
+=====================================
+
+Note: All four conditions shown for preview. In the final survey, respondents are randomly assigned to one group.
+
+--- Group 1: Control ---
+
+[Text displayed:]
+"Agave cultivation is a major industry in Mexico, and specialized farming techniques can do a lot to help improve plant health. Specifically, farmers can monitor for invasive pests, implement sustainable harvest cycles, and ensure proper soil drainage to protect the heart of the plant. Decisions about the timing and methods of these agricultural practices are largely in the hands of independent field managers. Therefore, plantation owners have some ability to protect their crops, although many weather patterns that affect agave growth are out of the owners' hands."
+
+--- Group 2: Plain Information ---
+
+[Text displayed:]
+"Crime is a major issue in Mexico, and municipal police forces can do a lot to help reduce crime. Specifically, municipal forces can support higher-level operations and supply valuable information, respond first to criminal incidents, and patrol the streets and maintain public order. Decisions about funding and structure of municipal police forces are largely in the hands of municipal presidents. Therefore, municipal governments have some ability to control crime, although many factors that lead to crime are out of the government's hands."
+
+"Robberies in [home municipality] [increased/decreased] by [X]% from 2024 to 2025."
+
+--- Group 3: Same-Party Comparison ---
+
+[Plain Information text above, plus:]
+"The following graph shows the change in robbery rates from 2024 to 2025 for [home municipality] and a sample of other municipalities in [state] that are governed by [governing party], as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP)."
+
+[Bar chart: robbery % change for home municipality vs. same-party comparison municipalities]
+
+--- Group 4: Opposite-Party Comparison ---
+
+[Plain Information text above, plus:]
+"The following graph shows the change in robbery rates from 2024 to 2025 for [home municipality] and a sample of other municipalities in [state] that are governed by [opposite coalition parties], as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP)."
+
+[Bar chart: robbery % change for home municipality vs. opposite-coalition comparison municipalities]
+
+
+=====================================
+PAGE 6: Post-Treatment Survey
+=====================================
+
+19. How likely are you to vote in the 2027 local elections?
+    - Type: Slider (0–100, default 50)
+
+20. After seeing this information, how well do you think the [incumbent party] in general handles crime?
+    - Type: Radio buttons
+    - Options:
+      * Very poorly
+      * Poorly
+      * Neither well nor poorly
+      * Well
+      * Very well
+
+21. Compared to [home municipality], how would you rate the local government's handling of crime in these other municipalities?
+    - Type: Drag-and-drop bucket list (same format as question 9)
+    - Instruction: "After seeing the crime data, drag and drop the following municipalities to rank them on their handling of crime, from worst (top) to best (bottom)"
+    - Buckets:
+      * Worse at Handling Crime
+      * Same at Handling Crime
+      * Better at Handling Crime
+      * Unranked (starting position)
+
+22. Has this information changed how strongly you identify with [respondent's party]?
+    - Type: Radio buttons
+    - Options:
+      * Much less strongly
+      * Somewhat less strongly
+      * No change
+      * Somewhat more strongly
+      * Much more strongly
+
+23. Which party do you intend to vote for in the 2027 municipal elections?
+    - Type: Radio buttons with party logos
+    - Options:
+      * PAN (Partido Acción Nacional)
+      * PRI (Partido Revolucionario Institucional)
+      * PRD (Partido de la Revolución Democrática)
+      * PVEM (Partido Verde Ecologista de México)
+      * PT (Partido del Trabajo)
+      * MC (Movimiento Ciudadano)
+      * MORENA
+      * Undecided
+      * Will not vote
+      * Other
+
+24. [If "Other" selected] Please specify the party:
+    - Type: Text input
+
+
+=====================================
+PAGE 7: Select Reference Municipalities
+=====================================
+
+25. Select reference municipalities for your home municipality of [home municipality]:
+    - Type: Interactive Leaflet map (click to select/deselect municipalities)
+    - Also: Searchable dropdown to find municipalities by name
+
+
+=====================================
+PAGE 9: Thank You
+=====================================
+
+[No questions — confirmation screen]
+"Thank you! Your survey has been submitted successfully. You may now close this window."
