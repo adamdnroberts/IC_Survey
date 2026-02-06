@@ -640,7 +640,9 @@ ui <- fluidPage(
           div(
             id = "page5",
             h4("Step 5: Treatment Groups (Preview)"),
-            p(em("All four treatment conditions are shown below for preview purposes. In the final survey, respondents will be randomly assigned to one group.")),
+            p(em(
+              "All four treatment conditions are shown below for preview purposes. In the final survey, respondents will be randomly assigned to one group."
+            )),
 
             # Group 1: Control (Agave)
             wellPanel(
@@ -1221,43 +1223,6 @@ server <- function(input, output, session) {
     )
   })
 
-  # Display selection summary (used elsewhere if needed)
-  output$selection_summary <- renderUI({
-    home_muni <- if (!is.null(found_municipality())) {
-      d_geo %>%
-        st_drop_geometry() %>%
-        filter(muni_id == found_municipality()) %>%
-        mutate(full_name = paste0(NOMGEO, ", ", NOM_ENT)) %>%
-        pull(full_name)
-    } else {
-      "None"
-    }
-
-    selected_munis <- if (length(selected_map_munis()) > 0) {
-      d_geo %>%
-        st_drop_geometry() %>%
-        filter(muni_id %in% selected_map_munis()) %>%
-        mutate(full_name = paste0(NOMGEO, ", ", NOM_ENT)) %>%
-        pull(full_name) %>%
-        paste(collapse = ", ")
-    } else {
-      "None selected"
-    }
-
-    div(
-      style = "background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px;",
-      h5(icon("info-circle"), " Your Selections:"),
-      tags$p(
-        tags$strong("Home Municipality: "),
-        tags$span(home_muni, style = "color: #0072B2;")
-      ),
-      tags$p(
-        tags$strong("Additional Selected Municipalities: "),
-        tags$span(selected_munis, style = "color: #E69F00;")
-      )
-    )
-  })
-
   # Dynamic bucket list for municipality crime ranking (relative to home)
   output$municipality_ranking_ui <- renderUI({
     home_id <- found_municipality()
@@ -1376,14 +1341,34 @@ server <- function(input, output, session) {
     home_pct_change <- robo_data %>%
       filter(Cve..Municipio == as.numeric(home_id)) %>%
       pull(pct_change)
-    home_pct_change <- ifelse(length(home_pct_change) == 0 || is.na(home_pct_change), 0, home_pct_change)
+    home_pct_change <- ifelse(
+      length(home_pct_change) == 0 || is.na(home_pct_change),
+      0,
+      home_pct_change
+    )
 
     if (home_pct_change > 0) {
-      paste0("Robberies in ", home_name, " increased by ", round(abs(home_pct_change), 1), "% from 2024 to 2025.")
+      paste0(
+        "Robberies in ",
+        home_name,
+        " increased by ",
+        round(abs(home_pct_change), 1),
+        "% from 2024 to 2025."
+      )
     } else if (home_pct_change < 0) {
-      paste0("Robberies in ", home_name, " decreased by ", round(abs(home_pct_change), 1), "% from 2024 to 2025.")
+      paste0(
+        "Robberies in ",
+        home_name,
+        " decreased by ",
+        round(abs(home_pct_change), 1),
+        "% from 2024 to 2025."
+      )
     } else {
-      paste0("Robberies in ", home_name, " remained unchanged from 2024 to 2025.")
+      paste0(
+        "Robberies in ",
+        home_name,
+        " remained unchanged from 2024 to 2025."
+      )
     }
   })
 
@@ -1571,7 +1556,9 @@ server <- function(input, output, session) {
     comp_munis <- comparison_municipalities()
 
     if (is.null(home_id) || is.null(comp_munis) || nrow(comp_munis) == 0) {
-      return(p(em("Comparison municipalities will appear after your home municipality is found.")))
+      return(p(em(
+        "Comparison municipalities will appear after your home municipality is found."
+      )))
     }
 
     party_choices <- c(
@@ -1594,7 +1581,13 @@ server <- function(input, output, session) {
 
       radioButtons(
         input_id,
-        paste0("Which party do you believe currently governs ", muni_name, ", ", muni_state, "?"),
+        paste0(
+          "Which party do you believe currently governs ",
+          muni_name,
+          ", ",
+          muni_state,
+          "?"
+        ),
         choices = party_choices,
         selected = character(0)
       )
@@ -1602,7 +1595,9 @@ server <- function(input, output, session) {
 
     tagList(
       h5(strong("Comparison Municipalities")),
-      p("For each of the following municipalities that will be used in comparison, please indicate which party you believe governs them:"),
+      p(
+        "For each of the following municipalities that will be used in comparison, please indicate which party you believe governs them:"
+      ),
       radio_buttons_list
     )
   })
@@ -1812,7 +1807,11 @@ server <- function(input, output, session) {
       )
   })
 
-  outputOptions(output, "treatment_histogram_opposite", suspendWhenHidden = FALSE)
+  outputOptions(
+    output,
+    "treatment_histogram_opposite",
+    suspendWhenHidden = FALSE
+  )
 
   # Display zoom to home button
   output$home_muni_info <- renderUI({
@@ -2434,6 +2433,28 @@ server <- function(input, output, session) {
         NA_character_,
         input$last_election_vote_other
       ),
+      Home_Governing_Party_Belief = ifelse(
+        is.null(input$home_governing_party_belief) ||
+          length(input$home_governing_party_belief) == 0,
+        NA_character_,
+        input$home_governing_party_belief
+      ),
+      Comp_Governing_Party_Belief_1 = {
+        val <- input$comp_governing_party_1
+        ifelse(is.null(val) || length(val) == 0, NA_character_, val)
+      },
+      Comp_Governing_Party_Belief_2 = {
+        val <- input$comp_governing_party_2
+        ifelse(is.null(val) || length(val) == 0, NA_character_, val)
+      },
+      Comp_Governing_Party_Belief_3 = {
+        val <- input$comp_governing_party_3
+        ifelse(is.null(val) || length(val) == 0, NA_character_, val)
+      },
+      Comp_Governing_Party_Belief_4 = {
+        val <- input$comp_governing_party_4
+        ifelse(is.null(val) || length(val) == 0, NA_character_, val)
+      },
       # Issue importance rankings (from drag-and-drop rank_list)
       # Convert ordered list to numeric ranks (1 = most important)
       Importance_Crime = {

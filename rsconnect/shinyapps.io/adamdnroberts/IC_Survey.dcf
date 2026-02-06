@@ -5,9 +5,9 @@ account: adamdnroberts
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 16478313
-bundleId: 11538117
+bundleId: 11547295
 url: https://adamdnroberts.shinyapps.io/IC_Survey/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: .claude/settings.local.json|00mun.shp|ballot_example.jpg|CLAUDE.md|create_municipality_graph.R|homicidio_doloso_2025.rds|make_geojson_file.R|power_analysis_simulation.R|power_analysis_simulation_less_treatments.R|power_graph.pdf|survey_responses.csv
+ignoredFiles: .claude/settings.local.json|00mun.shp|ballot_example.jpg|CLAUDE.md|create_municipality_graph.R|homicidio_doloso_2025.rds|Information_Sheet_Incumbent_Comparisons.doc|make_geojson_file.R|power_analysis_simulation.R|power_analysis_simulation_less_treatments.R|power_graph.pdf|Protocol_Incumbent_Comparisons.doc|survey_questions.txt|survey_responses.csv|references

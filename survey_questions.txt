@@ -2,7 +2,7 @@ IC Survey — Full Question List
 ==============================
 
 =====================================
-PAGE 1: Find Your Municipality
+STEP 1: Find Your Municipality
 =====================================
 
 1. Enter your address to find your home municipality:
@@ -11,7 +11,7 @@ PAGE 1: Find Your Municipality
 
 
 =====================================
-PAGE 2: Your Municipality
+STEP 2: Your Municipality
 =====================================
 
 --- Political Views ---
@@ -78,7 +78,7 @@ PAGE 2: Your Municipality
 
 
 =====================================
-PAGE 3: Your Municipality's Performance
+STEP 3: Your Municipality's Performance
 =====================================
 
 9. Compared to [home municipality], how would you rate the local government's handling of crime in these other municipalities?
@@ -131,7 +131,7 @@ PAGE 3: Your Municipality's Performance
 
 
 =====================================
-PAGE 4: About You
+STEP 4: About You
 =====================================
 
 15. What is your age?
@@ -164,7 +164,7 @@ PAGE 4: About You
 
 
 =====================================
-PAGE 5: Treatment Groups (Preview)
+STEP 5: Treatment Groups (Preview)
 =====================================
 
 Note: All four conditions shown for preview. In the final survey, respondents are randomly assigned to one group.
@@ -184,20 +184,20 @@ Note: All four conditions shown for preview. In the final survey, respondents ar
 --- Group 3: Same-Party Comparison ---
 
 [Plain Information text above, plus:]
-"The following graph shows the change in robbery rates from 2024 to 2025 for [home municipality] and a sample of other municipalities in [state] that are governed by [governing party], as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP)."
+"The following graph shows the change in robbery rates from 2024 to 2025 for [home municipality] and a sample of other municipalities in [state] that are governed by [governing party], as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad Publica (SESNSP)."
 
 [Bar chart: robbery % change for home municipality vs. same-party comparison municipalities]
 
 --- Group 4: Opposite-Party Comparison ---
 
 [Plain Information text above, plus:]
-"The following graph shows the change in robbery rates from 2024 to 2025 for [home municipality] and a sample of other municipalities in [state] that are governed by [opposite coalition parties], as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP)."
+"The following graph shows the change in robbery rates from 2024 to 2025 for [home municipality] and a sample of other municipalities in [state] that are governed by [opposite coalition parties], as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad Publica (SESNSP)."
 
 [Bar chart: robbery % change for home municipality vs. opposite-coalition comparison municipalities]
 
 
 =====================================
-PAGE 6: Post-Treatment Survey
+STEP 6: Post-Treatment Survey
 =====================================
 
 19. How likely are you to vote in the 2027 local elections?
@@ -249,7 +249,7 @@ PAGE 6: Post-Treatment Survey
 
 
 =====================================
-PAGE 7: Select Reference Municipalities
+STEP 7: Select Reference Municipalities
 =====================================
 
 25. Select reference municipalities for your home municipality of [home municipality]:
@@ -258,7 +258,15 @@ PAGE 7: Select Reference Municipalities
 
 
 =====================================
-PAGE 9: Thank You
+STEP 8: Feedback
+=====================================
+
+26. Do you have any comments about this survey? Anything I could improve? (Optional)
+    - Type: Text area
+
+
+=====================================
+STEP 9: Thank You
 =====================================
 
 [No questions — confirmation screen]
