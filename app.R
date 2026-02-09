@@ -7,6 +7,14 @@ library(dplyr)
 library(httr)
 library(jsonlite)
 library(ggplot2)
+library(googlesheets4)
+
+# Google Sheets authentication for persistent response storage
+gs4_auth(path = "google-service-account.json")
+SHEET_ID <- Sys.getenv(
+  "GOOGLE_SHEET_ID",
+  unset = "10d1Bf5vSymN9pJSAnqhRnC4DKk2qzr5YkUdtHdZJtoU"
+)
 
 # Read municipalities from GeoJSON file
 d_geo <- st_read("00mun_simplified.geojson", quiet = TRUE)
@@ -117,6 +125,51 @@ ui <- fluidPage(
       .rank-list-container .rank-list-item:nth-child(5) {
         background-color: #ffffff;
       }
+      /* Governance grid table */
+      .governance-grid {
+        overflow-x: auto;
+      }
+      .governance-grid table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9em;
+      }
+      .governance-grid th {
+        text-align: center;
+        padding: 6px 4px;
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+        font-size: 0.85em;
+        white-space: nowrap;
+      }
+      .governance-grid th:first-child {
+        text-align: left;
+        min-width: 160px;
+      }
+      .governance-grid td {
+        text-align: center;
+        padding: 8px 4px;
+        border-bottom: 1px solid #eee;
+        vertical-align: middle;
+      }
+      .governance-grid td:first-child {
+        text-align: left;
+        font-weight: 500;
+      }
+      .governance-grid tr:hover {
+        background-color: #f8f9fa;
+      }
+      .governance-grid input[type='radio'] {
+        margin: 0;
+        cursor: pointer;
+        width: 16px;
+        height: 16px;
+      }
+      .governance-grid tr.home-row td:first-child {
+        color: #0072B2;
+        font-weight: 600;
+      }
     "
     )),
     tags$script(HTML(
@@ -132,6 +185,9 @@ ui <- fluidPage(
       });
       $(document).on('change', 'input[name=\"vote_intention_pre\"]', function() {
         Shiny.setInputValue('vote_intention_pre', $(this).val());
+      });
+      $(document).on('change', '#governance_grid input[type=\"radio\"]', function() {
+        Shiny.setInputValue($(this).attr('name'), $(this).val());
       });
       $(document).on('keypress', '#address', function(e) {
         if (e.which == 13) {
@@ -289,16 +345,28 @@ ui <- fluidPage(
               )
             ),
 
-            radioButtons(
+            sliderInput(
               "party_strength",
               "How strongly do you identify with this party?",
-              choices = c(
-                "Not strongly at all" = "not_strongly",
-                "Not very strongly" = "not_very_strongly",
-                "Somewhat strongly" = "somewhat_strongly",
-                "Very strongly" = "very_strongly"
+              min = 0,
+              max = 100,
+              value = 50
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Not at all",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
               ),
-              selected = character(0)
+              column(
+                6,
+                p(
+                  "Very strongly",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
             ),
 
             hr(),
@@ -382,9 +450,7 @@ ui <- fluidPage(
 
             h5(strong("Municipal Governance")),
 
-            uiOutput("home_governing_party_ui"),
-
-            uiOutput("comparison_governing_parties_ui"),
+            uiOutput("governance_grid_ui"),
 
             hr(),
             fluidRow(
@@ -1020,6 +1086,17 @@ server <- function(input, output, session) {
       ) %>%
       select(muni_id, NOMGEO, NOM_ENT)
 
+    # Fallback: if no same-party municipalities in state, use any from same state
+    if (nrow(comp_munis) == 0) {
+      comp_munis <- d_geo %>%
+        st_drop_geometry() %>%
+        filter(
+          NOM_ENT == home_state,
+          muni_id != home_id
+        ) %>%
+        select(muni_id, NOMGEO, NOM_ENT)
+    }
+
     # Randomly select up to 4 comparison municipalities
     if (nrow(comp_munis) > 4) {
       comp_munis <- comp_munis %>% slice_sample(n = 4)
@@ -1050,6 +1127,17 @@ server <- function(input, output, session) {
         muni_id != home_id
       ) %>%
       select(muni_id, NOMGEO, NOM_ENT)
+
+    # Fallback: if no opposite-coalition municipalities in state, use any from same state
+    if (nrow(comp_munis_opp) == 0) {
+      comp_munis_opp <- d_geo %>%
+        st_drop_geometry() %>%
+        filter(
+          NOM_ENT == home_state,
+          muni_id != home_id
+        ) %>%
+        select(muni_id, NOMGEO, NOM_ENT)
+    }
 
     # Randomly select up to 4 comparison municipalities
     if (nrow(comp_munis_opp) > 4) {
@@ -1518,9 +1606,10 @@ server <- function(input, output, session) {
     )
   })
 
-  # Dynamic question about governing party of home municipality
-  output$home_governing_party_ui <- renderUI({
+  # Combined governance grid for home + comparison municipalities
+  output$governance_grid_ui <- renderUI({
     home_id <- found_municipality()
+    comp_munis <- comparison_municipalities()
 
     if (is.null(home_id)) {
       return(p(em("Please find your home municipality first.")))
@@ -1529,76 +1618,86 @@ server <- function(input, output, session) {
     home_info <- d_geo %>%
       st_drop_geometry() %>%
       filter(muni_id == home_id)
+    home_name <- paste0(home_info$NOMGEO[1], ", ", home_info$NOM_ENT[1])
 
-    home_name <- home_info$NOMGEO[1]
-
-    radioButtons(
-      "home_governing_party_belief",
-      paste0("Which party do you believe currently governs ", home_name, "?"),
-      choices = c(
-        "PAN" = "pan",
-        "PRI" = "pri",
-        "PRD" = "prd",
-        "PVEM" = "pvem",
-        "PT" = "pt",
-        "MC" = "mc",
-        "MORENA" = "morena",
-        "Coalition / Other" = "other",
-        "Don't know" = "dont_know"
-      ),
-      selected = character(0)
+    # Build list of municipality rows: home first, then comparisons
+    muni_rows <- list(
+      list(
+        name = home_name,
+        input_name = "home_governing_party_belief",
+        is_home = TRUE
+      )
     )
-  })
-
-  # Dynamic question about governing parties of comparison municipalities
-  output$comparison_governing_parties_ui <- renderUI({
-    home_id <- found_municipality()
-    comp_munis <- comparison_municipalities()
-
-    if (is.null(home_id) || is.null(comp_munis) || nrow(comp_munis) == 0) {
-      return(p(em(
-        "Comparison municipalities will appear after your home municipality is found."
-      )))
+    if (!is.null(comp_munis) && nrow(comp_munis) > 0) {
+      for (i in seq_len(nrow(comp_munis))) {
+        muni_rows <- c(
+          muni_rows,
+          list(list(
+            name = paste0(comp_munis$NOMGEO[i], ", ", comp_munis$NOM_ENT[i]),
+            input_name = paste0("comp_governing_party_", i),
+            is_home = FALSE
+          ))
+        )
+      }
     }
 
-    party_choices <- c(
-      "PAN" = "pan",
-      "PRI" = "pri",
-      "PRD" = "prd",
-      "PVEM" = "pvem",
-      "PT" = "pt",
-      "MC" = "mc",
-      "MORENA" = "morena",
-      "Coalition / Other" = "other",
-      "Don't know" = "dont_know"
+    party_labels <- c(
+      "PAN",
+      "PRI",
+      "PRD",
+      "PVEM",
+      "PT",
+      "MC",
+      "MORENA",
+      "Other",
+      "Don't\nknow"
+    )
+    party_values <- c(
+      "pan",
+      "pri",
+      "prd",
+      "pvem",
+      "pt",
+      "mc",
+      "morena",
+      "other",
+      "dont_know"
     )
 
-    # Create a radio button question for each comparison municipality
-    radio_buttons_list <- lapply(seq_len(nrow(comp_munis)), function(i) {
-      muni_name <- comp_munis$NOMGEO[i]
-      muni_state <- comp_munis$NOM_ENT[i]
-      input_id <- paste0("comp_governing_party_", i)
+    # Table header
+    header_cells <- c(
+      list(tags$th("Municipality")),
+      lapply(party_labels, function(lbl) tags$th(HTML(gsub("\n", "<br>", lbl))))
+    )
 
-      radioButtons(
-        input_id,
-        paste0(
-          "Which party do you believe currently governs ",
-          muni_name,
-          ", ",
-          muni_state,
-          "?"
-        ),
-        choices = party_choices,
-        selected = character(0)
+    # Table body rows
+    body_rows <- lapply(muni_rows, function(row) {
+      cells <- c(
+        list(tags$td(row$name)),
+        lapply(seq_along(party_values), function(j) {
+          tags$td(tags$input(
+            type = "radio",
+            name = row$input_name,
+            value = party_values[j]
+          ))
+        })
       )
+      row_class <- if (row$is_home) "home-row" else NULL
+      do.call(tags$tr, c(cells, list(class = row_class)))
     })
 
     tagList(
-      h5(strong("Comparison Municipalities")),
       p(
-        "For each of the following municipalities that will be used in comparison, please indicate which party you believe governs them:"
+        "Which party do you believe currently governs each of the following municipalities?"
       ),
-      radio_buttons_list
+      div(
+        id = "governance_grid",
+        class = "governance-grid",
+        tags$table(
+          tags$thead(do.call(tags$tr, header_cells)),
+          do.call(tags$tbody, body_rows)
+        )
+      )
     )
   })
 
@@ -1615,21 +1714,16 @@ server <- function(input, output, session) {
         pull(governing_party)
     }
 
-    radioButtons(
+    sliderInput(
       "incumbent_crime_rating",
       paste0(
         "How well do you think the ",
         incumbent_party,
         " government in your municipality handles crime?"
       ),
-      choices = c(
-        "Very poorly" = "very_poorly",
-        "Poorly" = "poorly",
-        "Neither well nor poorly" = "neutral",
-        "Well" = "well",
-        "Very well" = "very_well"
-      ),
-      selected = character(0)
+      min = 0,
+      max = 100,
+      value = 50
     )
   })
 
@@ -1646,21 +1740,16 @@ server <- function(input, output, session) {
         pull(governing_party)
     }
 
-    radioButtons(
+    sliderInput(
       "incumbent_crime_rating_post",
       paste0(
         "After seeing this information, how well do you think the ",
         incumbent_party,
         " in general handles crime?"
       ),
-      choices = c(
-        "Very poorly" = "very_poorly",
-        "Poorly" = "poorly",
-        "Neither well nor poorly" = "neutral",
-        "Well" = "well",
-        "Very well" = "very_well"
-      ),
-      selected = character(0)
+      min = 0,
+      max = 100,
+      value = 50
     )
   })
 
@@ -2417,11 +2506,7 @@ server <- function(input, output, session) {
         NA_character_,
         input$party_preference_other
       ),
-      Party_Strength = ifelse(
-        is.null(input$party_strength) || length(input$party_strength) == 0,
-        NA_character_,
-        input$party_strength
-      ),
+      Party_Strength = input$party_strength,
       Last_Election_Vote = ifelse(
         is.null(input$last_election_vote) || input$last_election_vote == "",
         NA_character_,
@@ -2549,12 +2634,7 @@ server <- function(input, output, session) {
           find_bucket_category(comp_label, "muni_rank_")
         }
       },
-      Incumbent_Crime_Rating = ifelse(
-        is.null(input$incumbent_crime_rating) ||
-          length(input$incumbent_crime_rating) == 0,
-        NA_character_,
-        input$incumbent_crime_rating
-      ),
+      Incumbent_Crime_Rating = input$incumbent_crime_rating,
       Turnout_Likelihood_Pre = input$turnout_likelihood_pre,
       Vote_Intention_Pre = ifelse(
         is.null(input$vote_intention_pre) || input$vote_intention_pre == "",
@@ -2569,12 +2649,7 @@ server <- function(input, output, session) {
       ),
       # Treatment outcomes
       Turnout_Likelihood = input$turnout_likelihood,
-      Incumbent_Crime_Rating_Post = ifelse(
-        is.null(input$incumbent_crime_rating_post) ||
-          length(input$incumbent_crime_rating_post) == 0,
-        NA_character_,
-        input$incumbent_crime_rating_post
-      ),
+      Incumbent_Crime_Rating_Post = input$incumbent_crime_rating_post,
       # Post-treatment municipality crime categories (relative to home: "worse", "same", "better")
       Crime_Rank_Comp_1_Post = {
         comp <- comparison_municipalities()
@@ -2633,18 +2708,34 @@ server <- function(input, output, session) {
       stringsAsFactors = FALSE
     )
 
-    if (file.exists(responses_file)) {
-      write.table(
-        response_df,
-        responses_file,
-        append = TRUE,
-        sep = ",",
-        row.names = FALSE,
-        col.names = FALSE
-      )
-    } else {
-      write.csv(response_df, responses_file, row.names = FALSE)
-    }
+    # Write to Google Sheets for persistent storage
+    tryCatch(
+      googlesheets4::sheet_append(SHEET_ID, response_df),
+      error = function(e) {
+        warning("Google Sheets write failed: ", e$message)
+      }
+    )
+
+    # Local CSV backup
+    tryCatch(
+      {
+        if (file.exists(responses_file)) {
+          write.table(
+            response_df,
+            responses_file,
+            append = TRUE,
+            sep = ",",
+            row.names = FALSE,
+            col.names = FALSE
+          )
+        } else {
+          write.csv(response_df, responses_file, row.names = FALSE)
+        }
+      },
+      error = function(e) {
+        warning("Local CSV write failed: ", e$message)
+      }
+    )
 
     # Go to thank you page instead of resetting
     current_page(9)

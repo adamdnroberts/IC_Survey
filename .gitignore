@@ -22,6 +22,10 @@ survey_responses.csv
 # Reference data
 references/
 
+# Google service account key
+google-service-account.json
+.env
+
 #claude code
 .claude/
 CLAUDE.md
