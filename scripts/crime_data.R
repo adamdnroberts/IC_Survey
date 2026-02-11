@@ -1,7 +1,7 @@
 library(dplyr)
 
 # Load crime data
-incidencia_delictiva <- read.csv("crime_data_all_years.csv")
+incidencia_delictiva <- read.csv("data/crime_data_all_years.csv")
 
 # Define robbery subtypes
 robo_subtypes <- c(
@@ -77,4 +77,4 @@ robo_data <- robo_data %>%
   )
 
 # Save as RDS for use in app.R
-saveRDS(robo_data, "robo_2025.rds")
+saveRDS(robo_data, "data/robo_2025.rds")

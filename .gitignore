@@ -4,20 +4,20 @@
 .Ruserdata
 
 # Large data files
-*.shp
-*.shx
-*.dbf
-*.prj
-*.geojson
-*.mbtiles
-*.csv
-*.rds
+data/*.shp
+data/*.shx
+data/*.dbf
+data/*.prj
+data/*.geojson
+data/*.mbtiles
+data/*.csv
+data/*.rds
 
 # Large PDFs
 *.pdf
 
 # Survey data
-survey_responses.csv
+data/survey_responses.csv
 
 # Reference data
 references/
@@ -29,4 +29,3 @@ google-service-account.json
 #claude code
 .claude/
 CLAUDE.md
-00mun_simplified.geojson

@@ -17,12 +17,12 @@ SHEET_ID <- Sys.getenv(
 )
 
 # Read municipalities from GeoJSON file
-d_geo <- st_read("00mun_simplified.geojson", quiet = TRUE)
+d_geo <- st_read("data/00mun_simplified.geojson", quiet = TRUE)
 municipality_list <- sort(unique(d_geo$mun_state))
 d_geo$muni_id <- d_geo$CVEGEO
 
 # Load robbery data for treatment graph
-robo_data <- readRDS("robo_2025.rds")
+robo_data <- readRDS("data/robo_2025.rds")
 
 # Randomly assign governing parties to municipalities
 # TODO: Replace with actual party data when available
@@ -205,6 +205,72 @@ ui <- fluidPage(
       8,
       offset = 2,
       wellPanel(
+        # Page 0: Information Sheet
+        hidden(
+          div(
+            id = "page0",
+            h4("Information Sheet"),
+            h5(strong(
+              "Evaluating the Efficacy of Sub-National Informational Comparisons"
+            )),
+            p(em("Principal Investigator: Adam Roberts")),
+            p(
+              "This form describes a research study that is being conducted by Adam Roberts from the ",
+              "University of Rochester's Department of Political Science. The purpose of this study is to ",
+              "understand how voters use information when deciding which candidate or political party to vote for."
+            ),
+            p(
+              "If you decide to take part in this study, you will be asked to complete a survey that will take ",
+              "about 15\u201320 minutes to complete. The surveys will ask questions about the municipality you live in, ",
+              "demographics, and political topics, including your political preferences, party affiliation, and ",
+              "vote choice in the most recent municipal elections."
+            ),
+            p(
+              "You will be asked to provide your location to identify which municipality you live in, but we ",
+              "will not save this information. Some of the survey questions may be upsetting or make you feel ",
+              "uncomfortable, but not any more uncomfortable than you might feel reading the news. You may ",
+              "withdraw at any time. This study will not collect any direct identifiers, like your name or ",
+              "government ID number. However, we will collect some indirect identifiers, namely the municipality ",
+              "in which you live, political affiliation, and demographic information. All information we collect ",
+              "will be stored in a secure manner and only the principal investigator will have access to it. There ",
+              "are no other expected risks. There are also no expected benefits."
+            ),
+            p(
+              "Your participation in this study is completely voluntary. You are free not to participate or to ",
+              "withdraw at any time, for whatever reason."
+            ),
+            p(
+              "For more information or questions about this research you may contact Adam Roberts at ",
+              tags$a(
+                href = "mailto:arober48@ur.rochester.edu",
+                "arober48@ur.rochester.edu"
+              ),
+              ". Please contact the University of Rochester Research Subjects Review Board at 265 Crittenden Blvd., ",
+              "CU 420628, Rochester, NY 14642, Telephone +1 (585) 276-0005 or +1 (877) 449-4441 for the following reasons:"
+            ),
+            tags$ul(
+              tags$li(
+                "You wish to talk to someone other than the research staff about your rights as a research subject;"
+              ),
+              tags$li("To voice concerns about the research;"),
+              tags$li("To provide input concerning the research process;"),
+              tags$li("In the event the study staff could not be reached.")
+            ),
+            hr(),
+            fluidRow(
+              column(
+                12,
+                align = "right",
+                actionButton(
+                  "goto_page1_from_0",
+                  "I have read the information sheet. Continue \u2192",
+                  class = "btn-primary btn-lg"
+                )
+              )
+            )
+          )
+        ),
+
         # Page 1: Find Municipality
         hidden(
           div(
@@ -1049,12 +1115,12 @@ server <- function(input, output, session) {
   selected_map_munis <- reactiveVal(character())
   found_municipality <- reactiveVal(NULL)
   found_address_coords <- reactiveVal(NULL)
-  current_page <- reactiveVal(1)
+  current_page <- reactiveVal(0)
   comparison_municipalities <- reactiveVal(NULL) # Stores comparison muni data for ranking & graph
   comparison_municipalities_opposite <- reactiveVal(NULL) # Stores opposite-coalition comparison munis
 
   # Define the file path for saving responses
-  responses_file <- "survey_responses.csv"
+  responses_file <- "data/survey_responses.csv"
 
   # Update municipality search choices on server side
   updateSelectizeInput(
@@ -1149,7 +1215,7 @@ server <- function(input, output, session) {
 
   # Show appropriate page
   observe({
-    pages <- paste0("page", 1:9)
+    pages <- paste0("page", 0:9)
     lapply(pages, hide)
     show(paste0("page", current_page()))
   })
@@ -1204,6 +1270,11 @@ server <- function(input, output, session) {
   })
 
   # Page navigation
+  # Page 0 → Page 1 (Information Sheet → Find Municipality)
+  observeEvent(input$goto_page1_from_0, {
+    current_page(1)
+  })
+
   # Page 1 → Page 2
   observeEvent(input$goto_page2, {
     current_page(2)

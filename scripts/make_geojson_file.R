@@ -1,6 +1,6 @@
 library(dplyr)
 
-shapefile_path <- "00mun.shp"
+shapefile_path <- "data/00mun.shp"
 d_geo <- st_read(shapefile_path, quiet = TRUE)
 
 # Fix invalid geometries (very important)
@@ -21,4 +21,4 @@ test2 <- d_geo_fast %>% left_join(test, join_by(CVEGEO == mun_id))
 
 test2$mun_state <- paste0(test2$NOMGEO, ", ", test2$NOM_ENT)
 
-st_write(test2, "~/IC_survey/00mun_simplified.geojson", delete_dsn = TRUE)
+st_write(test2, "data/00mun_simplified.geojson", delete_dsn = TRUE)
