@@ -26,6 +26,9 @@ references/
 google-service-account.json
 .env
 
+# Linting
+.lintr
+
 #claude code
 .claude/
 CLAUDE.md

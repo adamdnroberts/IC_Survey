@@ -7,14 +7,6 @@ library(dplyr)
 library(httr)
 library(jsonlite)
 library(ggplot2)
-library(googlesheets4)
-
-# Google Sheets authentication for persistent response storage
-gs4_auth(path = "google-service-account.json")
-SHEET_ID <- Sys.getenv(
-  "GOOGLE_SHEET_ID",
-  unset = "10d1Bf5vSymN9pJSAnqhRnC4DKk2qzr5YkUdtHdZJtoU"
-)
 
 # Read municipalities from GeoJSON file
 d_geo <- st_read("data/00mun_simplified.geojson", quiet = TRUE)
@@ -36,6 +28,10 @@ coalition_b <- c("PAN", "PRI", "PRD", "MC")
 
 get_opposite_parties <- function(party) {
   if (party %in% coalition_a) coalition_b else coalition_a
+}
+
+get_same_coalition_parties <- function(party) {
+  if (party %in% coalition_a) coalition_a else coalition_b
 }
 
 get_coalition_label <- function(parties) {
@@ -221,7 +217,8 @@ ui <- fluidPage(
             ),
             p(
               "If you decide to take part in this study, you will be asked to complete a survey that will take ",
-              "about 15\u201320 minutes to complete. The surveys will ask questions about the municipality you live in, ",
+              "about 15\u201320 minutes to complete. The surveys will ask questions ",
+              "about the municipality you live in, ",
               "demographics, and political topics, including your political preferences, party affiliation, and ",
               "vote choice in the most recent municipal elections."
             ),
@@ -246,7 +243,8 @@ ui <- fluidPage(
                 "arober48@ur.rochester.edu"
               ),
               ". Please contact the University of Rochester Research Subjects Review Board at 265 Crittenden Blvd., ",
-              "CU 420628, Rochester, NY 14642, Telephone +1 (585) 276-0005 or +1 (877) 449-4441 for the following reasons:"
+              "CU 420628, Rochester, NY 14642, ",
+              "Telephone +1 (585) 276-0005 or +1 (877) 449-4441 for the following reasons:"
             ),
             tags$ul(
               tags$li(
@@ -275,7 +273,7 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page1",
-            h4("Step 1: Find Your Municipality"),
+            h4("Find Your Municipality"),
 
             # Address search
             p(strong("Enter your address to find your home municipality:")),
@@ -301,7 +299,10 @@ ui <- fluidPage(
             hidden(
               div(
                 id = "loading_msg",
-                style = "color: #0066cc; margin-top: 10px; padding: 10px; background-color: #e7f3ff; border-radius: 4px;",
+                style = paste0(
+                  "color: #0066cc; margin-top: 10px; padding: 10px; ",
+                  "background-color: #e7f3ff; border-radius: 4px;"
+                ),
                 icon("spinner", class = "fa-spin"),
                 tags$strong(" Searching for your address..."),
                 tags$br(),
@@ -325,8 +326,6 @@ ui <- fluidPage(
                 id = "home_confirmation_section",
                 hr(),
                 uiOutput("home_municipality_summary"),
-                h5("Is this correct?"),
-                p("If not, click Clear Map and search again."),
                 actionButton(
                   "clear_map_btn",
                   "Clear Map",
@@ -353,11 +352,46 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 2: Political Views & Municipal Governance
+        # Page 2: Verify Municipality
         hidden(
           div(
             id = "page2",
-            h4("Step 2: Your Municipality"),
+            h4("Confirm Your Municipality"),
+
+            p("Please confirm that the following information is correct before continuing:"),
+
+            uiOutput("verify_municipality_info"),
+
+            p("If this is not correct, click Back to search again."),
+
+            hr(),
+            fluidRow(
+              column(
+                6,
+                actionButton(
+                  "goto_page1_from_2",
+                  "\u2190 Back",
+                  class = "btn-secondary btn-lg"
+                )
+              ),
+              column(
+                6,
+                align = "right",
+                actionButton(
+                  "goto_page3_from_2",
+                  "Next \u2192",
+                  class = "btn-primary btn-lg"
+                )
+              )
+            )
+          )
+        ),
+
+        # Page 3: Political Views & Municipal Governance
+        hidden(
+          div(
+            id = "page3",
+            h4("Your Municipality"),
 
             # Political Party Allegiance
             h5(strong("Political Views")),
@@ -523,7 +557,7 @@ ui <- fluidPage(
               column(
                 6,
                 actionButton(
-                  "goto_page1_from_2",
+                  "goto_page2_from_3",
                   "← Back",
                   class = "btn-secondary btn-lg"
                 )
@@ -532,7 +566,7 @@ ui <- fluidPage(
                 6,
                 align = "right",
                 actionButton(
-                  "goto_page3_from_2",
+                  "goto_page4_from_3",
                   "Next →",
                   class = "btn-primary btn-lg"
                 )
@@ -541,11 +575,11 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 3: Your Municipality's Performance
+        # Page 4: Your Municipality's Performance
         hidden(
           div(
-            id = "page3",
-            h4("Step 3: Your Municipality's Performance"),
+            id = "page4",
+            h4("Your Municipality's Performance"),
 
             p(
               "Drag and drop the following municipalities to rank them on crime, from worst (top) to best (bottom):"
@@ -643,7 +677,8 @@ ui <- fluidPage(
 
             hr(),
 
-            # Importance of Issues, language loosely based on Mitofsky public opinion survey https://drive.google.com/file/d/1GPiJS0CDUoho_NRnb3M3T5rHq5dtiqLb/view
+            # Importance of Issues, language loosely based on Mitofsky
+            # public opinion survey (see Google Drive reference)
             h5(strong("Issue Importance")),
             rank_list(
               text = "Drag to rank the following issues in order of importance (top = most important):",
@@ -662,7 +697,7 @@ ui <- fluidPage(
               column(
                 6,
                 actionButton(
-                  "goto_page2_from_3",
+                  "goto_page3_from_4",
                   "← Back",
                   class = "btn-secondary btn-lg"
                 )
@@ -671,7 +706,7 @@ ui <- fluidPage(
                 6,
                 align = "right",
                 actionButton(
-                  "goto_page4_from_3",
+                  "goto_page5_from_4",
                   "Next →",
                   class = "btn-primary btn-lg"
                 )
@@ -680,11 +715,11 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 4: About You
+        # Page 5: About You
         hidden(
           div(
-            id = "page4",
-            h4("Step 4: About You"),
+            id = "page5",
+            h4("About You"),
 
             # Demographics
             h5(strong("Demographics")),
@@ -749,7 +784,7 @@ ui <- fluidPage(
               column(
                 6,
                 actionButton(
-                  "goto_page3_from_4",
+                  "goto_page4_from_5",
                   "← Back",
                   class = "btn-secondary btn-lg"
                 )
@@ -758,7 +793,7 @@ ui <- fluidPage(
                 6,
                 align = "right",
                 actionButton(
-                  "goto_page5_from_4",
+                  "goto_page6_from_5",
                   "Next →",
                   class = "btn-primary btn-lg"
                 )
@@ -767,13 +802,14 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 5: Treatment
+        # Page 6: Treatment
         hidden(
           div(
-            id = "page5",
-            h4("Step 5: Treatment Groups (Preview)"),
+            id = "page6",
+            h4("Treatment Groups (Preview)"),
             p(em(
-              "All four treatment conditions are shown below for preview purposes. In the final survey, respondents will be randomly assigned to one group."
+              "All four treatment conditions are shown below for preview purposes. ",
+              "In the final survey, respondents will be randomly assigned to one group."
             )),
 
             # Group 1: Control (Agave)
@@ -807,7 +843,7 @@ ui <- fluidPage(
               column(
                 6,
                 actionButton(
-                  "goto_page4_from_5",
+                  "goto_page5_from_6",
                   "← Back",
                   class = "btn-secondary btn-lg"
                 )
@@ -816,7 +852,7 @@ ui <- fluidPage(
                 6,
                 align = "right",
                 actionButton(
-                  "goto_page6_from_5",
+                  "goto_page7_from_6",
                   "Next →",
                   class = "btn-primary btn-lg"
                 )
@@ -825,11 +861,11 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 6: Post-Treatment Questions
+        # Page 7: Post-Treatment Questions
         hidden(
           div(
-            id = "page6",
-            h4("Step 6: Post-Treatment Survey"),
+            id = "page7",
+            h4("Post-Treatment Survey"),
 
             sliderInput(
               "turnout_likelihood",
@@ -848,7 +884,8 @@ ui <- fluidPage(
             h5(strong("Your Municipality's Performance (Post-Treatment)")),
 
             p(
-              "After seeing the crime data, drag and drop the following municipalities to rank them on their handling of crime, from worst (top) to best (bottom):"
+              "After seeing the crime data, drag and drop the following municipalities ",
+              "to rank them on their handling of crime, from worst (top) to best (bottom):"
             ),
             uiOutput("municipality_ranking_post_ui"),
 
@@ -938,7 +975,7 @@ ui <- fluidPage(
               column(
                 6,
                 actionButton(
-                  "goto_page5_from_6",
+                  "goto_page6_from_7",
                   "← Back",
                   class = "btn-secondary btn-lg"
                 )
@@ -947,7 +984,7 @@ ui <- fluidPage(
                 6,
                 align = "right",
                 actionButton(
-                  "goto_page7_from_6",
+                  "goto_page8_from_7",
                   "Next →",
                   class = "btn-primary btn-lg"
                 )
@@ -956,11 +993,11 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 7: Select Reference Municipalities
+        # Page 8: Select Reference Municipalities
         hidden(
           div(
-            id = "page7",
-            h4("Step 7: Select Reference Municipalities"),
+            id = "page8",
+            h4("Select Reference Municipalities"),
 
             p(
               "Now we would like you to select some reference municipalities for comparison."
@@ -970,7 +1007,7 @@ ui <- fluidPage(
               "(You can select multiple municipalities by clicking on them. Click again to deselect.)"
             )),
 
-            leafletOutput("map_page7", height = 450),
+            leafletOutput("map_page8", height = 450),
             p(em(
               style = "color: #6c757d; font-size: 0.9em;",
               "Note: Your home municipality is shown in blue."
@@ -979,13 +1016,13 @@ ui <- fluidPage(
             # Municipality search box
             fluidRow(
               column(
-                7,
+                5,
                 selectizeInput(
                   "muni_search",
                   "Search for a municipality by name:",
                   choices = NULL,
                   options = list(
-                    placeholder = 'Type to search municipalities...'
+                    placeholder = "Type to search municipalities..."
                   )
                 )
               ),
@@ -1001,7 +1038,7 @@ ui <- fluidPage(
                 )
               ),
               column(
-                3,
+                2,
                 style = "margin-top: 25px;",
                 actionButton(
                   "clear_search",
@@ -1009,48 +1046,21 @@ ui <- fluidPage(
                   class = "btn-secondary",
                   style = "width: 100%;"
                 )
+              ),
+              column(
+                3,
+                style = "margin-top: 25px;",
+                actionButton(
+                  "zoom_home",
+                  "Zoom to Home",
+                  icon = icon("home"),
+                  class = "btn-primary",
+                  style = "width: 100%;"
+                )
               )
             ),
 
             verbatimTextOutput("selected_munis_display"),
-
-            hr(),
-            fluidRow(
-              column(
-                6,
-                actionButton(
-                  "goto_page6_from_7",
-                  "← Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
-                align = "right",
-                disabled(
-                  actionButton(
-                    "goto_page8_from_7",
-                    "Next →",
-                    class = "btn-primary btn-lg"
-                  )
-                )
-              )
-            )
-          )
-        ),
-
-        # Page 8: Feedback
-        hidden(
-          div(
-            id = "page8",
-            h4("Step 8: Feedback"),
-
-            textAreaInput(
-              "additional_comments",
-              "Do you have any comments about this survey? Anything I could improve? (Optional)",
-              placeholder = "Enter any additional information here...",
-              rows = 3
-            ),
 
             hr(),
             fluidRow(
@@ -1065,11 +1075,13 @@ ui <- fluidPage(
               column(
                 6,
                 align = "right",
-                actionButton(
-                  "submit",
-                  "Submit Survey",
-                  class = "btn-success btn-lg",
-                  icon = icon("check")
+                disabled(
+                  actionButton(
+                    "submit",
+                    "Submit Survey",
+                    class = "btn-success btn-lg",
+                    icon = icon("check")
+                  )
                 )
               )
             )
@@ -1108,7 +1120,7 @@ server <- function(input, output, session) {
         return(cat)
       }
     }
-    return(NA_character_)
+    NA_character_
   }
 
   # Reactive values
@@ -1117,7 +1129,7 @@ server <- function(input, output, session) {
   found_address_coords <- reactiveVal(NULL)
   current_page <- reactiveVal(0)
   comparison_municipalities <- reactiveVal(NULL) # Stores comparison muni data for ranking & graph
-  comparison_municipalities_opposite <- reactiveVal(NULL) # Stores opposite-coalition comparison munis
+  comp_munis_opp_rv <- reactiveVal(NULL) # Stores opposite-coalition comparison munis
 
   # Define the file path for saving responses
   responses_file <- "data/survey_responses.csv"
@@ -1141,18 +1153,19 @@ server <- function(input, output, session) {
 
     home_state <- home_info$NOM_ENT[1]
     home_party <- home_info$governing_party[1]
+    same_coalition <- get_same_coalition_parties(home_party)
 
-    # Get comparison municipalities (same state, same party, excluding home)
+    # Get comparison municipalities (same state, same coalition, excluding home)
     comp_munis <- d_geo %>%
       st_drop_geometry() %>%
       filter(
         NOM_ENT == home_state,
-        governing_party == home_party,
+        governing_party %in% same_coalition,
         muni_id != home_id
       ) %>%
       select(muni_id, NOMGEO, NOM_ENT)
 
-    # Fallback: if no same-party municipalities in state, use any from same state
+    # Fallback: if no same-coalition municipalities in state, use any from same state
     if (nrow(comp_munis) == 0) {
       comp_munis <- d_geo %>%
         st_drop_geometry() %>%
@@ -1210,7 +1223,7 @@ server <- function(input, output, session) {
       comp_munis_opp <- comp_munis_opp %>% slice_sample(n = 4)
     }
 
-    comparison_municipalities_opposite(comp_munis_opp)
+    comp_munis_opp_rv(comp_munis_opp)
   })
 
   # Show appropriate page
@@ -1275,7 +1288,7 @@ server <- function(input, output, session) {
     current_page(1)
   })
 
-  # Page 1 → Page 2
+  # Page 1 → Page 2 (Find Municipality → Verify Municipality)
   observeEvent(input$goto_page2, {
     current_page(2)
   })
@@ -1325,7 +1338,7 @@ server <- function(input, output, session) {
     current_page(5)
   })
 
-  # Page 6 → Page 7 (Reference Municipalities)
+  # Page 6 → Page 7
   observeEvent(input$goto_page7_from_6, {
     current_page(7)
   })
@@ -1335,7 +1348,7 @@ server <- function(input, output, session) {
     current_page(6)
   })
 
-  # Page 7 → Page 8 (Feedback)
+  # Page 7 → Page 8 (Reference Municipalities)
   observeEvent(input$goto_page8_from_7, {
     current_page(8)
   })
@@ -1382,6 +1395,30 @@ server <- function(input, output, session) {
     )
   })
 
+  # Display verification info on page 2
+  output$verify_municipality_info <- renderUI({
+    home_id <- found_municipality()
+    req(!is.null(home_id))
+
+    home_info <- d_geo %>%
+      st_drop_geometry() %>%
+      filter(muni_id == home_id)
+
+    home_name <- home_info$NOMGEO[1]
+    home_state <- home_info$NOM_ENT[1]
+
+    div(
+      style = "background-color: #f8f9fa; padding: 20px; border-radius: 4px; margin: 20px 0;",
+      h5(icon("map-marker-alt"), " Your Home Municipality:"),
+      tags$p(
+        tags$span(
+          paste0(home_name, ", ", home_state),
+          style = "color: #0072B2; font-size: 1.3em; font-weight: bold;"
+        )
+      )
+    )
+  })
+
   # Dynamic bucket list for municipality crime ranking (relative to home)
   output$municipality_ranking_ui <- renderUI({
     home_id <- found_municipality()
@@ -1398,8 +1435,6 @@ server <- function(input, output, session) {
     home_info <- d_geo %>%
       st_drop_geometry() %>%
       filter(muni_id == home_id)
-    home_label <- paste0(home_info$NOMGEO, ", ", home_info$NOM_ENT)
-
     # Create labels for comparison municipalities only
     comp_labels <- paste0(comp_munis$NOMGEO, ", ", comp_munis$NOM_ENT)
 
@@ -1450,8 +1485,6 @@ server <- function(input, output, session) {
     home_info <- d_geo %>%
       st_drop_geometry() %>%
       filter(muni_id == home_id)
-    home_label <- paste0(home_info$NOMGEO, ", ", home_info$NOM_ENT)
-
     # Create labels for comparison municipalities only
     comp_labels <- paste0(comp_munis$NOMGEO, ", ", comp_munis$NOM_ENT)
 
@@ -1533,10 +1566,11 @@ server <- function(input, output, session) {
 
   # Plain information paragraph (shared by groups 2, 3, and 4)
   plain_info_text <- paste0(
-    "Crime is a major issue in Mexico, and municipal police forces can do a lot to help reduce crime. ",
-    "Specifically, municipal forces can support higher-level operations and supply valuable information, ",
-    "respond first to criminal incidents, and patrol the streets and maintain public order. ",
-    "Decisions about funding and structure of municipal police forces are largely in the hands of municipal presidents. ",
+    "Municipal police forces in Mexico can do a lot to help reduce crime. ",
+    "Specifically, municipal forces can respond to criminal incidents, patrol the streets, ",
+    "and supply valuable information to higher-level operations. ",
+    "Decisions about funding and structure of municipal police forces are largely ",
+    "in the hands of municipal presidents. ",
     "Therefore, municipal governments have some ability to control crime, although many factors that lead to crime ",
     "are out of the government\u2019s hands."
   )
@@ -1574,6 +1608,8 @@ server <- function(input, output, session) {
     home_name <- home_info$NOMGEO[1]
     home_state <- home_info$NOM_ENT[1]
     home_party <- home_info$governing_party[1]
+    same_coalition <- get_same_coalition_parties(home_party)
+    same_label <- get_coalition_label(same_coalition)
     change_text <- home_robbery_change_text()
 
     tagList(
@@ -1586,13 +1622,14 @@ server <- function(input, output, session) {
           " and a sample of other municipalities in ",
           home_state,
           " that are governed by ",
-          home_party,
+          same_label,
           ", as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
         )
       ),
       p(
         em(
-          "The values shown are percent changes. Positive values indicate increases in robbery, negative values indicate decreases."
+          "The values shown are percent changes. Positive values indicate ",
+          "increases in robbery, negative values indicate decreases."
         )
       )
     )
@@ -1630,7 +1667,8 @@ server <- function(input, output, session) {
       ),
       p(
         em(
-          "The values shown are percent changes. Positive values indicate increases in robbery, negative values indicate decreases."
+          "The values shown are percent changes. Positive values indicate ",
+          "increases in robbery, negative values indicate decreases."
         )
       )
     )
@@ -1659,21 +1697,34 @@ server <- function(input, output, session) {
       party_names[party_code]
     }
 
-    radioButtons(
-      "party_allegiance_update",
-      paste0(
-        "Has this information changed how strongly you identify with ",
-        party_display,
-        "?"
+    tagList(
+      sliderInput(
+        "party_allegiance_update",
+        paste0(
+          "After seeing this information, how strongly do you identify with ",
+          party_display,
+          "?"
+        ),
+        min = 0,
+        max = 100,
+        value = 50
       ),
-      choices = c(
-        "Much less strongly" = "much_less",
-        "Somewhat less strongly" = "somewhat_less",
-        "No change" = "no_change",
-        "Somewhat more strongly" = "somewhat_more",
-        "Much more strongly" = "much_more"
-      ),
-      selected = character(0)
+      fluidRow(
+        column(
+          6,
+          p(
+            "Not at all",
+            style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+          )
+        ),
+        column(
+          6,
+          p(
+            "Very strongly",
+            style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+          )
+        )
+      )
     )
   })
 
@@ -1901,7 +1952,7 @@ server <- function(input, output, session) {
   # Treatment histogram for opposite-party comparisons
   output$treatment_histogram_opposite <- renderPlot({
     home_id <- found_municipality()
-    comp_munis <- comparison_municipalities_opposite()
+    comp_munis <- comp_munis_opp_rv()
     req(!is.null(home_id), !is.null(comp_munis))
 
     # Combine home municipality with opposite-coalition comparison municipalities
@@ -1998,7 +2049,9 @@ server <- function(input, output, session) {
 
     p(strong(
       paste0(
-        "We are interested in which municipalities you think are the most useful comparisons for your municipality. Click on the map or use the search bar below to select these reference municipalities for your home municipality of ",
+        "We are interested in which municipalities you think are the most useful ",
+        "comparisons for your municipality. Click on the map or use the search bar ",
+        "below to select these reference municipalities for your home municipality of ",
         muni_name,
         ":"
       )
@@ -2038,8 +2091,8 @@ server <- function(input, output, session) {
       fitBounds(lng1 = -115.0, lat1 = 16.0, lng2 = -88.0, lat2 = 30.5)
   })
 
-  # Page 7 Map - Interactive map for reference selection
-  output$map_page7 <- renderLeaflet({
+  # Page 8 Map - Interactive map for reference selection
+  output$map_page8 <- renderLeaflet({
     home_id <- found_municipality()
 
     map <- leaflet(d_geo) %>%
@@ -2087,28 +2140,23 @@ server <- function(input, output, session) {
           )
       }
 
-      # Zoom to home municipality
-      centroid <- st_centroid(st_geometry(home_data))
-      coords <- st_coordinates(centroid)
-      map <- map %>%
-        setView(lng = coords[1], lat = coords[2], zoom = 8)
     }
 
     map
   })
 
-  # Enable/disable Next button on page 7 based on reference selections
+  # Enable/disable Submit button on page 8 based on reference selections
   observe({
     has_reference <- length(selected_map_munis()) > 0
 
     if (has_reference) {
-      enable("goto_page8_from_7")
+      enable("submit")
     } else {
-      disable("goto_page8_from_7")
+      disable("submit")
     }
   })
 
-  # Municipality search - auto-select municipality on page 6
+  # Municipality search - auto-select municipality on page 8
   observeEvent(input$muni_search, {
     req(input$muni_search != "")
 
@@ -2123,12 +2171,12 @@ server <- function(input, output, session) {
           selected_map_munis(c(current, muni_id))
 
           # Update map highlighting
-          leafletProxy("map_page7") %>%
+          leafletProxy("map_page8") %>%
             clearGroup("selected") %>%
             clearGroup("found_muni")
 
           # Add selected municipalities
-          leafletProxy("map_page7") %>%
+          leafletProxy("map_page8") %>%
             addPolygons(
               data = d_geo[d_geo$muni_id %in% selected_map_munis(), ],
               group = "selected",
@@ -2147,7 +2195,7 @@ server <- function(input, output, session) {
             )
 
           # Re-add found municipality on top
-          leafletProxy("map_page7") %>%
+          leafletProxy("map_page8") %>%
             addPolygons(
               data = d_geo[d_geo$muni_id == found_municipality(), ],
               group = "found_muni",
@@ -2161,7 +2209,7 @@ server <- function(input, output, session) {
           # Re-add address marker
           if (!is.null(found_address_coords())) {
             address_coords <- found_address_coords()
-            leafletProxy("map_page7") %>%
+            leafletProxy("map_page8") %>%
               addMarkers(
                 lng = address_coords$lon,
                 lat = address_coords$lat,
@@ -2178,7 +2226,7 @@ server <- function(input, output, session) {
   observeEvent(input$clear_search, {
     updateSelectizeInput(session, "muni_search", selected = character(0))
 
-    leafletProxy("map_page7") %>%
+    leafletProxy("map_page8") %>%
       fitBounds(lng1 = -115.0, lat1 = 16.0, lng2 = -88.0, lat2 = 30.5)
   })
 
@@ -2193,8 +2241,23 @@ server <- function(input, output, session) {
       centroid <- st_centroid(st_geometry(muni_data))
       coords <- st_coordinates(centroid)
 
-      leafletProxy("map_page7") %>%
+      leafletProxy("map_page8") %>%
         setView(lng = coords[1], lat = coords[2], zoom = 10)
+    }
+  })
+
+  # Zoom to home municipality on page 8
+  observeEvent(input$zoom_home, {
+    home_id <- found_municipality()
+    req(home_id)
+
+    home_data <- d_geo[d_geo$muni_id == home_id, ]
+    if (nrow(home_data) > 0) {
+      centroid <- st_centroid(st_geometry(home_data))
+      coords <- st_coordinates(centroid)
+
+      leafletProxy("map_page8") %>%
+        setView(lng = coords[1], lat = coords[2], zoom = 8)
     }
   })
 
@@ -2298,7 +2361,10 @@ server <- function(input, output, session) {
 
             output$geocode_result <- renderUI({
               tags$div(
-                style = "color: #0072B2; margin-top: 10px; padding: 10px; background-color: #d4e9f7; border-radius: 4px;",
+                style = paste0(
+                  "color: #0072B2; margin-top: 10px; padding: 10px; ",
+                  "background-color: #d4e9f7; border-radius: 4px;"
+                ),
                 icon("check-circle"),
                 tags$strong(paste(" Found: ", muni_name, ", ", muni_state)),
                 tags$br()
@@ -2326,7 +2392,10 @@ server <- function(input, output, session) {
 
             output$geocode_result <- renderUI({
               tags$div(
-                style = "color: #856404; margin-top: 10px; padding: 10px; background-color: #fff3cd; border-radius: 4px;",
+                style = paste0(
+                  "color: #856404; margin-top: 10px; padding: 10px; ",
+                  "background-color: #fff3cd; border-radius: 4px;"
+                ),
                 icon("exclamation-triangle"),
                 " Address found on map, but not within our municipality database."
               )
@@ -2377,8 +2446,8 @@ server <- function(input, output, session) {
   })
 
   # Click-to-toggle municipality selection on map (page 7)
-  observeEvent(input$map_page7_shape_click, {
-    id <- input$map_page7_shape_click$id
+  observeEvent(input$map_page8_shape_click, {
+    id <- input$map_page8_shape_click$id
     req(id)
 
     # Only allow selection after home municipality is found
@@ -2390,11 +2459,11 @@ server <- function(input, output, session) {
       centroid <- st_centroid(st_geometry(muni_data))
       coords <- st_coordinates(centroid)
 
-      leafletProxy("map_page7") %>%
+      leafletProxy("map_page8") %>%
         setView(lng = coords[1], lat = coords[2], zoom = 10)
 
       # Ensure blue highlight and address marker are visible
-      leafletProxy("map_page7") %>%
+      leafletProxy("map_page8") %>%
         clearGroup("found_muni") %>%
         addPolygons(
           data = muni_data,
@@ -2408,7 +2477,7 @@ server <- function(input, output, session) {
 
       if (!is.null(found_address_coords())) {
         address_coords <- found_address_coords()
-        leafletProxy("map_page7") %>%
+        leafletProxy("map_page8") %>%
           clearGroup("address_marker") %>%
           addMarkers(
             lng = address_coords$lon,
@@ -2433,7 +2502,7 @@ server <- function(input, output, session) {
     # Update map based on whether selecting or deselecting
     if (is_deselecting) {
       # Re-add the deselected municipality as a clickable base polygon
-      leafletProxy("map_page7") %>%
+      leafletProxy("map_page8") %>%
         addPolygons(
           data = d_geo[d_geo$muni_id == id, ],
           layerId = id,
@@ -2451,7 +2520,7 @@ server <- function(input, output, session) {
         )
     } else {
       # Add the newly selected municipality with orange highlight
-      leafletProxy("map_page7") %>%
+      leafletProxy("map_page8") %>%
         addPolygons(
           data = d_geo[d_geo$muni_id == id, ],
           group = "selected",
@@ -2472,7 +2541,7 @@ server <- function(input, output, session) {
 
     # Re-add found municipality on top to ensure it stays visible
     if (!is.null(found_municipality())) {
-      leafletProxy("map_page7") %>%
+      leafletProxy("map_page8") %>%
         clearGroup("found_muni") %>%
         addPolygons(
           data = d_geo[d_geo$muni_id == found_municipality(), ],
@@ -2488,11 +2557,11 @@ server <- function(input, output, session) {
     # Re-add address marker
     if (!is.null(found_address_coords())) {
       address_coords <- found_address_coords()
-      leafletProxy("map_page7") %>%
+      leafletProxy("map_page8") %>%
         addMarkers(
           lng = address_coords$lon,
           lat = address_coords$lat,
-          popup = "Your address from Step 1",
+          popup = "Your address",
           group = "address_marker"
         )
     }
@@ -2539,11 +2608,6 @@ server <- function(input, output, session) {
     response_df <- data.frame(
       Found_Municipality = found_muni_name,
       Map_Selected_Municipalities = map_munis_names,
-      Additional_Comments = ifelse(
-        is.null(input$additional_comments) || input$additional_comments == "",
-        NA_character_,
-        input$additional_comments
-      ),
       # Demographics
       Age = ifelse(
         is.null(input$age),
@@ -2759,9 +2823,8 @@ server <- function(input, output, session) {
         }
       },
       Party_Allegiance_Update = ifelse(
-        is.null(input$party_allegiance_update) ||
-          length(input$party_allegiance_update) == 0,
-        NA_character_,
+        is.null(input$party_allegiance_update),
+        NA_integer_,
         input$party_allegiance_update
       ),
       Vote_Intention_2027 = ifelse(
@@ -2779,15 +2842,7 @@ server <- function(input, output, session) {
       stringsAsFactors = FALSE
     )
 
-    # Write to Google Sheets for persistent storage
-    tryCatch(
-      googlesheets4::sheet_append(SHEET_ID, response_df),
-      error = function(e) {
-        warning("Google Sheets write failed: ", e$message)
-      }
-    )
-
-    # Local CSV backup
+    # Save to local CSV
     tryCatch(
       {
         if (file.exists(responses_file)) {
