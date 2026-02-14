@@ -2,23 +2,26 @@ library(shiny)
 library(shinyjs)
 library(sortable)
 library(sf)
-library(leaflet)
 library(dplyr)
-library(httr)
-library(jsonlite)
 library(ggplot2)
 
 # Read municipalities from GeoJSON file
+if (!file.exists("data/00mun_simplified.geojson")) {
+  stop("Missing data/00mun_simplified.geojson. Run: source('scripts/make_geojson_file.R')")
+}
 d_geo <- st_read("data/00mun_simplified.geojson", quiet = TRUE)
 municipality_list <- sort(unique(d_geo$mun_state))
 d_geo$muni_id <- d_geo$CVEGEO
 
 # Load robbery data for treatment graph
+if (!file.exists("data/robo_2025.rds")) {
+  stop("Missing data/robo_2025.rds. Run: source('scripts/crime_data.R')")
+}
 robo_data <- readRDS("data/robo_2025.rds")
 
-# Randomly assign governing parties to municipalities
-# TODO: Replace with actual party data when available
-set.seed(42) # For reproducibility during testing
+# WARNING: Governing parties are randomly assigned — replace with actual data before deployment
+warning("Party assignments are FAKE (randomized). Replace with real data before collecting responses.")
+set.seed(42)
 parties <- c("MORENA", "PAN", "PRI", "PRD", "PVEM", "PT", "MC")
 d_geo$governing_party <- sample(parties, nrow(d_geo), replace = TRUE)
 
@@ -185,12 +188,6 @@ ui <- fluidPage(
       $(document).on('change', '#governance_grid input[type=\"radio\"]', function() {
         Shiny.setInputValue($(this).attr('name'), $(this).val());
       });
-      $(document).on('keypress', '#address', function(e) {
-        if (e.which == 13) {
-          e.preventDefault();
-          $('#geocode_btn').click();
-        }
-      });
     "
     ))
   ),
@@ -275,60 +272,25 @@ ui <- fluidPage(
             id = "page1",
             h4("Find Your Municipality"),
 
-            # Address search
-            p(strong("Enter your address to find your home municipality:")),
-            fluidRow(
-              column(
-                9,
-                textInput(
-                  "address",
-                  NULL,
-                  placeholder = "e.g., Av. Yucatán 147, Roma Nte., Cuauhtémoc, CDMX"
-                )
-              ),
-              column(
-                3,
-                actionButton(
-                  "geocode_btn",
-                  "Search",
-                  class = "btn-info",
-                  style = "margin-top: 0px; width: 100%;"
-                )
+            p(strong("Select your home municipality from the list below:")),
+            selectizeInput(
+              "home_muni_dropdown",
+              NULL,
+              choices = NULL,
+              options = list(
+                placeholder = "Type to search municipalities..."
               )
             ),
-            hidden(
-              div(
-                id = "loading_msg",
-                style = paste0(
-                  "color: #0066cc; margin-top: 10px; padding: 10px; ",
-                  "background-color: #e7f3ff; border-radius: 4px;"
-                ),
-                icon("spinner", class = "fa-spin"),
-                tags$strong(" Searching for your address..."),
-                tags$br(),
-                tags$small("This may take a few seconds.")
-              )
-            ),
-            uiOutput("geocode_result"),
 
-            # Home municipality info (shown after geocoding)
-            uiOutput("home_muni_info"),
-
-            leafletOutput("map_page1", height = 450),
-            p(em(
-              style = "color: #6c757d; font-size: 0.9em;",
-              "Note: The map may take a few seconds to load."
-            )),
-
-            # Confirmation section (shown after home municipality is found)
+            # Confirmation section (shown after municipality is selected)
             hidden(
               div(
                 id = "home_confirmation_section",
                 hr(),
                 uiOutput("home_municipality_summary"),
                 actionButton(
-                  "clear_map_btn",
-                  "Clear Map",
+                  "clear_selection_btn",
+                  "Clear Selection",
                   icon = icon("refresh"),
                   class = "btn-secondary"
                 )
@@ -358,7 +320,9 @@ ui <- fluidPage(
             id = "page2",
             h4("Confirm Your Municipality"),
 
-            p("Please confirm that the following information is correct before continuing:"),
+            p(
+              "Please confirm that the following information is correct before continuing:"
+            ),
 
             uiOutput("verify_municipality_info"),
 
@@ -1003,60 +967,14 @@ ui <- fluidPage(
               "Now we would like you to select some reference municipalities for comparison."
             ),
             uiOutput("reference_instructions_text"),
-            p(em(
-              "(You can select multiple municipalities by clicking on them. Click again to deselect.)"
-            )),
 
-            leafletOutput("map_page8", height = 450),
-            p(em(
-              style = "color: #6c757d; font-size: 0.9em;",
-              "Note: Your home municipality is shown in blue."
-            )),
-
-            # Municipality search box
-            fluidRow(
-              column(
-                5,
-                selectizeInput(
-                  "muni_search",
-                  "Search for a municipality by name:",
-                  choices = NULL,
-                  options = list(
-                    placeholder = "Type to search municipalities..."
-                  )
-                )
-              ),
-              column(
-                2,
-                style = "margin-top: 25px;",
-                actionButton(
-                  "zoom_search",
-                  "Zoom",
-                  icon = icon("crosshairs"),
-                  class = "btn-info",
-                  style = "width: 100%;"
-                )
-              ),
-              column(
-                2,
-                style = "margin-top: 25px;",
-                actionButton(
-                  "clear_search",
-                  "Clear",
-                  class = "btn-secondary",
-                  style = "width: 100%;"
-                )
-              ),
-              column(
-                3,
-                style = "margin-top: 25px;",
-                actionButton(
-                  "zoom_home",
-                  "Zoom to Home",
-                  icon = icon("home"),
-                  class = "btn-primary",
-                  style = "width: 100%;"
-                )
+            selectizeInput(
+              "reference_munis_dropdown",
+              "Select reference municipalities:",
+              choices = NULL,
+              multiple = TRUE,
+              options = list(
+                placeholder = "Type to search and select municipalities..."
               )
             ),
 
@@ -1126,7 +1044,6 @@ server <- function(input, output, session) {
   # Reactive values
   selected_map_munis <- reactiveVal(character())
   found_municipality <- reactiveVal(NULL)
-  found_address_coords <- reactiveVal(NULL)
   current_page <- reactiveVal(0)
   comparison_municipalities <- reactiveVal(NULL) # Stores comparison muni data for ranking & graph
   comp_munis_opp_rv <- reactiveVal(NULL) # Stores opposite-coalition comparison munis
@@ -1134,12 +1051,34 @@ server <- function(input, output, session) {
   # Define the file path for saving responses
   responses_file <- "data/survey_responses.csv"
 
-  # Update municipality search choices on server side
+  # Update municipality dropdown choices on server side
   updateSelectizeInput(
     session,
-    "muni_search",
+    "home_muni_dropdown",
     choices = c(" " = "", setNames(d_geo$muni_id, d_geo$mun_state)),
     server = TRUE
+  )
+  updateSelectizeInput(
+    session,
+    "reference_munis_dropdown",
+    choices = c(" " = "", setNames(d_geo$muni_id, d_geo$mun_state)),
+    server = TRUE
+  )
+
+  # Home municipality dropdown selection → sets found_municipality
+  observeEvent(input$home_muni_dropdown, {
+    if (!is.null(input$home_muni_dropdown) && input$home_muni_dropdown != "") {
+      found_municipality(input$home_muni_dropdown)
+    }
+  })
+
+  # Reference municipalities dropdown → sets selected_map_munis
+  observeEvent(
+    input$reference_munis_dropdown,
+    {
+      selected_map_munis(input$reference_munis_dropdown)
+    },
+    ignoreNULL = FALSE
   )
 
   # Set comparison municipalities when home municipality is found
@@ -1310,6 +1249,16 @@ server <- function(input, output, session) {
 
   # Page 3 → Page 4
   observeEvent(input$goto_page4_from_3, {
+    missing <- c()
+    if (is.null(input$party_preference)) missing <- c(missing, "party preference")
+    if (is.null(input$last_election_vote)) missing <- c(missing, "last election vote")
+    if (length(missing) > 0) {
+      showNotification(
+        paste("Please complete:", paste(missing, collapse = ", ")),
+        type = "warning"
+      )
+      return()
+    }
     current_page(4)
   })
 
@@ -1320,6 +1269,13 @@ server <- function(input, output, session) {
 
   # Page 4 → Page 5
   observeEvent(input$goto_page5_from_4, {
+    if (is.null(input$vote_intention_pre)) {
+      showNotification(
+        "Please select your vote intention before continuing.",
+        type = "warning"
+      )
+      return()
+    }
     current_page(5)
   })
 
@@ -1330,6 +1286,17 @@ server <- function(input, output, session) {
 
   # Page 5 → Page 6
   observeEvent(input$goto_page6_from_5, {
+    missing <- c()
+    if (is.null(input$age) || is.na(input$age)) missing <- c(missing, "age")
+    if (is.null(input$gender) || input$gender == "") missing <- c(missing, "gender")
+    if (is.null(input$attention_check)) missing <- c(missing, "attention check")
+    if (length(missing) > 0) {
+      showNotification(
+        paste("Please complete:", paste(missing, collapse = ", ")),
+        type = "warning"
+      )
+      return()
+    }
     current_page(6)
   })
 
@@ -1350,6 +1317,13 @@ server <- function(input, output, session) {
 
   # Page 7 → Page 8 (Reference Municipalities)
   observeEvent(input$goto_page8_from_7, {
+    if (is.null(input$vote_intention_2027)) {
+      showNotification(
+        "Please select your vote intention before continuing.",
+        type = "warning"
+      )
+      return()
+    }
     current_page(8)
   })
 
@@ -1358,17 +1332,10 @@ server <- function(input, output, session) {
     current_page(7)
   })
 
-  # Clear map button - resets the found municipality and map
-  observeEvent(input$clear_map_btn, {
+  # Clear selection button - resets the found municipality
+  observeEvent(input$clear_selection_btn, {
     found_municipality(NULL)
-    found_address_coords(NULL)
-    updateTextInput(session, "address", value = "")
-
-    # Reset map view and clear highlights
-    leafletProxy("map_page1") %>%
-      clearGroup("found_muni") %>%
-      clearGroup("address_marker") %>%
-      fitBounds(lng1 = -118.0, lat1 = 14.0, lng2 = -86.0, lat2 = 33.0)
+    updateSelectizeInput(session, "home_muni_dropdown", selected = character(0))
   })
 
   # Display home municipality summary on page 1 confirmation section
@@ -2024,21 +1991,6 @@ server <- function(input, output, session) {
     suspendWhenHidden = FALSE
   )
 
-  # Display zoom to home button
-  output$home_muni_info <- renderUI({
-    if (!is.null(found_municipality())) {
-      div(
-        style = "margin-bottom: 10px;",
-        actionButton(
-          "zoom_home",
-          "Zoom to Home",
-          icon = icon("crosshairs"),
-          class = "btn-primary btn-sm"
-        )
-      )
-    }
-  })
-
   # Reference instructions text with dynamic municipality name
   output$reference_instructions_text <- renderUI({
     req(!is.null(found_municipality()))
@@ -2050,99 +2002,12 @@ server <- function(input, output, session) {
     p(strong(
       paste0(
         "We are interested in which municipalities you think are the most useful ",
-        "comparisons for your municipality. Click on the map or use the search bar ",
+        "comparisons for your municipality. Use the search bar ",
         "below to select these reference municipalities for your home municipality of ",
         muni_name,
         ":"
       )
     ))
-  })
-
-  # Zoom to home municipality button
-  observeEvent(input$zoom_home, {
-    req(!is.null(found_municipality()))
-
-    muni_data <- d_geo %>% filter(muni_id == found_municipality())
-    centroid <- st_centroid(st_geometry(muni_data))
-    coords <- st_coordinates(centroid)
-
-    leafletProxy("map_page1") %>%
-      setView(lng = coords[1], lat = coords[2], zoom = 8)
-  })
-
-  # Page 1 Map - Interactive map for both geocoding and selection
-  output$map_page1 <- renderLeaflet({
-    leaflet(d_geo) %>%
-      addTiles() %>%
-      addPolygons(
-        layerId = ~muni_id,
-        fillColor = "#9ecae1",
-        fillOpacity = 0.35,
-        color = "#3182bd",
-        weight = 0.4,
-        label = ~ paste0(NOMGEO, ", ", NOM_ENT),
-        highlightOptions = highlightOptions(
-          weight = 2,
-          color = "#08519c",
-          fillOpacity = 0.55,
-          bringToFront = TRUE
-        )
-      ) %>%
-      fitBounds(lng1 = -115.0, lat1 = 16.0, lng2 = -88.0, lat2 = 30.5)
-  })
-
-  # Page 8 Map - Interactive map for reference selection
-  output$map_page8 <- renderLeaflet({
-    home_id <- found_municipality()
-
-    map <- leaflet(d_geo) %>%
-      addTiles() %>%
-      addPolygons(
-        layerId = ~muni_id,
-        fillColor = "#9ecae1",
-        fillOpacity = 0.35,
-        color = "#3182bd",
-        weight = 0.4,
-        label = ~ paste0(NOMGEO, ", ", NOM_ENT),
-        highlightOptions = highlightOptions(
-          weight = 2,
-          color = "#08519c",
-          fillOpacity = 0.55,
-          bringToFront = TRUE
-        )
-      ) %>%
-      fitBounds(lng1 = -115.0, lat1 = 16.0, lng2 = -88.0, lat2 = 30.5)
-
-    # Add home municipality highlight if found
-    if (!is.null(home_id)) {
-      home_data <- d_geo[d_geo$muni_id == home_id, ]
-      home_coords <- found_address_coords()
-
-      map <- map %>%
-        addPolygons(
-          data = home_data,
-          group = "found_muni",
-          fillColor = "#0072B2",
-          fillOpacity = 0.6,
-          color = "#005080",
-          weight = 2,
-          label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
-        )
-
-      # Add marker if we have coordinates
-      if (!is.null(home_coords)) {
-        map <- map %>%
-          addMarkers(
-            lng = home_coords$lon,
-            lat = home_coords$lat,
-            popup = "Your address",
-            group = "address_marker"
-          )
-      }
-
-    }
-
-    map
   })
 
   # Enable/disable Submit button on page 8 based on reference selections
@@ -2153,417 +2018,6 @@ server <- function(input, output, session) {
       enable("submit")
     } else {
       disable("submit")
-    }
-  })
-
-  # Municipality search - auto-select municipality on page 8
-  observeEvent(input$muni_search, {
-    req(input$muni_search != "")
-
-    muni_id <- input$muni_search
-    muni_data <- d_geo %>% filter(muni_id == !!muni_id)
-
-    if (nrow(muni_data) > 0) {
-      # Auto-select the municipality if it's not the home municipality
-      if (!is.null(found_municipality()) && muni_id != found_municipality()) {
-        current <- selected_map_munis()
-        if (!(muni_id %in% current)) {
-          selected_map_munis(c(current, muni_id))
-
-          # Update map highlighting
-          leafletProxy("map_page8") %>%
-            clearGroup("selected") %>%
-            clearGroup("found_muni")
-
-          # Add selected municipalities
-          leafletProxy("map_page8") %>%
-            addPolygons(
-              data = d_geo[d_geo$muni_id %in% selected_map_munis(), ],
-              group = "selected",
-              layerId = ~muni_id,
-              fillColor = "#E69F00",
-              fillOpacity = 0.6,
-              color = "#CC8800",
-              weight = 1.2,
-              label = ~ paste0(NOMGEO, ", ", NOM_ENT),
-              highlightOptions = highlightOptions(
-                weight = 2,
-                color = "#08519c",
-                fillOpacity = 0.55,
-                bringToFront = TRUE
-              )
-            )
-
-          # Re-add found municipality on top
-          leafletProxy("map_page8") %>%
-            addPolygons(
-              data = d_geo[d_geo$muni_id == found_municipality(), ],
-              group = "found_muni",
-              fillColor = "#0072B2",
-              fillOpacity = 0.6,
-              color = "#005080",
-              weight = 2,
-              label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
-            )
-
-          # Re-add address marker
-          if (!is.null(found_address_coords())) {
-            address_coords <- found_address_coords()
-            leafletProxy("map_page8") %>%
-              addMarkers(
-                lng = address_coords$lon,
-                lat = address_coords$lat,
-                popup = "Your address",
-                group = "address_marker"
-              )
-          }
-        }
-      }
-    }
-  })
-
-  # Clear search button (page 7)
-  observeEvent(input$clear_search, {
-    updateSelectizeInput(session, "muni_search", selected = character(0))
-
-    leafletProxy("map_page8") %>%
-      fitBounds(lng1 = -115.0, lat1 = 16.0, lng2 = -88.0, lat2 = 30.5)
-  })
-
-  # Zoom to searched municipality button (page 7)
-  observeEvent(input$zoom_search, {
-    req(input$muni_search != "")
-
-    muni_id <- input$muni_search
-    muni_data <- d_geo %>% filter(muni_id == !!muni_id)
-
-    if (nrow(muni_data) > 0) {
-      centroid <- st_centroid(st_geometry(muni_data))
-      coords <- st_coordinates(centroid)
-
-      leafletProxy("map_page8") %>%
-        setView(lng = coords[1], lat = coords[2], zoom = 10)
-    }
-  })
-
-  # Zoom to home municipality on page 8
-  observeEvent(input$zoom_home, {
-    home_id <- found_municipality()
-    req(home_id)
-
-    home_data <- d_geo[d_geo$muni_id == home_id, ]
-    if (nrow(home_data) > 0) {
-      centroid <- st_centroid(st_geometry(home_data))
-      coords <- st_coordinates(centroid)
-
-      leafletProxy("map_page8") %>%
-        setView(lng = coords[1], lat = coords[2], zoom = 8)
-    }
-  })
-
-  # Geocode address and find municipality
-  observeEvent(input$geocode_btn, {
-    req(input$address)
-
-    disable("geocode_btn")
-    updateActionButton(session, "geocode_btn", label = "Searching...")
-    show("loading_msg")
-    output$geocode_result <- renderUI({})
-
-    tryCatch(
-      {
-        # Method 1: Nominatim with Mexico bias
-        url1 <- paste0(
-          "https://nominatim.openstreetmap.org/search?",
-          "q=",
-          URLencode(paste(input$address, "Mexico")),
-          "&format=json&limit=3&countrycodes=mx"
-        )
-
-        response1 <- GET(url1, user_agent("ShinyApp/1.0 (Survey Research)"))
-        Sys.sleep(1)
-        result1 <- fromJSON(content(response1, "text", encoding = "UTF-8"))
-
-        # Method 2: Photon geocoder
-        url2 <- paste0(
-          "https://photon.komoot.io/api/?",
-          "q=",
-          URLencode(input$address),
-          "&limit=3"
-        )
-
-        response2 <- GET(url2)
-        result2 <- fromJSON(content(response2, "text", encoding = "UTF-8"))
-
-        lat <- lon <- NULL
-
-        if (length(result1) > 0 && nrow(result1) > 0) {
-          lat <- as.numeric(result1$lat[1])
-          lon <- as.numeric(result1$lon[1])
-        } else if (
-          !is.null(result2$features) && length(result2$features$geometry) > 0
-        ) {
-          coords <- result2$features$geometry$coordinates[[1]]
-          lon <- coords[1]
-          lat <- coords[2]
-        }
-
-        if (!is.null(lat) && !is.null(lon)) {
-          point <- st_sfc(st_point(c(lon, lat)), crs = 4326)
-
-          if (!is.na(st_crs(d_geo))) {
-            point <- st_transform(point, st_crs(d_geo))
-          }
-
-          intersection <- st_intersects(point, d_geo, sparse = FALSE)
-
-          if (any(intersection)) {
-            muni_id <- d_geo$muni_id[which(intersection)[1]]
-            muni_name <- d_geo$NOMGEO[which(intersection)[1]]
-            muni_state <- d_geo$NOM_ENT[which(intersection)[1]]
-
-            found_municipality(muni_id)
-            found_address_coords(list(lon = lon, lat = lat))
-
-            # Highlight the found municipality on page 1 map
-            leafletProxy("map_page1") %>%
-              clearGroup("found_muni") %>%
-              clearGroup("address_marker") %>%
-              addPolygons(
-                data = d_geo[d_geo$muni_id == muni_id, ],
-                group = "found_muni",
-                fillColor = "#0072B2",
-                fillOpacity = 0.6,
-                color = "#005080",
-                weight = 2,
-                label = ~ paste0(NOMGEO, ", ", NOM_ENT)
-              ) %>%
-              addMarkers(
-                lng = lon,
-                lat = lat,
-                popup = paste0(
-                  "<b>Your Address</b><br>",
-                  muni_name,
-                  ", ",
-                  muni_state
-                ),
-                group = "address_marker"
-              )
-
-            hide("loading_msg")
-            enable("geocode_btn")
-            updateActionButton(
-              session,
-              "geocode_btn",
-              label = "Search",
-              icon = NULL
-            )
-
-            output$geocode_result <- renderUI({
-              tags$div(
-                style = paste0(
-                  "color: #0072B2; margin-top: 10px; padding: 10px; ",
-                  "background-color: #d4e9f7; border-radius: 4px;"
-                ),
-                icon("check-circle"),
-                tags$strong(paste(" Found: ", muni_name, ", ", muni_state)),
-                tags$br()
-              )
-            })
-          } else {
-            leafletProxy("map_page1") %>%
-              clearGroup("address_marker") %>%
-              setView(lng = lon, lat = lat, zoom = 8) %>%
-              addMarkers(
-                lng = lon,
-                lat = lat,
-                popup = "Your searched address",
-                group = "address_marker"
-              )
-
-            hide("loading_msg")
-            enable("geocode_btn")
-            updateActionButton(
-              session,
-              "geocode_btn",
-              label = "Search",
-              icon = NULL
-            )
-
-            output$geocode_result <- renderUI({
-              tags$div(
-                style = paste0(
-                  "color: #856404; margin-top: 10px; padding: 10px; ",
-                  "background-color: #fff3cd; border-radius: 4px;"
-                ),
-                icon("exclamation-triangle"),
-                " Address found on map, but not within our municipality database."
-              )
-            })
-          }
-        } else {
-          hide("loading_msg")
-          enable("geocode_btn")
-          updateActionButton(
-            session,
-            "geocode_btn",
-            label = "Search",
-            icon = NULL
-          )
-
-          output$geocode_result <- renderUI({
-            tags$div(
-              style = "color: #721c24; margin-top: 10px; padding: 10px; background-color: #f8d7da; border-radius: 4px;",
-              icon("times-circle"),
-              " Could not find that address.",
-              tags$br(),
-              tags$small(
-                "Please try simplifying your address or checking spelling."
-              )
-            )
-          })
-        }
-      },
-      error = function(e) {
-        hide("loading_msg")
-        enable("geocode_btn")
-        updateActionButton(
-          session,
-          "geocode_btn",
-          label = "Search",
-          icon = NULL
-        )
-
-        output$geocode_result <- renderUI({
-          tags$div(
-            style = "color: #721c24; margin-top: 10px; padding: 10px; background-color: #f8d7da; border-radius: 4px;",
-            icon("times-circle"),
-            " Error searching for address."
-          )
-        })
-      }
-    )
-  })
-
-  # Click-to-toggle municipality selection on map (page 7)
-  observeEvent(input$map_page8_shape_click, {
-    id <- input$map_page8_shape_click$id
-    req(id)
-
-    # Only allow selection after home municipality is found
-    req(!is.null(found_municipality()))
-
-    # If clicking the found municipality, zoom to it and show marker
-    if (id == found_municipality()) {
-      muni_data <- d_geo %>% filter(muni_id == found_municipality())
-      centroid <- st_centroid(st_geometry(muni_data))
-      coords <- st_coordinates(centroid)
-
-      leafletProxy("map_page8") %>%
-        setView(lng = coords[1], lat = coords[2], zoom = 10)
-
-      # Ensure blue highlight and address marker are visible
-      leafletProxy("map_page8") %>%
-        clearGroup("found_muni") %>%
-        addPolygons(
-          data = muni_data,
-          group = "found_muni",
-          fillColor = "#0072B2",
-          fillOpacity = 0.6,
-          color = "#005080",
-          weight = 2,
-          label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
-        )
-
-      if (!is.null(found_address_coords())) {
-        address_coords <- found_address_coords()
-        leafletProxy("map_page8") %>%
-          clearGroup("address_marker") %>%
-          addMarkers(
-            lng = address_coords$lon,
-            lat = address_coords$lat,
-            popup = "Your address",
-            group = "address_marker"
-          )
-      }
-
-      return()
-    }
-
-    current <- selected_map_munis()
-    is_deselecting <- id %in% current
-
-    if (is_deselecting) {
-      selected_map_munis(setdiff(current, id))
-    } else {
-      selected_map_munis(c(current, id))
-    }
-
-    # Update map based on whether selecting or deselecting
-    if (is_deselecting) {
-      # Re-add the deselected municipality as a clickable base polygon
-      leafletProxy("map_page8") %>%
-        addPolygons(
-          data = d_geo[d_geo$muni_id == id, ],
-          layerId = id,
-          fillColor = "#9ecae1",
-          fillOpacity = 0.35,
-          color = "#3182bd",
-          weight = 0.4,
-          label = ~ paste0(NOMGEO, ", ", NOM_ENT),
-          highlightOptions = highlightOptions(
-            weight = 2,
-            color = "#08519c",
-            fillOpacity = 0.55,
-            bringToFront = TRUE
-          )
-        )
-    } else {
-      # Add the newly selected municipality with orange highlight
-      leafletProxy("map_page8") %>%
-        addPolygons(
-          data = d_geo[d_geo$muni_id == id, ],
-          group = "selected",
-          layerId = id,
-          fillColor = "#E69F00",
-          fillOpacity = 0.6,
-          color = "#CC8800",
-          weight = 1.2,
-          label = ~ paste0(NOMGEO, ", ", NOM_ENT),
-          highlightOptions = highlightOptions(
-            weight = 2,
-            color = "#08519c",
-            fillOpacity = 0.55,
-            bringToFront = TRUE
-          )
-        )
-    }
-
-    # Re-add found municipality on top to ensure it stays visible
-    if (!is.null(found_municipality())) {
-      leafletProxy("map_page8") %>%
-        clearGroup("found_muni") %>%
-        addPolygons(
-          data = d_geo[d_geo$muni_id == found_municipality(), ],
-          group = "found_muni",
-          fillColor = "#0072B2",
-          fillOpacity = 0.6,
-          color = "#005080",
-          weight = 2,
-          label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
-        )
-    }
-
-    # Re-add address marker
-    if (!is.null(found_address_coords())) {
-      address_coords <- found_address_coords()
-      leafletProxy("map_page8") %>%
-        addMarkers(
-          lng = address_coords$lon,
-          lat = address_coords$lat,
-          popup = "Your address",
-          group = "address_marker"
-        )
     }
   })
 
@@ -2843,7 +2297,7 @@ server <- function(input, output, session) {
     )
 
     # Save to local CSV
-    tryCatch(
+    save_success <- tryCatch(
       {
         if (file.exists(responses_file)) {
           write.table(
@@ -2857,11 +2311,21 @@ server <- function(input, output, session) {
         } else {
           write.csv(response_df, responses_file, row.names = FALSE)
         }
+        TRUE
       },
       error = function(e) {
         warning("Local CSV write failed: ", e$message)
+        FALSE
       }
     )
+
+    if (!save_success) {
+      showNotification(
+        "Error: Your response could not be saved. Please try again or contact the researcher.",
+        type = "error",
+        duration = NULL
+      )
+    }
 
     # Go to thank you page instead of resetting
     current_page(9)

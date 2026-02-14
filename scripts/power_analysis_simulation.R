@@ -248,7 +248,7 @@ coef_diff_power_line_graph <- ggplot(
 #coef_diff_power_line_graph
 
 ggsave(
-  "C:/Users/adamd/Documents/incumbent_comparisons/power_graph.pdf",
+  "docs/power_graph.pdf",
   plot = power_line_graph,
   width = 6,
   height = 4

@@ -70,7 +70,7 @@ mun_bar_graph <- ggplot(
   geom_text(aes(label = homicides), vjust = -0.5, size = 3.5)
 
 ggsave(
-  "C:/Users/adamd/Dropbox/Apps/Overleaf/Incumbent_comparisons/images/mun_bar_graph.pdf",
+  "docs/mun_bar_graph.pdf",
   plot = mun_bar_graph,
   width = 6,
   height = 4

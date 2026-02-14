@@ -154,7 +154,7 @@ power_line_graph <- ggplot(
   theme_classic()
 
 ggsave(
-  "C:/Users/adamd/Dropbox/Apps/Overleaf/Incumbent_comparisons/images/power_graph.pdf",
+  "docs/power_graph.pdf",
   plot = power_line_graph,
   width = 6,
   height = 4
