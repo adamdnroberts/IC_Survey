@@ -29,13 +29,34 @@ large_munis <- d_geo %>%
   filter(!is.na(POB_TOTAL) & (POB_TOTAL >= 200000 | is_capital)) %>%
   pull(muni_id)
 
-# WARNING: Governing parties are randomly assigned — replace with actual data before deployment
-warning(
-  "Party assignments are FAKE (randomized). Replace with real data before collecting responses."
-)
-set.seed(42)
-parties <- c("MORENA", "PAN", "PRI", "PRD", "PVEM", "PT", "MC")
-d_geo$governing_party <- sample(parties, nrow(d_geo), replace = TRUE)
+# Load real governing party data from Magar incumbents
+magar_incumbents <- read.csv("data/magar_incumbents.csv")
+magar_2024 <- magar_incumbents %>%
+  mutate(state_abbr = sub("-.*", "", emm)) %>%
+  filter(yr == 2024, state_abbr %in% c("mex", "mor", "pue")) %>%
+  mutate(
+    CVEGEO = sprintf("%05d", inegi),
+    governing_party = case_when(
+      grepl("morena|pvem|pt", part) ~ "MORENA",
+      grepl("pan", part) ~ "PAN",
+      grepl("pri|prd", part) ~ "PRI",
+      grepl("mc", part) ~ "MC",
+      TRUE ~ NA_character_
+    ),
+    coalition_label = case_when(
+      grepl("morena|pvem|pt", part) ~ "MORENA/PVEM/PT",
+      grepl("pan", part) & grepl("pri|prd", part) ~ "PAN/PRI/PRD",
+      grepl("pan", part) ~ "PAN",
+      grepl("pri|prd", part) ~ "PRI/PRD",
+      grepl("mc", part) ~ "MC",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  select(CVEGEO, governing_party, coalition_label)
+
+all_parties <- magar_2024
+d_geo <- d_geo %>%
+  left_join(all_parties, by = c("muni_id" = "CVEGEO"))
 
 # Coalition definitions for treatment groups
 coalition_a <- c("MORENA", "PT", "PVEM")
@@ -1018,11 +1039,18 @@ server <- function(input, output, session) {
   # Reference dropdown: only large cities (500k+) and state capitals
   large_geo <- d_geo %>%
     st_drop_geometry() %>%
-    filter(muni_id %in% large_munis)
+    filter(muni_id %in% large_munis) %>%
+    mutate(
+      dropdown_label = ifelse(
+        !is.na(coalition_label),
+        paste0(mun_state, " — ", coalition_label),
+        mun_state
+      )
+    )
   updateSelectizeInput(
     session,
     "reference_munis_dropdown",
-    choices = c(" " = "", setNames(large_geo$muni_id, large_geo$mun_state)),
+    choices = c(" " = "", setNames(large_geo$muni_id, large_geo$dropdown_label)),
     server = TRUE
   )
 
@@ -1908,10 +1936,11 @@ server <- function(input, output, session) {
       d_geo %>%
         st_drop_geometry() %>%
         filter(muni_id == home_id) %>%
-        select(muni_id, NOMGEO, governing_party),
+        select(muni_id, NOMGEO, governing_party, coalition_label),
       comp_munis %>%
         left_join(
-          d_geo %>% st_drop_geometry() %>% select(muni_id, governing_party),
+          d_geo %>% st_drop_geometry() %>%
+            select(muni_id, governing_party, coalition_label),
           by = "muni_id"
         )
     )
@@ -1925,9 +1954,13 @@ server <- function(input, output, session) {
       ) %>%
       arrange(robos)
 
-    # Build x-axis labels, optionally with party name
+    # Build x-axis labels, optionally with coalition label
     labels <- if (show_party) {
-      paste0(muni_info$NOMGEO, " (", muni_info$governing_party, ")")
+      ifelse(
+        !is.na(muni_info$coalition_label),
+        paste0(muni_info$NOMGEO, " (", muni_info$coalition_label, ")"),
+        muni_info$NOMGEO
+      )
     } else {
       muni_info$NOMGEO
     }
