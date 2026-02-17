@@ -1,0 +1,61 @@
+Party Abbreviations Legend (Magar elecRetrns dataset)
+=====================================================
+
+NATIONAL PARTIES (CURRENT)
+--------------------------
+PAN       Partido Acción Nacional (National Action Party)
+PRI       Partido Revolucionario Institucional (Institutional Revolutionary Party)
+PRD       Partido de la Revolución Democrática (Party of the Democratic Revolution)
+MORENA    Movimiento Regeneración Nacional (National Regeneration Movement)
+PT        Partido del Trabajo (Labor Party)
+PVEM      Partido Verde Ecologista de México (Green Ecologist Party of Mexico)
+MC        Movimiento Ciudadano (Citizens' Movement)
+
+NATIONAL PARTIES (DEFUNCT / LOST REGISTRY)
+------------------------------------------
+PNA       Partido Nueva Alianza (New Alliance Party) — lost national registry 2018
+FXM       Fuerza por México (Force for Mexico) — lost national registry 2021
+PES       Partido Encuentro Social (Social Encounter Party) — lost national registry 2021
+RSP       Redes Sociales Progresistas (Progressive Social Networks) — lost national registry 2021
+FuerCiud  Fuerza Ciudadana (Citizen Force)
+PARM      Partido Auténtico de la Revolución Mexicana (Authentic Party of the Mexican Revolution)
+PCD       Partido del Centro Democrático (Democratic Center Party)
+CONVE     Convergencia (Convergence) — predecessor of MC
+PPS       Partido Popular Socialista (Popular Socialist Party)
+PFCRN     Partido del Frente Cardenista de Reconstrucción Nacional (Cardenista Front Party)
+PFD       Partido Fuerza del Pueblo / Partido Fuerza Democrática
+PSN       Partido de la Sociedad Nacionalista (Nationalist Society Party)
+PAS       Partido Alianza Social (Social Alliance Party)
+PLM       Partido Liberal Mexicano (Mexican Liberal Party)
+PSD       Partido Socialdemócrata (Social Democratic Party)
+CP/CPP    Partido Compromiso por Puebla / Compromiso por... (state-level commitment party)
+
+STATE/LOCAL PARTIES
+-------------------
+PCPP      Partido Conciencia Popular (Popular Conscience Party) — state-level
+PSI       Partido Sinaloense (Sinaloan Party) — Sinaloa
+PH        Partido Humanista (Humanist Party) — Baja California Sur
+PRS       Partido de la Revolución Sudcaliforniana — Baja California Sur
+PUP       Partido Unidad Popular (Popular Unity Party) — state-level
+PMM       Partido Municipalista de México — state-level
+PMR       Partido México Rojo — state-level
+PMP       Partido Movimiento de Participación — state-level
+PESM      Partido Encuentro Solidario de México — state-level successor of PES
+PCIVM     Partido Cívico — state-level
+PEC       Partido Estatal de Colima / similar — state-level
+MAS       Más (party) — state-level
+MLN       Movimiento de Liberación Nacional — state-level
+MM        Movimiento Municipalista — state-level
+TXM       Todos por México — state-level
+UYC       Unidad y Cambio — state-level
+PD        Partido Duranguense / similar — state-level
+PCC       Partido Cívico Chihuahuense / similar — state-level
+VIA_RAD   Vía Radical — state-level
+PROGRESA  Progresa — state-level
+
+OTHER LABELS
+------------
+INDEP     Independent candidate
+INDEP1    Independent candidate (alternate coding)
+MUJER     Women's party / candidacy label
+ESO       Unidentified / minor local label
