@@ -1,6 +1,7 @@
 library(dplyr)
 library(purrr)
 library(ggplot2)
+library(ggrepel)
 
 set.seed(42)
 
@@ -155,9 +156,9 @@ power_line_graph <- ggplot(
     shape = 21,
     fill = "white"
   ) +
-  geom_text(
+  geom_text_repel(
     data = crossings_precise,
-    aes(x = n_at_80, y = power_80, label = sprintf("%.2f", n_at_80)),
+    aes(x = n_at_80, y = power_80, label = sprintf("N = %.0f", n_at_80)),
     nudge_y = 0.05,
     size = 3,
     show.legend = FALSE
@@ -173,7 +174,7 @@ power_line_graph <- ggplot(
 print(power_line_graph)
 
 ggsave(
-  "docs/power_graph.pdf",
+  "C:/Users/adamd/Documents/IC_Survey/latex/68f2c388f14090ff511a63c6/power_graph.pdf",
   plot = power_line_graph,
   width = 6,
   height = 4
