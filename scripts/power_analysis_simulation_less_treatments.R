@@ -12,7 +12,11 @@ simulate_power <- function(
   beta2 = 0,
   beta3 = 0,
   beta4 = 0,
-  interact = -1,
+  interact = 0,
+  interact1 = 0,
+  interact2 = 0,
+  interact3 = 0,
+  interact4 = 0,
   sd_error = 20,
   sample_n = 4000,
   n_groups = 5,
@@ -21,32 +25,39 @@ simulate_power <- function(
 ) {
   # Move design matrix creation inside the function
   treatment <- rep(0:(n_groups - 1), floor(sample_n / n_groups))
-  interact_var <- rep(0:1, each = 7, length.out = length(treatment))
   treatment_factor <- factor(treatment)
-  X <- model.matrix(~ treatment_factor * interact_var)
+  n_obs <- length(treatment)
 
   p_values <- numeric(n_reps)
   r2_values <- numeric(n_reps)
-  coef_diffs <- numeric(n_reps)
-  p_values_diff <- numeric(n_reps)
-  sd_outcomes <- numeric(n_reps) # NEW: Store SD of outcome
+  # coef_diffs <- numeric(n_reps)
+  # p_values_diff <- numeric(n_reps)
+  sd_outcomes <- numeric(n_reps)
+  sd_interact <- numeric(n_reps)
 
   for (i in 1:n_reps) {
+    interact_var <- pmin(
+      4,
+      pmax(-4, rnorm(n_obs, mean = 0, sd = 1))
+    )
+    X <- model.matrix(~ treatment_factor * interact_var)
+
     y_raw <- beta0 +
       beta1 * X[, "treatment_factor1"] +
       beta2 * X[, "treatment_factor2"] +
       beta3 * X[, "treatment_factor3"] +
       beta4 * X[, "treatment_factor4"] +
       interact * X[, "interact_var"] +
-      beta1 * interact * X[, "treatment_factor1:interact_var"] +
-      beta2 * interact * X[, "treatment_factor2:interact_var"] +
-      beta3 * interact * X[, "treatment_factor3:interact_var"] +
-      beta4 * interact * X[, "treatment_factor4:interact_var"] +
-      rnorm(length(treatment), mean = 0, sd = sd_error)
+      interact1 * X[, "treatment_factor1:interact_var"] +
+      interact2 * X[, "treatment_factor2:interact_var"] +
+      interact3 * X[, "treatment_factor3:interact_var"] +
+      interact4 * X[, "treatment_factor4:interact_var"] +
+      rnorm(n_obs, mean = 0, sd = sd_error)
 
     y <- pmin(100, pmax(0, round(y_raw)))
 
-    sd_outcomes[i] <- sd(y) # NEW: Calculate SD of outcome
+    sd_outcomes[i] <- sd(y)
+    sd_interact[i] <- sd(interact_var)
 
     # linear model
     fit <- lm.fit(X, y)
@@ -64,53 +75,55 @@ simulate_power <- function(
     t_stat <- fit$coefficients[idx1] / se[idx1]
     p_values[i] <- 2 * pt(abs(t_stat), df_resid, lower.tail = FALSE)
 
-    idx2 <- which(colnames(X) == comparison_coef)
-
-    coef_diff <- coef_diffs[i] <- fit$coefficients[idx1] -
-      fit$coefficients[idx2]
-    se_diff <- sqrt(
-      XtX_inv[idx1, idx1] *
-        sigma2 +
-        XtX_inv[idx2, idx2] * sigma2 -
-        2 * XtX_inv[idx1, idx2] * sigma2
-    )
-    t_stat_diff <- coef_diff / se_diff
-    p_values_diff[i] <- 2 * pt(abs(t_stat_diff), df_resid, lower.tail = FALSE)
+    # idx2 <- which(colnames(X) == comparison_coef)
+    #
+    # coef_diff <- coef_diffs[i] <- fit$coefficients[idx1] -
+    #   fit$coefficients[idx2]
+    # se_diff <- sqrt(
+    #   XtX_inv[idx1, idx1] *
+    #     sigma2 +
+    #     XtX_inv[idx2, idx2] * sigma2 -
+    #     2 * XtX_inv[idx1, idx2] * sigma2
+    # )
+    # t_stat_diff <- coef_diff / se_diff
+    # p_values_diff[i] <- 2 * pt(abs(t_stat_diff), df_resid, lower.tail = FALSE)
   }
 
   result <- tibble(
-    beta1 = beta1,
+    interact1 = interact1,
     sd_error = sd_error,
     sample_n = sample_n,
     power = mean(p_values < 0.05),
     mean_r2 = mean(r2_values),
-    mean_coef_diff = mean(coef_diffs),
-    coef_diff_power = mean(p_values_diff < 0.05),
-    mean_sd_outcome = mean(sd_outcomes) # NEW: Average SD across simulations
+    # mean_coef_diff = mean(coef_diffs),
+    # coef_diff_power = mean(p_values_diff < 0.05),
+    mean_sd_outcome = mean(sd_outcomes),
+    sd_interact_var = mean(sd_interact)
   )
 }
 
 # Update simulation grid
 params <- expand.grid(
-  beta1 = c(4, 5, 6),
+  interact1 = c(4, 5, 6),
   sample_n = seq(500, 4500, by = 100) # Add sample sizes
 )
 
 power_results <- pmap_dfr(
   params,
   ~ simulate_power(
-    beta1 = ..1,
+    interact1 = ..1,
     sample_n = ..2,
-    coef_of_interest = "treatment_factor1"
+    coef_of_interest = "treatment_factor1:interact_var"
   )
 )
 
-power_results$cohens_d_raw <- power_results$beta1 /
+power_results$cohens_d_raw <- power_results$interact1 *
+  power_results$sd_interact_var /
   power_results$mean_sd_outcome
 power_results$cohens_d <- round(power_results$cohens_d_raw * 20) / 20
 
 crossings_precise <- power_results %>%
-  group_by(beta1) %>%
+  group_by(interact1) %>%
   arrange(sample_n) %>%
   mutate(
     next_power = lead(power),
@@ -150,8 +163,14 @@ power_line_graph <- ggplot(
     show.legend = FALSE
   ) +
   #facet_wrap(~cohens_d) +
-  labs(color = "Treatment Effect Size", x = "Sample Size", y = "Power") +
+  labs(
+    color = "Interaction Effect Size",
+    x = "Total Sample Size",
+    y = "Power"
+  ) +
   theme_classic()
+
+print(power_line_graph)
 
 ggsave(
   "docs/power_graph.pdf",
