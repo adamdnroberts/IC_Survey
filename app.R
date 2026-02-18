@@ -660,11 +660,11 @@ ui <- fluidPage(
             rank_list(
               text = "Drag to rank the following issues in order of importance (top = most important):",
               labels = c(
-                "Delincuencia",
-                "Economia / Inflacion",
+                "Seguridad / Delincuencia",
+                "Economía / Inflación",
+                "Empleo y pobreza",
                 "Corrupción",
-                "Desempleo / Bajos salarios",
-                "Educacion / Servicios de salud"
+                "Educación y servicios de salud"
               ),
               input_id = "issue_importance_ranking"
             ),
@@ -2164,23 +2164,23 @@ server <- function(input, output, session) {
       # Convert ordered list to numeric ranks (1 = most important)
       Importance_Crime = {
         ranking <- input$issue_importance_ranking
-        match("Delincuencia", ranking, nomatch = NA_integer_)
+        match("Seguridad / Delincuencia", ranking, nomatch = NA_integer_)
       },
       Importance_Economy = {
         ranking <- input$issue_importance_ranking
-        match("Economia / Inflacion", ranking, nomatch = NA_integer_)
+        match("Economía / Inflación", ranking, nomatch = NA_integer_)
+      },
+      Importance_Employment_Poverty = {
+        ranking <- input$issue_importance_ranking
+        match("Empleo y pobreza", ranking, nomatch = NA_integer_)
       },
       Importance_Corruption = {
         ranking <- input$issue_importance_ranking
         match("Corrupción", ranking, nomatch = NA_integer_)
       },
-      Importance_Employment = {
-        ranking <- input$issue_importance_ranking
-        match("Desempleo / Bajos salarios", ranking, nomatch = NA_integer_)
-      },
       Importance_Education_Health = {
         ranking <- input$issue_importance_ranking
-        match("Educacion / Servicios de salud", ranking, nomatch = NA_integer_)
+        match("Educación y servicios de salud", ranking, nomatch = NA_integer_)
       },
       # Priors - municipality crime ranking relative to home
       # (home is the fixed reference point)
