@@ -1,7 +1,7 @@
 library(dplyr)
 library(ggplot2)
 
-magar_incumbents <- read.csv("~/IC_Survey/data/magar_incumbents.csv")
+magar_coalition_full <- read.csv("data/aymu-coalAgg2020s.csv")
 
 # Map state abbreviations to full names
 state_names <- c(
@@ -12,14 +12,18 @@ state_names <- c(
   "coa" = "Coahuila",
   "col" = "Colima",
   "chi" = "Chiapas",
+  "cps" = "Chiapas",
   "chs" = "Chihuahua",
+  "cua" = "Chihuahua",
   "cin" = "Ciudad de México",
   "cdmx" = "Ciudad de México",
   "df" = "Ciudad de México",
   "dur" = "Durango",
+  "dgo" = "Durango",
   "gua" = "Guanajuato",
   "gue" = "Guerrero",
   "hid" = "Hidalgo",
+  "hgo" = "Hidalgo",
   "jal" = "Jalisco",
   "mex" = "Estado de México",
   "mic" = "Michoacán",
@@ -41,28 +45,23 @@ state_names <- c(
   "zac" = "Zacatecas"
 )
 
-magar_incumbents <- magar_incumbents %>%
+magar_coalition_full <- magar_coalition_full %>%
   mutate(
     state_abbr = sub("-.*", "", emm),
     estado = state_names[state_abbr]
   )
 
-magar_2024 <- filter(magar_incumbents, yr == 2024 & !grepl("^oax", emm))
+# Use most recent election year per municipality (covers all 32 states)
+magar2024 <- magar_coalition_full %>%
+  group_by(inegi) %>%
+  slice_max(yr, n = 1, with_ties = FALSE) %>%
+  ungroup()
 
-# Group any coalition containing morena into the MORENA coalition (pvem-pt-morena)
-magar_2024 <- magar_2024 %>%
-  mutate(
-    coalition = case_when(
-      grepl("morena|pvem|pt", part) ~ "pvem-pt-morena",
-      grepl("pan|pri|prd", part) ~ "pan-pri-prd",
-      grepl("mc", part) ~ "mc",
-      TRUE ~ part
-    )
-  )
+save(magar2024, file = "data/magar2024_coalitions.Rdata")
 
 # Check for cross-coalition cases (morena + pan/pri/prd in same coalition)
-cross_coalition <- magar_2024 %>%
-  filter(grepl("morena", part) & grepl("pan|pri|prd", part))
+cross_coalition <- magar2024 %>%
+  filter(grepl("morena", v01) & grepl("pan|pri|prd", v01))
 cat(
   "Cross-coalition cases (morena with pan/pri/prd):",
   nrow(cross_coalition),
@@ -73,10 +72,10 @@ if (nrow(cross_coalition) > 0) {
 }
 
 # Bar graph: frequency of each coalition
-coalition_counts <- magar_2024 %>%
-  count(estado, coalition, sort = TRUE)
+coalition_counts <- magar2024 %>%
+  count(estado, v01, sort = TRUE)
 
-ggplot(coalition_counts, aes(x = reorder(coalition, n), y = n)) +
+ggplot(coalition_counts, aes(x = reorder(v01, n), y = n)) +
   geom_col(fill = "#0072B2") +
   coord_flip() +
   labs(
@@ -98,16 +97,14 @@ d_map <- d_geo %>%
   filter(CVE_ENT %in% c("15", "17", "21"))
 
 # Prepare party data for join — format inegi as 5-digit CVEGEO
-magar_map <- magar_2024 %>%
+magar_map <- magar2024 %>%
   filter(edon %in% c(15, 17, 21)) %>%
   mutate(
     CVEGEO = sprintf("%05d", inegi),
     coalition_label = case_when(
-      grepl("morena|pvem|pt", part) ~ "MORENA/PVEM/PT",
-      grepl("pan", part) & grepl("pri|prd", part) ~ "PAN/PRI/PRD",
-      grepl("pan", part) ~ "PAN",
-      grepl("pri|prd", part) ~ "PRI/PRD",
-      grepl("mc", part) ~ "MC",
+      grepl("morena|pvem|pt", l01) ~ "MORENA/PVEM/PT",
+      grepl("pan|pri|prd", l01) ~ "PAN/PRI/PRD",
+      grepl("mc", l01) ~ "MC",
       TRUE ~ "Other"
     )
   ) %>%
@@ -119,7 +116,7 @@ all_parties <- magar_map
 d_map <- d_map %>%
   left_join(all_parties, by = "CVEGEO") %>%
   mutate(
-    coalition_label = ifelse(is.na(coalition_label), "No data", coalition_label)
+    coalition_label = ifelse(is.na(coalition_label), "Other", coalition_label)
   )
 
 # Set factor order for consistent legend
@@ -128,22 +125,16 @@ d_map$coalition_label <- factor(
   levels = c(
     "MORENA/PVEM/PT",
     "PAN/PRI/PRD",
-    "PAN",
-    "PRI/PRD",
     "MC",
-    "Other",
-    "No data"
+    "Other"
   )
 )
 
 coalition_colors <- c(
   "MORENA/PVEM/PT" = "#8B0000",
-  "PAN/PRI/PRD" = "#00008B",
-  "PAN" = "#1E90FF",
-  "PRI/PRD" = "#006400",
-  "MC" = "#FF8C00",
-  "Other" = "#808080",
-  "No data" = "grey90"
+  "PAN/PRI/PRD" = "#00308F",
+  "MC" = "#FF5722",
+  "Other" = "#808080"
 )
 
 # Dissolve municipalities into state boundaries for border overlay
