@@ -17,6 +17,8 @@ if (!file.exists("data/00mun_simplified.geojson")) {
 d_geo <- st_read("data/00mun_simplified.geojson", quiet = TRUE)
 municipality_list <- sort(unique(d_geo$mun_state))
 d_geo$muni_id <- d_geo$CVEGEO
+muni_choices <- setNames(d_geo$muni_id, d_geo$mun_state)
+muni_choices <- muni_choices[order(names(muni_choices))]
 
 # Load robbery data for treatment graph
 if (!file.exists("data/robo_2025.rds")) {
@@ -101,11 +103,40 @@ party_radio_choice <- function(
   )
 }
 
+party_checkbox_choice <- function(
+  value,
+  label,
+  img_src = NULL,
+  group = "last_election_vote"
+) {
+  tags$label(
+    class = "party-radio-label",
+    tags$input(
+      type = "checkbox",
+      value = value,
+      class = "party-checkbox-input",
+      `data-group` = group
+    ),
+    if (!is.null(img_src)) tags$img(src = img_src, class = "party-logo"),
+    tags$span(label)
+  )
+}
+
 ui <- fluidPage(
   useShinyjs(),
   tags$head(
     tags$style(HTML(
       "
+      /* Whitespace between survey elements */
+      .shiny-input-container {
+        margin-bottom: 24px;
+      }
+      .form-group {
+        margin-bottom: 24px;
+      }
+      .well p, .well hr {
+        margin-bottom: 16px;
+      }
       .party-radio-group {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -145,25 +176,43 @@ ui <- fluidPage(
         margin-right: 8px;
         min-width: 20px;
       }
-      /* Remove numbering for municipality bucket lists */
-      .bucket-list .rank-list-container .rank-list-item::before {
-        content: none;
+      /* Source bins: no numbering, no color coding */
+      .source-bin .rank-list-item::before {
+        content: none !important;
+      }
+      .source-bin .rank-list-item,
+      .source-bin .rank-list-item:nth-child(1),
+      .source-bin .rank-list-item:nth-child(2),
+      .source-bin .rank-list-item:nth-child(3),
+      .source-bin .rank-list-item:nth-child(4),
+      .source-bin .rank-list-item:nth-child(5) {
+        background-color: #ffffff !important;
+        color: #333333 !important;
       }
       .rank-list-container .rank-list-item:nth-child(1) {
-        background-color: #e74c3c;
-        color: #ffffff;
+        background-color: #D4AF37;
+        color: #333333;
       }
       .rank-list-container .rank-list-item:nth-child(2) {
-        background-color: #f1948a;
+        background-color: #C08B2A;
+        color: #333333;
       }
       .rank-list-container .rank-list-item:nth-child(3) {
-        background-color: #f5c6cb;
+        background-color: #9B6B3A;
+        color: #ffffff;
       }
       .rank-list-container .rank-list-item:nth-child(4) {
-        background-color: #fae5e8;
+        background-color: #7A4E2D;
+        color: #ffffff;
       }
       .rank-list-container .rank-list-item:nth-child(5) {
-        background-color: #ffffff;
+        background-color: #5C3317;
+        color: #ffffff;
+      }
+      /* Issue importance ranking: grayed out until first interaction */
+      .issue-grayed {
+        opacity: 0.4;
+        transition: opacity 0.4s ease;
       }
       /* Governance grid table */
       .governance-grid {
@@ -231,11 +280,30 @@ ui <- fluidPage(
         });
         Shiny.setInputValue(inputName, checked.length > 0 ? checked : null);
       });
+      $(document).on('change', 'input.party-checkbox-input', function() {
+        var group = $(this).data('group');
+        var val = $(this).val();
+        var exclusive = ['did_not_vote', 'dont_remember'];
+        if ($(this).is(':checked')) {
+          if (exclusive.indexOf(val) !== -1) {
+            // Exclusive option selected: uncheck everything else in the group
+            $('input.party-checkbox-input[data-group=\"' + group + '\"]').not(this).prop('checked', false);
+          } else {
+            // Regular option selected: uncheck exclusive options
+            exclusive.forEach(function(ex) {
+              $('input.party-checkbox-input[data-group=\"' + group + '\"][value=\"' + ex + '\"]').prop('checked', false);
+            });
+          }
+        }
+        var checked = [];
+        $('input.party-checkbox-input[data-group=\"' + group + '\"]:checked').each(function() {
+          checked.push($(this).val());
+        });
+        Shiny.setInputValue(group, checked.length > 0 ? checked : null);
+      });
     "
     ))
   ),
-  titlePanel("Municipality Survey"),
-
   fluidRow(
     column(
       8,
@@ -246,9 +314,6 @@ ui <- fluidPage(
           div(
             id = "page0",
             h4("Information Sheet"),
-            h5(strong(
-              "Evaluating the Efficacy of Sub-National Informational Comparisons"
-            )),
             p(em("Principal Investigator: Adam Roberts")),
             p(
               "This form describes a research study that is being conducted by Adam Roberts from the ",
@@ -257,7 +322,7 @@ ui <- fluidPage(
             ),
             p(
               "If you decide to take part in this study, you will be asked to complete a survey that will take ",
-              "about 15\u201320 minutes to complete. The surveys will ask questions ",
+              "about 10\u201315 minutes to complete. The surveys will ask questions ",
               "about the municipality you live in, ",
               "demographics, and political topics, including your political preferences, party affiliation, and ",
               "vote choice in the most recent municipal elections."
@@ -301,7 +366,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page1_from_0",
-                  "I have read the information sheet. Continue \u2192",
+                  "Entiendo, Continuar \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -359,11 +424,13 @@ ui <- fluidPage(
                   "Please confirm that the following information is correct before continuing:"
                 ),
                 uiOutput("home_municipality_summary"),
-                p(
-                  em(
-                    "If this is not correct, clear your selection and search again."
-                  ),
-                  style = "color: #6c757d; font-size: 0.9em;"
+                selectInput(
+                  "dropdown_municipality",
+                  "Not right? Search your address again or select your municipality from the list:",
+                  choices = c("-- Select a municipality --" = "", muni_choices),
+                  selected = "",
+                  selectize = TRUE,
+                  width = "100%"
                 ),
                 actionButton(
                   "clear_selection_btn",
@@ -395,33 +462,57 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page2",
-            h4("Practice Question"),
-            p("This survey includes questions where you rank items by dragging and dropping them into order."),
-            p("Try it below: drag the items to rank them from most to least important to you personally."),
-            tags$hr(),
-            rank_list(
-              text = "Drag to rank your favorite foods from most favorite (top) to least favorite (bottom):",
-              labels = c(
-                "Pizza",
-                "Tacos",
-                "Sushi",
-                "Hamburgers",
-                "Pasta"
-              ),
-              input_id = "practice_ranking"
+            p(
+              "This survey includes questions where you rank items by dragging and dropping them into order."
             ),
-            p(style = "color: #555; font-size: 0.9em;",
-              "There is no right or wrong answer \u2014 this is just to help you get comfortable with the drag-and-drop format."),
+            p(
+              "The following is a list of news sources that you can re-arrange by dragging and dropping each individual item.",
+              "To make sure that you are paying attention to the question wording, please put ",
+              "Radio in position 1 (top) and Social media is in position 5 (bottom)."
+            ),
             tags$hr(),
+            bucket_list(
+              header = NULL,
+              group_name = "practice_bucket",
+              orientation = "horizontal",
+              add_rank_list(
+                text = "Available items — drag into slots:",
+                labels = c(
+                  "Television",
+                  "Social media",
+                  "Online news websites",
+                  "Radio",
+                  "Print newspapers"
+                ),
+                input_id = "practice_source",
+                class = "default-sortable source-bin"
+              ),
+              add_rank_list(
+                text = "Your ranking (1 = top, 5 = bottom):",
+                labels = NULL,
+                input_id = "practice_ranking",
+                class = "default-sortable"
+              )
+            ),
+            tags$hr(),
+            uiOutput("practice_warning"),
             fluidRow(
               column(
                 6,
-                actionButton("goto_page1_from_2", "\u2190 Back", class = "btn-default btn-lg")
+                actionButton(
+                  "goto_page1_from_2",
+                  "\u2190 Back",
+                  class = "btn-default btn-lg"
+                )
               ),
               column(
                 6,
                 align = "right",
-                actionButton("goto_page3_from_2", "Next \u2192", class = "btn-primary btn-lg")
+                actionButton(
+                  "goto_page3_from_2",
+                  "Next \u2192",
+                  class = "btn-primary btn-lg"
+                )
               )
             )
           )
@@ -433,8 +524,348 @@ ui <- fluidPage(
             id = "page3",
             h4("Your Municipality"),
 
-            # Political Party Allegiance
+            tags$div(
+              class = "form-group",
+              tags$label(
+                "Which party or parties did you vote for in the last municipal election? (select all that apply)"
+              ),
+              tags$div(
+                class = "party-radio-group",
+                party_checkbox_choice(
+                  "pan",
+                  "PAN (Partido Acción Nacional)",
+                  "PAN_logo.png"
+                ),
+                party_checkbox_choice(
+                  "pri",
+                  "PRI (Partido Revolucionario Institucional)",
+                  "PRI_logo.png"
+                ),
+                party_checkbox_choice(
+                  "prd",
+                  "PRD (Partido de la Revolución Democrática)",
+                  "PRD_logo.png"
+                ),
+                party_checkbox_choice(
+                  "pvem",
+                  "PVEM (Partido Verde Ecologista de México)",
+                  "PVEM_logo.png"
+                ),
+                party_checkbox_choice(
+                  "pt",
+                  "PT (Partido del Trabajo)",
+                  "PT_logo.png"
+                ),
+                party_checkbox_choice(
+                  "mc",
+                  "MC (Movimiento Ciudadano)",
+                  "Movimiento_Ciudadano_logo.png"
+                ),
+                party_checkbox_choice("morena", "MORENA", "Morena_logo.png"),
+                party_checkbox_choice("did_not_vote", "Did not vote"),
+                party_checkbox_choice("dont_remember", "Don't remember"),
+                party_checkbox_choice("other", "Other")
+              )
+            ),
+            hidden(
+              textInput(
+                "last_election_vote_other",
+                "Please specify the party:",
+                placeholder = "Enter party name..."
+              )
+            ),
+
+            hr(),
+
+            h5(strong("Municipal Governance")),
+
+            uiOutput("governance_grid_ui"),
+
+            hr(),
+
+            sliderInput(
+              "turnout_likelihood_pre",
+              "How likely are you to vote in the 2027 local elections on a scale of 0 to 100, where 0 means 'definitely won't vote' and 100 means 'certainly will vote'?",
+              min = 0,
+              max = 100,
+              value = 50
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Definitely won't vote",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Certainly will vote",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
+            ),
+
+            br(),
+
+            tags$div(
+              class = "form-group",
+              tags$label(
+                "Which party or parties do you intend to vote for in the next municipal election? (select all that apply)"
+              ),
+              tags$div(
+                class = "party-radio-group",
+                party_checkbox_choice(
+                  "pan",
+                  "PAN (Partido Acción Nacional)",
+                  "PAN_logo.png",
+                  "vote_intention_pre"
+                ),
+                party_checkbox_choice(
+                  "pri",
+                  "PRI (Partido Revolucionario Institucional)",
+                  "PRI_logo.png",
+                  "vote_intention_pre"
+                ),
+                party_checkbox_choice(
+                  "prd",
+                  "PRD (Partido de la Revolución Democrática)",
+                  "PRD_logo.png",
+                  "vote_intention_pre"
+                ),
+                party_checkbox_choice(
+                  "pvem",
+                  "PVEM (Partido Verde Ecologista de México)",
+                  "PVEM_logo.png",
+                  "vote_intention_pre"
+                ),
+                party_checkbox_choice(
+                  "pt",
+                  "PT (Partido del Trabajo)",
+                  "PT_logo.png",
+                  "vote_intention_pre"
+                ),
+                party_checkbox_choice(
+                  "mc",
+                  "MC (Movimiento Ciudadano)",
+                  "Movimiento_Ciudadano_logo.png",
+                  "vote_intention_pre"
+                ),
+                party_checkbox_choice(
+                  "morena",
+                  "MORENA",
+                  "Morena_logo.png",
+                  "vote_intention_pre"
+                ),
+                party_checkbox_choice(
+                  "undecided",
+                  "Undecided",
+                  group = "vote_intention_pre"
+                ),
+                party_checkbox_choice(
+                  "will_not_vote",
+                  "Will not vote",
+                  group = "vote_intention_pre"
+                ),
+                party_checkbox_choice(
+                  "other",
+                  "Other",
+                  group = "vote_intention_pre"
+                )
+              )
+            ),
+            hidden(
+              textInput(
+                "vote_intention_pre_other",
+                "Please specify the party:",
+                placeholder = "Enter party name..."
+              )
+            ),
+
+            hr(),
+
+            # Importance of Issues, language loosely based on Mitofsky
+            # public opinion survey (see Google Drive reference)
+            h5(strong("Issue Importance")),
+            div(
+              id = "issue_importance_wrapper",
+              class = "issue-grayed",
+              uiOutput("issue_importance_ui")
+            ),
+
+            hr(),
+            uiOutput("issue_importance_warning"),
+            fluidRow(
+              column(
+                6,
+                actionButton(
+                  "goto_page1_from_3",
+                  "← Back",
+                  class = "btn-secondary btn-lg"
+                )
+              ),
+              column(
+                6,
+                align = "right",
+                actionButton(
+                  "goto_page4_from_3",
+                  "Next →",
+                  class = "btn-primary btn-lg"
+                )
+              )
+            )
+          )
+        ),
+
+        # Page 4: Your Municipality's Performance
+        hidden(
+          div(
+            id = "page4",
+            h4("Your Municipality's Performance"),
+
+            p(strong(
+              "Las siguientes preguntas le pedir\u00e1n que eval\u00fae c\u00f3mo ciertos municipios y partidos \u201cmanejan\u201d la delincuencia no violenta, como los robos. \u201cManejar la delincuencia\u201d aqu\u00ed se refiere a los esfuerzos del gobierno para prevenir el crimen, hacer cumplir la ley y garantizar la seguridad p\u00fablica."
+            )),
+
+            uiOutput("home_crime_handling_pre_ui"),
+
+            sliderInput(
+              "morena_crime_rating",
+              "On average, how well do you think municipalities governed by MORENA, PT, or PVEM handle crime?",
+              min = 0,
+              max = 100,
+              value = 50
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Handles crime extremely poorly",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Handles crime extremely well",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
+            ),
+
+            sliderInput(
+              "coalition_pan_pri_prd_crime_rating",
+              "On average, how well do you think municipalities governed by PAN, PRI, or PRD handle crime?",
+              min = 0,
+              max = 100,
+              value = 50
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Handles crime extremely poorly",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Handles crime extremely well",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
+            ),
+
+            sliderInput(
+              "coalition_mc_crime_rating",
+              "On average, how well do you think municipalities governed by MC handle crime?",
+              min = 0,
+              max = 100,
+              value = 50
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Handles crime extremely poorly",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Handles crime extremely well",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
+            ),
+
+            hr(),
+
+            uiOutput("robbery_estimate_ui"),
+
+            hr(),
+
+            uiOutput("municipality_ranking_ui"),
+
+            hr(),
+            fluidRow(
+              column(
+                6,
+                actionButton(
+                  "goto_page3_from_4",
+                  "← Back",
+                  class = "btn-secondary btn-lg"
+                )
+              ),
+              column(
+                6,
+                align = "right",
+                actionButton(
+                  "goto_page5_from_4",
+                  "Next →",
+                  class = "btn-primary btn-lg"
+                )
+              )
+            )
+          )
+        ),
+
+        # Page 5: About You
+        hidden(
+          div(
+            id = "page5",
+            h4("About You"),
+
             h5(strong("Political Views")),
+
+            sliderInput(
+              "left_right_scale",
+              "In politics, people sometimes talk being 'left' or 'right' on an ideological scale, where further right means more conservative.
+              Where would you place yourself on this scale?",
+              min = 0,
+              max = 10,
+              value = 5,
+              step = 1
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Left",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Right",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
+            ),
 
             tags$div(
               class = "form-group",
@@ -485,30 +916,6 @@ ui <- fluidPage(
               )
             ),
 
-            sliderInput(
-              "party_strength",
-              "How strongly do you identify with this party?",
-              min = 0,
-              max = 100,
-              value = 50
-            ),
-            fluidRow(
-              column(
-                6,
-                p(
-                  "Not at all",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
-                )
-              ),
-              column(
-                6,
-                p(
-                  "Very strongly",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
-                )
-              )
-            ),
-
             selectInput(
               "party_preference_2nd",
               "Which political party do you feel second closest to? (optional)",
@@ -543,258 +950,16 @@ ui <- fluidPage(
               selected = ""
             ),
 
-            sliderInput(
-              "left_right_scale",
-              "In politics, people sometimes talk about 'left' and 'right'. Where would you place yourself on this scale?",
-              min = 0,
-              max = 10,
-              value = 5,
-              step = 1
-            ),
-            fluidRow(
-              column(
-                6,
-                p(
-                  "Left",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
-                )
-              ),
-              column(
-                6,
-                p(
-                  "Right",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
-                )
-              )
-            ),
-
-            hr(),
-
-            checkboxGroupInput(
-              "last_election_vote",
-              "Which party or parties did you vote for in the last municipal election? (select all that apply)",
-              choices = c(
-                "PAN (Partido Acción Nacional)" = "pan",
-                "PRI (Partido Revolucionario Institucional)" = "pri",
-                "PRD (Partido de la Revolución Democrática)" = "prd",
-                "PVEM (Partido Verde Ecologista de México)" = "pvem",
-                "PT (Partido del Trabajo)" = "pt",
-                "MC (Movimiento Ciudadano)" = "mc",
-                "MORENA" = "morena",
-                "Did not vote" = "did_not_vote",
-                "Don't remember" = "dont_remember",
-                "Other" = "other"
-              )
-            ),
-            hidden(
-              textInput(
-                "last_election_vote_other",
-                "Please specify the party:",
-                placeholder = "Enter party name..."
-              )
-            ),
-
-            hr(),
-
-            h5(strong("Municipal Governance")),
-
-            uiOutput("governance_grid_ui"),
-
-            hr(),
-
-            sliderInput(
-              "turnout_likelihood_pre",
-              "How likely are you to vote in the 2027 local elections?",
-              min = 0,
-              max = 100,
-              value = 50
-            ),
-
-            br(),
-
-            checkboxGroupInput(
-              "vote_intention_pre",
-              "Which party or parties do you intend to vote for in the next municipal election? (select all that apply)",
-              choices = c(
-                "PAN (Partido Acción Nacional)" = "pan",
-                "PRI (Partido Revolucionario Institucional)" = "pri",
-                "PRD (Partido de la Revolución Democrática)" = "prd",
-                "PVEM (Partido Verde Ecologista de México)" = "pvem",
-                "PT (Partido del Trabajo)" = "pt",
-                "MC (Movimiento Ciudadano)" = "mc",
-                "MORENA" = "morena",
-                "Undecided" = "undecided",
-                "Will not vote" = "will_not_vote",
-                "Other" = "other"
-              )
-            ),
-            hidden(
-              textInput(
-                "vote_intention_pre_other",
-                "Please specify the party:",
-                placeholder = "Enter party name..."
-              )
-            ),
-
-            hr(),
-
-            # Importance of Issues, language loosely based on Mitofsky
-            # public opinion survey (see Google Drive reference)
-            h5(strong("Issue Importance")),
-            rank_list(
-              text = "Drag to rank the following issues in order of importance (top = most important):",
-              labels = c(
-                "Seguridad / Delincuencia",
-                "Economía / Inflación",
-                "Empleo y pobreza",
-                "Corrupción",
-                "Educación y servicios de salud"
-              ),
-              input_id = "issue_importance_ranking"
-            ),
-
-            hr(),
-            fluidRow(
-              column(
-                6,
-                actionButton(
-                  "goto_page1_from_3",
-                  "← Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
-                align = "right",
-                actionButton(
-                  "goto_page4_from_3",
-                  "Next →",
-                  class = "btn-primary btn-lg"
-                )
-              )
-            )
-          )
-        ),
-
-        # Page 4: Your Municipality's Performance
-        hidden(
-          div(
-            id = "page4",
-            h4("Your Municipality's Performance"),
-
-            numericInput(
-              "robbery_estimate",
-              "How many robberies do you think were reported in your municipality in 2025?",
-              value = NULL,
-              min = 0,
-              step = 1
-            ),
-
-            hr(),
-
-            uiOutput("municipality_ranking_ui"),
-
-            sliderInput(
-              "morena_crime_rating",
-              "On average, how well do you think municipalities governed by MORENA, PT, or PVEM handle crime?",
-              min = 0,
-              max = 100,
-              value = 50
-            ),
-
-            sliderInput(
-              "coalition_pan_pri_prd_crime_rating",
-              "On average, how well do you think municipalities governed by PAN, PRI, or PRD handle crime?",
-              min = 0,
-              max = 100,
-              value = 50
-            ),
-
-            sliderInput(
-              "coalition_mc_crime_rating",
-              "On average, how well do you think municipalities governed by MC handle crime?",
-              min = 0,
-              max = 100,
-              value = 50
-            ),
-
-            hr(),
-            fluidRow(
-              column(
-                6,
-                actionButton(
-                  "goto_page3_from_4",
-                  "← Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
-                align = "right",
-                actionButton(
-                  "goto_page5_from_4",
-                  "Next →",
-                  class = "btn-primary btn-lg"
-                )
-              )
-            )
-          )
-        ),
-
-        # Page 5: About You
-        hidden(
-          div(
-            id = "page5",
-            h4("About You"),
-
-            # Demographics
-            h5(strong("Demographics")),
-
-            fluidRow(
-              column(
-                6,
-                numericInput(
-                  "age",
-                  "What is your age?",
-                  value = NULL,
-                  min = 18,
-                  max = 120
-                )
-              ),
-              column(
-                6,
-                selectInput(
-                  "gender",
-                  "What is your gender?",
-                  choices = c(
-                    "Select..." = "",
-                    "Male" = "male",
-                    "Female" = "female",
-                    "Non-binary" = "non_binary",
-                    "Other" = "other",
-                    "Prefer not to say" = "prefer_not_to_say"
-                  )
-                )
-              )
-            ),
-
-            selectInput(
-              "indigenous",
-              "Do you identify as indigenous?",
-              choices = c(
-                "Select..." = "",
-                "Yes" = "yes",
-                "No" = "no",
-                "Prefer not to say" = "prefer_not_to_say"
-              )
-            ),
-
             hr(),
 
             # Attention check
             radioButtons(
               "attention_check",
-              "To ensure you are reading each question carefully, please select 'Somewhat agree' below.",
+              paste(
+                "Sustainable farming is an important issue for many Mexicans.",
+                "We want to make sure you are reading each question carefully.",
+                "To ensure you are reading each question carefully, please select 'Somewhat agree' below."
+              ),
               choices = c(
                 "Strongly disagree" = "strongly_disagree",
                 "Somewhat disagree" = "somewhat_disagree",
@@ -900,20 +1065,35 @@ ui <- fluidPage(
             id = "page7",
             h4("Post-Treatment Survey"),
 
-            # 1. Municipality performance (ranking)
-            h5(strong("Your Municipality's Performance")),
+            # 1. Party handling of crime (coalition ratings)
+            p(strong(
+              "Las siguientes preguntas le pedir\u00e1n que eval\u00fae c\u00f3mo ciertos municipios y partidos \u201cmanejan\u201d la delincuencia no violenta, como los robos. \u201cManejar la delincuencia\u201d aqu\u00ed se refiere a los esfuerzos del gobierno para prevenir el crimen, hacer cumplir la ley y garantizar la seguridad p\u00fablica."
+            )),
 
-            uiOutput("municipality_ranking_post_ui"),
+            uiOutput("home_crime_handling_post_ui"),
 
-            br(),
-
-            # 2. Party handling of crime (coalition ratings)
             sliderInput(
               "morena_crime_rating_post",
               "On average, how well do you think municipalities governed by MORENA, PT, or PVEM handle crime?",
               min = 0,
               max = 100,
               value = 50
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Handles crime extremely poorly",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Handles crime extremely well",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
             ),
 
             sliderInput(
@@ -923,6 +1103,22 @@ ui <- fluidPage(
               max = 100,
               value = 50
             ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Handles crime extremely poorly",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Handles crime extremely well",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
+            ),
 
             sliderInput(
               "coalition_mc_crime_rating_post",
@@ -931,49 +1127,29 @@ ui <- fluidPage(
               max = 100,
               value = 50
             ),
-
-            br(),
-
-            # 3. Party identification (allegiance)
-            uiOutput("party_allegiance_update_ui"),
-
-            br(),
-
-            # 4. Vote likelihood (turnout)
-            sliderInput(
-              "turnout_likelihood",
-              "How likely are you to vote in the 2027 local elections?",
-              min = 0,
-              max = 100,
-              value = 50
-            ),
-
-            br(),
-
-            # 5. Vote choice (vote intention)
-            checkboxGroupInput(
-              "vote_intention_2027",
-              "Which party or parties do you intend to vote for in the next municipal election? (select all that apply)",
-              choices = c(
-                "PAN (Partido Acción Nacional)" = "pan",
-                "PRI (Partido Revolucionario Institucional)" = "pri",
-                "PRD (Partido de la Revolución Democrática)" = "prd",
-                "PVEM (Partido Verde Ecologista de México)" = "pvem",
-                "PT (Partido del Trabajo)" = "pt",
-                "MC (Movimiento Ciudadano)" = "mc",
-                "MORENA" = "morena",
-                "Undecided" = "undecided",
-                "Will not vote" = "will_not_vote",
-                "Other" = "other"
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Handles crime extremely poorly",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Handles crime extremely well",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
               )
             ),
-            hidden(
-              textInput(
-                "vote_intention_2027_other",
-                "Please specify the party:",
-                placeholder = "Enter party name..."
-              )
-            ),
+
+            hr(),
+
+            # 2. Municipality performance (ranking)
+            h5(strong("Your Municipality's Performance")),
+
+            uiOutput("municipality_ranking_post_ui"),
 
             hr(),
             fluidRow(
@@ -998,18 +1174,163 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 8: Select Reference Municipalities
+        # Page 8: Turnout Likelihood + Vote Intention
         hidden(
           div(
             id = "page8",
+
+            # Vote likelihood (turnout)
+            sliderInput(
+              "turnout_likelihood",
+              "How likely are you to vote in the 2027 local elections on a scale of 0 to 100, where 0 means 'definitely won't vote' and 100 means 'certainly will vote'?",
+              min = 0,
+              max = 100,
+              value = 50
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Definitely won't vote",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Certainly will vote",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
+            ),
+
+            br(),
+
+            # Vote choice (vote intention)
+            tags$div(
+              class = "form-group",
+              tags$label(
+                "Which party or parties do you intend to vote for in the next municipal election? (select all that apply)"
+              ),
+              tags$div(
+                class = "party-radio-group",
+                party_checkbox_choice(
+                  "pan",
+                  "PAN (Partido Acción Nacional)",
+                  "PAN_logo.png",
+                  "vote_intention_2027"
+                ),
+                party_checkbox_choice(
+                  "pri",
+                  "PRI (Partido Revolucionario Institucional)",
+                  "PRI_logo.png",
+                  "vote_intention_2027"
+                ),
+                party_checkbox_choice(
+                  "prd",
+                  "PRD (Partido de la Revolución Democrática)",
+                  "PRD_logo.png",
+                  "vote_intention_2027"
+                ),
+                party_checkbox_choice(
+                  "pvem",
+                  "PVEM (Partido Verde Ecologista de México)",
+                  "PVEM_logo.png",
+                  "vote_intention_2027"
+                ),
+                party_checkbox_choice(
+                  "pt",
+                  "PT (Partido del Trabajo)",
+                  "PT_logo.png",
+                  "vote_intention_2027"
+                ),
+                party_checkbox_choice(
+                  "mc",
+                  "MC (Movimiento Ciudadano)",
+                  "Movimiento_Ciudadano_logo.png",
+                  "vote_intention_2027"
+                ),
+                party_checkbox_choice(
+                  "morena",
+                  "MORENA",
+                  "Morena_logo.png",
+                  "vote_intention_2027"
+                ),
+                party_checkbox_choice(
+                  "undecided",
+                  "Undecided",
+                  group = "vote_intention_2027"
+                ),
+                party_checkbox_choice(
+                  "will_not_vote",
+                  "Will not vote",
+                  group = "vote_intention_2027"
+                ),
+                party_checkbox_choice(
+                  "other",
+                  "Other",
+                  group = "vote_intention_2027"
+                )
+              )
+            ),
+            hidden(
+              textInput(
+                "vote_intention_2027_other",
+                "Please specify the party:",
+                placeholder = "Enter party name..."
+              )
+            ),
+
+            hr(),
+            fluidRow(
+              column(
+                6,
+                actionButton(
+                  "goto_page7_from_8",
+                  "\u2190 Back",
+                  class = "btn-secondary btn-lg"
+                )
+              ),
+              column(
+                6,
+                align = "right",
+                actionButton(
+                  "goto_page9_from_8",
+                  "Next \u2192",
+                  class = "btn-primary btn-lg"
+                )
+              )
+            )
+          )
+        ),
+
+        # Page 9: Select Reference Municipalities
+        hidden(
+          div(
+            id = "page9",
             h4("Select Reference Municipalities"),
 
             uiOutput("reference_instructions_text"),
             p(em(
-              "(You can select multiple municipalities by clicking on them. Click again to deselect. Your home municipality is marked.)"
+              "(You can select multiple municipalities by clicking on them. Selected municipalities will be highlighted in ",
+              tags$span(style = "color: #9B59B6; font-weight: bold;", "purple"),
+              ". Click again to deselect. Your home municipality is outlined in blue.)"
             )),
 
-            leafletOutput("map_page8", height = 450),
+            fluidRow(
+              column(
+                12,
+                align = "right",
+                actionButton(
+                  "zoom_home",
+                  "Zoom to Home",
+                  icon = icon("home"),
+                  class = "btn-primary"
+                )
+              )
+            ),
+
+            leafletOutput("map_page9", height = 450),
             p(em(
               style = "color: #6c757d; font-size: 0.9em;",
               "Note: May take a few seconds for map to load."
@@ -1017,7 +1338,7 @@ ui <- fluidPage(
 
             fluidRow(
               column(
-                5,
+                6,
                 selectizeInput(
                   "muni_search",
                   "Search for a municipality by name:",
@@ -1028,7 +1349,7 @@ ui <- fluidPage(
                 )
               ),
               column(
-                2,
+                3,
                 style = "margin-top: 25px;",
                 actionButton(
                   "zoom_search",
@@ -1039,23 +1360,12 @@ ui <- fluidPage(
                 )
               ),
               column(
-                2,
+                3,
                 style = "margin-top: 25px;",
                 actionButton(
                   "clear_search",
                   "Clear",
                   class = "btn-secondary",
-                  style = "width: 100%;"
-                )
-              ),
-              column(
-                3,
-                style = "margin-top: 25px;",
-                actionButton(
-                  "zoom_home",
-                  "Zoom to Home",
-                  icon = icon("home"),
-                  class = "btn-primary",
                   style = "width: 100%;"
                 )
               )
@@ -1068,8 +1378,8 @@ ui <- fluidPage(
               column(
                 6,
                 actionButton(
-                  "goto_page7_from_8",
-                  "← Back",
+                  "goto_page8_from_9",
+                  "\u2190 Back",
                   class = "btn-secondary btn-lg"
                 )
               ),
@@ -1087,10 +1397,10 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 9: Thank you screen
+        # Page 10: Thank you screen
         hidden(
           div(
-            id = "page9",
+            id = "page10",
             br(),
             br(),
             br(),
@@ -1110,22 +1420,26 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   # Helper function to find municipality's robbery category from bucket inputs
-  # Returns "much_more", "somewhat_more", "same", "somewhat_fewer", "much_fewer", "dont_know", or NA
+  # Returns "more_than_double", "more", "same", "fewer", "less_than_half", "dont_know", or NA
   make_crime_ranking_grid <- function(home_name, comp_labels, prefix) {
     col_labels <- c(
-      "much_more"      = "Much more",
-      "somewhat_more"  = "Somewhat more",
-      "same"           = "About the same",
-      "somewhat_fewer" = "Somewhat fewer",
-      "much_fewer"     = "Much fewer",
-      "dont_know"      = "Don't know"
+      "more_than_double" = "More than double",
+      "more" = "More, less than double",
+      "same" = "About the same",
+      "fewer" = "Fewer, more than half",
+      "less_than_half" = "Fewer, less than half",
+      "dont_know" = "Don't know"
     )
     header_cells <- tagList(
-      tags$th("Municipality",
-        style = "text-align: left; padding: 6px 10px; min-width: 160px;"),
+      tags$th(
+        "Municipality",
+        style = "text-align: left; padding: 6px 10px; min-width: 160px;"
+      ),
       lapply(names(col_labels), function(val) {
-        tags$th(col_labels[[val]],
-          style = "text-align: center; padding: 6px 8px; font-size: 0.85em; vertical-align: bottom;")
+        tags$th(
+          col_labels[[val]],
+          style = "text-align: center; padding: 6px 8px; font-size: 0.85em; vertical-align: bottom;"
+        )
       })
     )
     body_rows <- lapply(seq_along(comp_labels), function(i) {
@@ -1151,8 +1465,11 @@ server <- function(input, output, session) {
       )
     })
     tagList(
-      p("Compared to ", strong(home_name),
-        ", how do you think the number of robberies in these municipalities compares?"),
+      p(
+        "Compared to ",
+        strong(home_name),
+        ", how do you think the number of robberies in these municipalities compares?"
+      ),
       tags$div(
         style = "overflow-x: auto; margin-top: 10px;",
         tags$table(
@@ -1453,7 +1770,7 @@ server <- function(input, output, session) {
 
   # Show appropriate page
   observe({
-    pages <- paste0("page", 0:9)
+    pages <- paste0("page", 0:10)
     lapply(pages, hide)
     show(paste0("page", current_page()))
   })
@@ -1462,6 +1779,11 @@ server <- function(input, output, session) {
   observe({
     if (!is.null(found_municipality())) {
       show("home_confirmation_section")
+      updateSelectInput(
+        session,
+        "dropdown_municipality",
+        selected = found_municipality()
+      )
     } else {
       hide("home_confirmation_section")
     }
@@ -1596,9 +1918,21 @@ server <- function(input, output, session) {
     current_page(1)
   })
 
-  # Page 2 → Page 3
+  # Page 2 → Page 3 (attention check: Radio #1, Social media #5 — validation TODO)
+  practice_warning_msg <- reactiveVal(NULL)
+  output$practice_warning <- renderUI({
+    msg <- practice_warning_msg()
+    if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
+  })
   observeEvent(input$goto_page3_from_2, {
-    current_page(3)
+    if (length(input$practice_ranking) < 5) {
+      practice_warning_msg(
+        "Please drag all items into the ranking slots before continuing."
+      )
+    } else {
+      practice_warning_msg(NULL)
+      current_page(3)
+    }
   })
 
   # Page 3 → Page 1
@@ -1606,7 +1940,7 @@ server <- function(input, output, session) {
     current_page(1)
   })
 
-  # Page 7 → Page 8 (Post-treatment → Reference Municipalities)
+  # Page 7 → Page 8 (Post-treatment → Turnout/Vote Intention)
   observeEvent(input$goto_page8_from_7, {
     current_page(8)
   })
@@ -1616,9 +1950,31 @@ server <- function(input, output, session) {
     current_page(7)
   })
 
+  # Page 8 → Page 9 (Turnout/Vote Intention → Reference Municipalities)
+  observeEvent(input$goto_page9_from_8, {
+    current_page(9)
+  })
+
+  # Page 9 → Page 8
+  observeEvent(input$goto_page8_from_9, {
+    current_page(8)
+  })
+
   # Page 3 → Page 4
+  issue_importance_warning_msg <- reactiveVal(NULL)
+  output$issue_importance_warning <- renderUI({
+    msg <- issue_importance_warning_msg()
+    if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
+  })
   observeEvent(input$goto_page4_from_3, {
-    current_page(4)
+    if (length(input$issue_importance_ranking) < 5) {
+      issue_importance_warning_msg(
+        "Please drag all issues into the ranking slots before continuing."
+      )
+    } else {
+      issue_importance_warning_msg(NULL)
+      current_page(4)
+    }
   })
 
   # Page 4 → Page 3
@@ -1657,6 +2013,18 @@ server <- function(input, output, session) {
   })
 
   # Clear selection button - resets the found municipality
+  # Dropdown municipality selection
+  observeEvent(
+    input$dropdown_municipality,
+    {
+      req(input$dropdown_municipality != "")
+      found_municipality(input$dropdown_municipality)
+      found_address_coords(NULL)
+      output$geocode_result <- renderUI({})
+    },
+    ignoreInit = TRUE
+  )
+
   observeEvent(input$clear_selection_btn, {
     found_municipality(NULL)
     found_address_coords(NULL)
@@ -1690,12 +2058,157 @@ server <- function(input, output, session) {
 
   # Display verification info on page 2
 
+  # Issue importance ranking with randomized order (per session)
+  issue_labels_randomized <- sample(c(
+    "Seguridad / Delincuencia",
+    "Economía / Inflación",
+    "Empleo y pobreza",
+    "Corrupción",
+    "Educación y servicios de salud"
+  ))
+  output$issue_importance_ui <- renderUI({
+    bucket_list(
+      header = NULL,
+      group_name = "issue_bucket",
+      orientation = "horizontal",
+      add_rank_list(
+        text = "Available issues — drag into slots:",
+        labels = issue_labels_randomized,
+        input_id = "issue_importance_source",
+        class = "default-sortable source-bin"
+      ),
+      add_rank_list(
+        text = "Your ranking (1 = most important, 5 = least important):",
+        labels = NULL,
+        input_id = "issue_importance_ranking",
+        class = "default-sortable"
+      )
+    )
+  })
+  observeEvent(
+    input$issue_importance_ranking,
+    {
+      removeClass("issue_importance_wrapper", "issue-grayed")
+    },
+    ignoreInit = TRUE,
+    once = TRUE
+  )
+
+  # Helper: get municipality display name for dynamic questions
+  home_muni_name <- reactive({
+    home_id <- found_municipality()
+    if (!is.null(home_id)) {
+      d_geo %>%
+        st_drop_geometry() %>%
+        filter(muni_id == home_id) %>%
+        mutate(full_name = paste0(NOMGEO, ", ", NOM_ENT)) %>%
+        pull(full_name)
+    } else {
+      "your municipality"
+    }
+  })
+
+  # Pre-treatment: home municipality crime handling slider
+  output$home_crime_handling_pre_ui <- renderUI({
+    muni_name <- home_muni_name()
+    tagList(
+      sliderInput(
+        "home_crime_handling_pre",
+        paste0(
+          "How well do you think the government of ",
+          muni_name,
+          " handles crime?"
+        ),
+        min = 0,
+        max = 100,
+        value = 50
+      ),
+      fluidRow(
+        column(
+          6,
+          p(
+            "Handles crime extremely poorly",
+            style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+          )
+        ),
+        column(
+          6,
+          p(
+            "Handles crime extremely well",
+            style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+          )
+        )
+      )
+    )
+  })
+
+  # Post-treatment: home municipality crime handling slider
+  output$home_crime_handling_post_ui <- renderUI({
+    muni_name <- home_muni_name()
+    tagList(
+      sliderInput(
+        "home_crime_handling_post",
+        paste0(
+          "How well do you think the government of ",
+          muni_name,
+          " handles crime?"
+        ),
+        min = 0,
+        max = 100,
+        value = 50
+      ),
+      fluidRow(
+        column(
+          6,
+          p(
+            "Handles crime extremely poorly",
+            style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+          )
+        ),
+        column(
+          6,
+          p(
+            "Handles crime extremely well",
+            style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+          )
+        )
+      )
+    )
+  })
+
+  # Robbery estimate question with dynamic municipality name
+  output$robbery_estimate_ui <- renderUI({
+    home_id <- found_municipality()
+    muni_name <- if (!is.null(home_id)) {
+      d_geo %>%
+        st_drop_geometry() %>%
+        filter(muni_id == home_id) %>%
+        mutate(full_name = paste0(NOMGEO, ", ", NOM_ENT)) %>%
+        pull(full_name)
+    } else {
+      "your municipality"
+    }
+    numericInput(
+      "robbery_estimate",
+      paste0(
+        "How many robberies do you think were reported in ",
+        muni_name,
+        " in 2025?"
+      ),
+      value = NULL,
+      min = 0,
+      step = 1
+    )
+  })
+
   # Dynamic bucket list for municipality crime ranking (relative to home)
   output$municipality_ranking_ui <- renderUI({
     home_id <- found_municipality()
     comp_munis <- comparison_municipalities()
     if (is.null(home_id) || is.null(comp_munis)) {
-      return(p(em("Please find your home municipality first to see the ranking options.")))
+      return(p(em(
+        "Please find your home municipality first to see the ranking options."
+      )))
     }
     home_info <- d_geo %>% st_drop_geometry() %>% filter(muni_id == home_id)
     comp_labels <- paste0(comp_munis$NOMGEO, ", ", comp_munis$NOM_ENT)
@@ -1721,7 +2234,11 @@ server <- function(input, output, session) {
     # Create labels for comparison municipalities only
     comp_labels <- paste0(comp_munis$NOMGEO, ", ", comp_munis$NOM_ENT)
 
-    make_crime_ranking_grid(home_info$NOMGEO, comp_labels, "muni_rank_post_comp_")
+    make_crime_ranking_grid(
+      home_info$NOMGEO,
+      comp_labels,
+      "muni_rank_post_comp_"
+    )
   })
 
   # Helper: get robbery change text for home municipality
@@ -1888,60 +2405,6 @@ server <- function(input, output, session) {
     suspendWhenHidden = FALSE
   )
 
-  # Dynamic party allegiance question with respondent's party
-  output$party_allegiance_update_ui <- renderUI({
-    party_code <- input$party_preference
-
-    # Map party codes to display names
-    party_names <- c(
-      "pan" = "PAN",
-      "pri" = "PRI",
-      "prd" = "PRD",
-      "pvem" = "PVEM",
-      "pt" = "PT",
-      "mc" = "MC",
-      "morena" = "MORENA",
-      "none" = "your party",
-      "other" = "your party"
-    )
-
-    party_display <- if (is.null(party_code) || party_code == "") {
-      "your party"
-    } else {
-      party_names[party_code]
-    }
-
-    tagList(
-      sliderInput(
-        "party_allegiance_update",
-        paste0(
-          "How strongly do you identify with ",
-          party_display,
-          "?"
-        ),
-        min = 0,
-        max = 100,
-        value = 50
-      ),
-      fluidRow(
-        column(
-          6,
-          p(
-            "Not at all",
-            style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
-          )
-        ),
-        column(
-          6,
-          p(
-            "Very strongly",
-            style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
-          )
-        )
-      )
-    )
-  })
-
   # Combined governance grid for home + comparison municipalities
   output$governance_grid_ui <- renderUI({
     home_id <- found_municipality()
@@ -2044,16 +2507,18 @@ server <- function(input, output, session) {
     if (show_party) {
       fill_values <- c(
         "Your municipality" = "#0072B2",
-        "MORENA/PVEM/PT"   = "#8B0000",
-        "PAN/PRI/PRD"      = "#00308F",
-        "MC"               = "#FF5722",
-        "Other"            = "#D3D3D3"
+        "MORENA/PVEM/PT" = "#8B0000",
+        "PAN/PRI/PRD" = "#00308F",
+        "MC" = "#FF5722",
+        "Other" = "#D3D3D3"
       )
-      fill_values <- fill_values[names(fill_values) %in% unique(plot_df$fill_group)]
+      fill_values <- fill_values[
+        names(fill_values) %in% unique(plot_df$fill_group)
+      ]
     } else {
       fill_values <- c(
         "Your municipality" = "#0072B2",
-        "Comparison"        = "#E69F00"
+        "Comparison" = "#E69F00"
       )
     }
 
@@ -2092,18 +2557,18 @@ server <- function(input, output, session) {
       mutate(
         robos = ifelse(is.na(robos), 0, robos),
         fill_group = case_when(
-          muni_id == home_id          ~ "Your municipality",
+          muni_id == home_id ~ "Your municipality",
           show_party & !is.na(coalition_label) ~ coalition_label,
-          show_party                  ~ "Other",
-          TRUE                        ~ "Comparison"
+          show_party ~ "Other",
+          TRUE ~ "Comparison"
         )
       ) %>%
       arrange(robos)
 
     data.frame(
       municipality = factor(muni_info$NOMGEO, levels = muni_info$NOMGEO),
-      robos        = muni_info$robos,
-      fill_group   = muni_info$fill_group
+      robos = muni_info$robos,
+      fill_group = muni_info$fill_group
     )
   }
 
@@ -2169,7 +2634,7 @@ server <- function(input, output, session) {
   })
 
   # Page 8 Map - Interactive map for reference municipality selection
-  output$map_page8 <- renderLeaflet({
+  output$map_page9 <- renderLeaflet({
     home_id <- found_municipality()
 
     map <- leaflet(d_geo) %>%
@@ -2195,8 +2660,8 @@ server <- function(input, output, session) {
       ) %>%
       addLegend(
         position = "bottomright",
-        colors = c(unname(coalition_map_colors), "#D3D3D3"),
-        labels = c(names(coalition_map_colors), "Other"),
+        colors = c(unname(coalition_map_colors), "#D3D3D3", "#9B59B6"),
+        labels = c(names(coalition_map_colors), "Other", "Selected"),
         title = "Governing coalition",
         opacity = 0.8
       ) %>%
@@ -2232,8 +2697,8 @@ server <- function(input, output, session) {
   })
 
   # Click-to-toggle municipality selection on page 8 map
-  observeEvent(input$map_page8_shape_click, {
-    id <- input$map_page8_shape_click$id
+  observeEvent(input$map_page9_shape_click, {
+    id <- input$map_page9_shape_click$id
     req(id)
     req(!is.null(found_municipality()))
 
@@ -2243,7 +2708,7 @@ server <- function(input, output, session) {
       centroid <- st_centroid(st_geometry(muni_data))
       coords <- st_coordinates(centroid)
 
-      leafletProxy("map_page8") %>%
+      leafletProxy("map_page9") %>%
         setView(lng = coords[1], lat = coords[2], zoom = 8) %>%
         clearGroup("found_muni") %>%
         addPolygons(
@@ -2258,7 +2723,7 @@ server <- function(input, output, session) {
 
       if (!is.null(found_address_coords())) {
         address_coords <- found_address_coords()
-        leafletProxy("map_page8") %>%
+        leafletProxy("map_page9") %>%
           clearGroup("address_marker") %>%
           addMarkers(
             lng = address_coords$lon,
@@ -2275,7 +2740,7 @@ server <- function(input, output, session) {
 
     if (is_deselecting) {
       selected_map_munis(setdiff(current, id))
-      leafletProxy("map_page8") %>%
+      leafletProxy("map_page9") %>%
         addPolygons(
           data = d_geo[d_geo$muni_id == id, ],
           layerId = id,
@@ -2298,20 +2763,20 @@ server <- function(input, output, session) {
         )
     } else {
       selected_map_munis(c(current, id))
-      leafletProxy("map_page8") %>%
+      leafletProxy("map_page9") %>%
         addPolygons(
           data = d_geo[d_geo$muni_id == id, ],
           group = "selected",
           layerId = id,
-          fillColor = "#E69F00",
+          fillColor = "#9B59B6",
           fillOpacity = 0.6,
-          color = "#CC8800",
+          color = "#6C3483",
           weight = 1.2,
           label = ~ paste0(NOMGEO, ", ", NOM_ENT),
           highlightOptions = highlightOptions(
             weight = 2,
-            color = "#08519c",
-            fillOpacity = 0.55,
+            color = "#4A235A",
+            fillOpacity = 0.75,
             bringToFront = TRUE
           )
         )
@@ -2319,7 +2784,7 @@ server <- function(input, output, session) {
 
     # Keep home municipality highlighted on top
     if (!is.null(found_municipality())) {
-      leafletProxy("map_page8") %>%
+      leafletProxy("map_page9") %>%
         clearGroup("found_muni") %>%
         addPolygons(
           data = d_geo[d_geo$muni_id == found_municipality(), ],
@@ -2334,7 +2799,7 @@ server <- function(input, output, session) {
 
     if (!is.null(found_address_coords())) {
       address_coords <- found_address_coords()
-      leafletProxy("map_page8") %>%
+      leafletProxy("map_page9") %>%
         addMarkers(
           lng = address_coords$lon,
           lat = address_coords$lat,
@@ -2356,22 +2821,22 @@ server <- function(input, output, session) {
       if (!(muni_id %in% current)) {
         selected_map_munis(c(current, muni_id))
 
-        leafletProxy("map_page8") %>%
+        leafletProxy("map_page9") %>%
           clearGroup("selected") %>%
           clearGroup("found_muni") %>%
           addPolygons(
             data = d_geo[d_geo$muni_id %in% selected_map_munis(), ],
             group = "selected",
             layerId = ~muni_id,
-            fillColor = "#E69F00",
+            fillColor = "#9B59B6",
             fillOpacity = 0.6,
-            color = "#CC8800",
+            color = "#6C3483",
             weight = 1.2,
             label = ~ paste0(NOMGEO, ", ", NOM_ENT),
             highlightOptions = highlightOptions(
               weight = 2,
-              color = "#08519c",
-              fillOpacity = 0.55,
+              color = "#4A235A",
+              fillOpacity = 0.75,
               bringToFront = TRUE
             )
           ) %>%
@@ -2387,7 +2852,7 @@ server <- function(input, output, session) {
 
         if (!is.null(found_address_coords())) {
           address_coords <- found_address_coords()
-          leafletProxy("map_page8") %>%
+          leafletProxy("map_page9") %>%
             addMarkers(
               lng = address_coords$lon,
               lat = address_coords$lat,
@@ -2408,14 +2873,14 @@ server <- function(input, output, session) {
 
     centroid <- st_centroid(st_geometry(muni_data))
     coords <- st_coordinates(centroid)
-    leafletProxy("map_page8") %>%
+    leafletProxy("map_page9") %>%
       setView(lng = coords[1], lat = coords[2], zoom = 8)
   })
 
   # Clear search and reset map view
   observeEvent(input$clear_search, {
     updateSelectizeInput(session, "muni_search", selected = character(0))
-    leafletProxy("map_page8") %>%
+    leafletProxy("map_page9") %>%
       fitBounds(lng1 = -115.0, lat1 = 16.0, lng2 = -88.0, lat2 = 30.5)
   })
 
@@ -2426,7 +2891,7 @@ server <- function(input, output, session) {
     home_data <- d_geo[d_geo$muni_id == home_id, ]
     centroid <- st_centroid(st_geometry(home_data))
     coords <- st_coordinates(centroid)
-    leafletProxy("map_page8") %>%
+    leafletProxy("map_page9") %>%
       setView(lng = coords[1], lat = coords[2], zoom = 8)
   })
 
@@ -2491,7 +2956,6 @@ server <- function(input, output, session) {
         NA_character_,
         input$party_preference_other
       ),
-      Party_Strength = input$party_strength,
       Party_Preference_2nd = ifelse(
         is.null(input$party_preference_2nd) || input$party_preference_2nd == "",
         NA_character_,
@@ -2615,15 +3079,32 @@ server <- function(input, output, session) {
         }
       },
       # Comparison municipality crime categories (relative to home)
-      Crime_Rank_Comp_1 = ifelse(is.null(input$muni_rank_comp_1), NA_character_, input$muni_rank_comp_1),
-      Crime_Rank_Comp_2 = ifelse(is.null(input$muni_rank_comp_2), NA_character_, input$muni_rank_comp_2),
-      Crime_Rank_Comp_3 = ifelse(is.null(input$muni_rank_comp_3), NA_character_, input$muni_rank_comp_3),
-      Crime_Rank_Comp_4 = ifelse(is.null(input$muni_rank_comp_4), NA_character_, input$muni_rank_comp_4),
+      Crime_Rank_Comp_1 = ifelse(
+        is.null(input$muni_rank_comp_1),
+        NA_character_,
+        input$muni_rank_comp_1
+      ),
+      Crime_Rank_Comp_2 = ifelse(
+        is.null(input$muni_rank_comp_2),
+        NA_character_,
+        input$muni_rank_comp_2
+      ),
+      Crime_Rank_Comp_3 = ifelse(
+        is.null(input$muni_rank_comp_3),
+        NA_character_,
+        input$muni_rank_comp_3
+      ),
+      Crime_Rank_Comp_4 = ifelse(
+        is.null(input$muni_rank_comp_4),
+        NA_character_,
+        input$muni_rank_comp_4
+      ),
       Robbery_Estimate = ifelse(
         is.null(input$robbery_estimate),
         NA_integer_,
         input$robbery_estimate
       ),
+      Home_Crime_Handling_Pre = input$home_crime_handling_pre,
       MORENA_Crime_Rating = input$morena_crime_rating,
       Coalition_PAN_PRI_PRD_Crime_Rating = input$coalition_pan_pri_prd_crime_rating,
       Coalition_MC_Crime_Rating = input$coalition_mc_crime_rating,
@@ -2643,19 +3124,31 @@ server <- function(input, output, session) {
         input$vote_intention_pre_other
       ),
       # Treatment outcomes
+      Home_Crime_Handling_Post = input$home_crime_handling_post,
       Turnout_Likelihood = input$turnout_likelihood,
       MORENA_Crime_Rating_Post = input$morena_crime_rating_post,
       Coalition_PAN_PRI_PRD_Crime_Rating_Post = input$coalition_pan_pri_prd_crime_rating_post,
       Coalition_MC_Crime_Rating_Post = input$coalition_mc_crime_rating_post,
       # Post-treatment municipality crime categories (relative to home)
-      Crime_Rank_Comp_1_Post = ifelse(is.null(input$muni_rank_post_comp_1), NA_character_, input$muni_rank_post_comp_1),
-      Crime_Rank_Comp_2_Post = ifelse(is.null(input$muni_rank_post_comp_2), NA_character_, input$muni_rank_post_comp_2),
-      Crime_Rank_Comp_3_Post = ifelse(is.null(input$muni_rank_post_comp_3), NA_character_, input$muni_rank_post_comp_3),
-      Crime_Rank_Comp_4_Post = ifelse(is.null(input$muni_rank_post_comp_4), NA_character_, input$muni_rank_post_comp_4),
-      Party_Allegiance_Update = ifelse(
-        is.null(input$party_allegiance_update),
-        NA_integer_,
-        input$party_allegiance_update
+      Crime_Rank_Comp_1_Post = ifelse(
+        is.null(input$muni_rank_post_comp_1),
+        NA_character_,
+        input$muni_rank_post_comp_1
+      ),
+      Crime_Rank_Comp_2_Post = ifelse(
+        is.null(input$muni_rank_post_comp_2),
+        NA_character_,
+        input$muni_rank_post_comp_2
+      ),
+      Crime_Rank_Comp_3_Post = ifelse(
+        is.null(input$muni_rank_post_comp_3),
+        NA_character_,
+        input$muni_rank_post_comp_3
+      ),
+      Crime_Rank_Comp_4_Post = ifelse(
+        is.null(input$muni_rank_post_comp_4),
+        NA_character_,
+        input$muni_rank_post_comp_4
       ),
       Vote_Intention_2027 = if (
         is.null(input$vote_intention_2027) ||
@@ -2707,7 +3200,7 @@ server <- function(input, output, session) {
     }
 
     # Go to thank you page instead of resetting
-    current_page(9)
+    current_page(10)
   })
 }
 
