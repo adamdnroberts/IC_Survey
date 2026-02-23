@@ -26,7 +26,7 @@ if (!file.exists("data/robo_2025.rds")) {
 }
 robo_data <- readRDS("data/robo_2025.rds")
 
-# Filter to large cities (500k+ population) and state capitals
+# Filter to large cities (200k+ population) and state capitals
 large_munis <- d_geo %>%
   st_drop_geometry() %>%
   filter(!is.na(POB_TOTAL) & (POB_TOTAL >= 200000 | is_capital)) %>%
@@ -997,44 +997,8 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page6",
-            h4("Treatment Groups (Preview)"),
-            p(em(
-              "All four treatment conditions are shown below for preview purposes. ",
-              "In the final survey, respondents will be randomly assigned to one group."
-            )),
 
-            # Control (Placebo)
-            wellPanel(
-              h5(strong("Control (Placebo)")),
-              uiOutput("treatment_control_ui")
-            ),
-
-            # T1: Plain Information
-            wellPanel(
-              h5(strong("T1: Plain Information")),
-              uiOutput("treatment_plain_info_ui")
-            ),
-
-            # T2: Non-Partisan Comparison
-            wellPanel(
-              h5(strong("T2: Non-Partisan Comparison")),
-              uiOutput("treatment_nonpartisan_ui"),
-              plotOutput("treatment_histogram_nonpartisan", height = "350px")
-            ),
-
-            # T3: Opposite-Coalition Comparison
-            wellPanel(
-              h5(strong("T3: Opposite-Coalition Comparison")),
-              uiOutput("treatment_partisan_ui"),
-              plotOutput("treatment_histogram_partisan", height = "350px")
-            ),
-
-            # T4: Same-Coalition Comparison
-            wellPanel(
-              h5(strong("T4: Same-Coalition Comparison")),
-              uiOutput("treatment_same_coalition_ui"),
-              plotOutput("treatment_histogram_same_coalition", height = "350px")
-            ),
+            uiOutput("treatment_content_ui"),
 
             hr(),
             fluidRow(
@@ -1493,6 +1457,11 @@ server <- function(input, output, session) {
   comp_munis_nonpartisan_rv <- reactiveVal(NULL) # Stores non-partisan comparison munis
   comp_munis_same_coalition_rv <- reactiveVal(NULL) # Stores same-coalition comparison munis
 
+  # Randomly assign treatment group for this respondent at session start
+  treatment_group <- reactiveVal(
+    sample(c("control", "T1", "T2", "T3", "T4"), 1)
+  )
+
   # Define the file path for saving responses
   responses_file <- "data/survey_responses.csv"
 
@@ -1766,6 +1735,18 @@ server <- function(input, output, session) {
     }
 
     comp_munis_same_coalition_rv(comp_munis_sc)
+  })
+
+  # Return the comparison municipalities appropriate for the assigned treatment group
+  active_comp_munis <- reactive({
+    tg <- treatment_group()
+    if (tg %in% c("control", "T1", "T2")) {
+      comp_munis_nonpartisan_rv()
+    } else if (tg == "T3") {
+      comparison_municipalities()
+    } else {
+      comp_munis_same_coalition_rv()
+    }
   })
 
   # Show appropriate page
@@ -2062,7 +2043,7 @@ server <- function(input, output, session) {
   issue_labels_randomized <- sample(c(
     "Seguridad / Delincuencia",
     "Economía / Inflación",
-    "Empleo y pobreza",
+    "Desempleo / Bajos salarios",
     "Corrupción",
     "Educación y servicios de salud"
   ))
@@ -2204,7 +2185,7 @@ server <- function(input, output, session) {
   # Dynamic bucket list for municipality crime ranking (relative to home)
   output$municipality_ranking_ui <- renderUI({
     home_id <- found_municipality()
-    comp_munis <- comparison_municipalities()
+    comp_munis <- active_comp_munis()
     if (is.null(home_id) || is.null(comp_munis)) {
       return(p(em(
         "Please find your home municipality first to see the ranking options."
@@ -2218,7 +2199,7 @@ server <- function(input, output, session) {
   # Dynamic bucket list for post-treatment municipality crime ranking (relative to home)
   output$municipality_ranking_post_ui <- renderUI({
     home_id <- found_municipality()
-    comp_munis <- comparison_municipalities()
+    comp_munis <- active_comp_munis()
 
     # Show placeholder if home not yet found
     if (is.null(home_id) || is.null(comp_munis)) {
@@ -2280,6 +2261,28 @@ server <- function(input, output, session) {
     "Therefore, municipal governments have some ability to control crime, although many factors that lead to crime ",
     "are out of the government\u2019s hands."
   )
+
+  # Show only the assigned treatment condition on page 6
+  output$treatment_content_ui <- renderUI({
+    tg <- treatment_group()
+    switch(
+      tg,
+      "control" = uiOutput("treatment_control_ui"),
+      "T1" = uiOutput("treatment_plain_info_ui"),
+      "T2" = tagList(
+        uiOutput("treatment_nonpartisan_ui"),
+        plotOutput("treatment_histogram_nonpartisan", height = "350px")
+      ),
+      "T3" = tagList(
+        uiOutput("treatment_partisan_ui"),
+        plotOutput("treatment_histogram_partisan", height = "350px")
+      ),
+      "T4" = tagList(
+        uiOutput("treatment_same_coalition_ui"),
+        plotOutput("treatment_histogram_same_coalition", height = "350px")
+      )
+    )
+  })
 
   # Control (Placebo)
   output$treatment_control_ui <- renderUI({
@@ -2408,7 +2411,7 @@ server <- function(input, output, session) {
   # Combined governance grid for home + comparison municipalities
   output$governance_grid_ui <- renderUI({
     home_id <- found_municipality()
-    comp_munis <- comparison_municipalities()
+    comp_munis <- active_comp_munis()
 
     if (is.null(home_id)) {
       return(p(em("Please find your home municipality first.")))
@@ -3033,7 +3036,7 @@ server <- function(input, output, session) {
       },
       Importance_Employment_Poverty = {
         ranking <- input$issue_importance_ranking
-        match("Empleo y pobreza", ranking, nomatch = NA_integer_)
+        match("Desempleo / Bajos salarios", ranking, nomatch = NA_integer_)
       },
       Importance_Corruption = {
         ranking <- input$issue_importance_ranking
@@ -3046,8 +3049,9 @@ server <- function(input, output, session) {
       # Priors - municipality crime ranking relative to home
       # (home is the fixed reference point)
       # Comparison municipality names (for reference)
+      Treatment_Group = treatment_group(),
       Comparison_Muni_1 = {
-        comp <- comparison_municipalities()
+        comp <- active_comp_munis()
         if (is.null(comp) || nrow(comp) < 1) {
           NA_character_
         } else {
@@ -3055,7 +3059,7 @@ server <- function(input, output, session) {
         }
       },
       Comparison_Muni_2 = {
-        comp <- comparison_municipalities()
+        comp <- active_comp_munis()
         if (is.null(comp) || nrow(comp) < 2) {
           NA_character_
         } else {
@@ -3063,7 +3067,7 @@ server <- function(input, output, session) {
         }
       },
       Comparison_Muni_3 = {
-        comp <- comparison_municipalities()
+        comp <- active_comp_munis()
         if (is.null(comp) || nrow(comp) < 3) {
           NA_character_
         } else {
@@ -3071,7 +3075,7 @@ server <- function(input, output, session) {
         }
       },
       Comparison_Muni_4 = {
-        comp <- comparison_municipalities()
+        comp <- active_comp_munis()
         if (is.null(comp) || nrow(comp) < 4) {
           NA_character_
         } else {
