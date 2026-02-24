@@ -7,6 +7,7 @@ library(dplyr)
 library(ggplot2)
 library(httr)
 library(jsonlite)
+library(paws.storage)
 
 # Read municipalities from GeoJSON file
 if (!file.exists("data/00mun_simplified.geojson")) {
@@ -1462,7 +1463,14 @@ server <- function(input, output, session) {
     sample(c("control", "T1", "T2", "T3", "T4"), 1)
   )
 
-  # Define the file path for saving responses
+  # Generate unique respondent ID at session start
+  respondent_id <- paste0(
+    format(Sys.time(), "%Y%m%d_%H%M%S"),
+    "_",
+    paste(sample(c(letters, 0:9), 8, replace = TRUE), collapse = "")
+  )
+
+  # Define the file path for saving responses (local fallback)
   responses_file <- "data/survey_responses.csv"
 
   # Populate municipality search choices for page 8 map
@@ -2924,7 +2932,9 @@ server <- function(input, output, session) {
     }
 
     response_df <- data.frame(
+      Respondent_ID = respondent_id,
       Found_Municipality = found_muni_name,
+      Found_Municipality_ID = found_municipality(),
       Map_Selected_Municipalities = map_munis_names,
       # Demographics
       Age = ifelse(
@@ -3082,6 +3092,23 @@ server <- function(input, output, session) {
           paste0(comp$NOMGEO[4], ", ", comp$NOM_ENT[4])
         }
       },
+      # Comparison municipality CVEGEOs (for analysis)
+      Comparison_Muni_1_ID = {
+        comp <- active_comp_munis()
+        if (is.null(comp) || nrow(comp) < 1) NA_character_ else comp$muni_id[1]
+      },
+      Comparison_Muni_2_ID = {
+        comp <- active_comp_munis()
+        if (is.null(comp) || nrow(comp) < 2) NA_character_ else comp$muni_id[2]
+      },
+      Comparison_Muni_3_ID = {
+        comp <- active_comp_munis()
+        if (is.null(comp) || nrow(comp) < 3) NA_character_ else comp$muni_id[3]
+      },
+      Comparison_Muni_4_ID = {
+        comp <- active_comp_munis()
+        if (is.null(comp) || nrow(comp) < 4) NA_character_ else comp$muni_id[4]
+      },
       # Comparison municipality crime categories (relative to home)
       Crime_Rank_Comp_1 = ifelse(
         is.null(input$muni_rank_comp_1),
@@ -3109,9 +3136,9 @@ server <- function(input, output, session) {
         input$robbery_estimate
       ),
       Home_Crime_Handling_Pre = input$home_crime_handling_pre,
-      MORENA_Crime_Rating = input$morena_crime_rating,
-      Coalition_PAN_PRI_PRD_Crime_Rating = input$coalition_pan_pri_prd_crime_rating,
-      Coalition_MC_Crime_Rating = input$coalition_mc_crime_rating,
+      MORENA_Crime_Rating_Pre = input$morena_crime_rating,
+      Coalition_PAN_PRI_PRD_Crime_Rating_Pre = input$coalition_pan_pri_prd_crime_rating,
+      Coalition_MC_Crime_Rating_Pre = input$coalition_mc_crime_rating,
       Turnout_Likelihood_Pre = input$turnout_likelihood_pre,
       Vote_Intention_Pre = if (
         is.null(input$vote_intention_pre) ||
@@ -3129,7 +3156,7 @@ server <- function(input, output, session) {
       ),
       # Treatment outcomes
       Home_Crime_Handling_Post = input$home_crime_handling_post,
-      Turnout_Likelihood = input$turnout_likelihood,
+      Turnout_Likelihood_Post = input$turnout_likelihood,
       MORENA_Crime_Rating_Post = input$morena_crime_rating_post,
       Coalition_PAN_PRI_PRD_Crime_Rating_Post = input$coalition_pan_pri_prd_crime_rating_post,
       Coalition_MC_Crime_Rating_Post = input$coalition_mc_crime_rating_post,
@@ -3154,7 +3181,7 @@ server <- function(input, output, session) {
         NA_character_,
         input$muni_rank_post_comp_4
       ),
-      Vote_Intention_2027 = if (
+      Vote_Intention_Post = if (
         is.null(input$vote_intention_2027) ||
           length(input$vote_intention_2027) == 0
       ) {
@@ -3162,7 +3189,7 @@ server <- function(input, output, session) {
       } else {
         paste(input$vote_intention_2027, collapse = ";")
       },
-      Vote_Intention_2027_Other = ifelse(
+      Vote_Intention_Post_Other = ifelse(
         is.null(input$vote_intention_2027_other) ||
           input$vote_intention_2027_other == "",
         NA_character_,
@@ -3172,28 +3199,54 @@ server <- function(input, output, session) {
       stringsAsFactors = FALSE
     )
 
-    # Save to local CSV
-    save_success <- tryCatch(
-      {
-        if (file.exists(responses_file)) {
-          write.table(
-            response_df,
-            responses_file,
-            append = TRUE,
-            sep = ",",
-            row.names = FALSE,
-            col.names = FALSE
+    # Serialize response to CSV text
+    tc <- textConnection("csv_out", "w", local = TRUE)
+    write.csv(response_df, tc, row.names = FALSE)
+    close(tc)
+    csv_content <- paste(csv_out, collapse = "\n")
+
+    s3_bucket <- Sys.getenv("S3_BUCKET")
+    save_success <- if (nchar(s3_bucket) > 0) {
+      # Production: upload to S3 (one file per respondent, no race conditions)
+      tryCatch(
+        {
+          s3_client <- paws.storage::s3()
+          s3_client$put_object(
+            Bucket = s3_bucket,
+            Key = paste0("responses/", respondent_id, ".csv"),
+            Body = charToRaw(csv_content)
           )
-        } else {
-          write.csv(response_df, responses_file, row.names = FALSE)
+          TRUE
+        },
+        error = function(e) {
+          warning("S3 upload failed: ", e$message)
+          FALSE
         }
-        TRUE
-      },
-      error = function(e) {
-        warning("Local CSV write failed: ", e$message)
-        FALSE
-      }
-    )
+      )
+    } else {
+      # Local development fallback: append to local CSV
+      tryCatch(
+        {
+          if (file.exists(responses_file)) {
+            write.table(
+              response_df,
+              responses_file,
+              append = TRUE,
+              sep = ",",
+              row.names = FALSE,
+              col.names = FALSE
+            )
+          } else {
+            write.csv(response_df, responses_file, row.names = FALSE)
+          }
+          TRUE
+        },
+        error = function(e) {
+          warning("Local CSV write failed: ", e$message)
+          FALSE
+        }
+      )
+    }
 
     if (!save_success) {
       showNotification(

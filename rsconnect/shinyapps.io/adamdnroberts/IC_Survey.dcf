@@ -5,9 +5,6 @@ account: adamdnroberts
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 16478313
-bundleId: 11591011
+bundleId: 11624002
 url: https://adamdnroberts.shinyapps.io/IC_Survey/
 version: 1
-asMultiple: FALSE
-asStatic: FALSE
-ignoredFiles: .claude/settings.local.json|.lintr|CLAUDE.md

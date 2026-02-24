@@ -2,6 +2,7 @@
 .Rhistory
 *.RData
 .Ruserdata
+.Renviron
 
 # Large data files
 data/*.shp
