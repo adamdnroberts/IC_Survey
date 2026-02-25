@@ -8,9 +8,14 @@ objects <- s3_client$list_objects_v2(
   Prefix = "responses/"
 )
 
-responses <- lapply(objects$Contents, function(obj) {
-  raw <- s3_client$get_object(Bucket = Sys.getenv("S3_BUCKET"), Key = obj$Key)
-  read.csv(text = rawToChar(raw$Body))
-})
+if (length(objects$Contents) == 0) {
+  stop("No responses found in S3 bucket.")
+}
 
-all_responses <- do.call(rbind, responses)
+all_responses <- dplyr::bind_rows(lapply(objects$Contents, function(obj) {
+  raw <- s3_client$get_object(Bucket = Sys.getenv("S3_BUCKET"), Key = obj$Key)
+  read.csv(text = rawToChar(raw$Body), stringsAsFactors = FALSE)
+}))
+
+saveRDS(all_responses, "data/responses.rds")
+cat("Saved", nrow(all_responses), "responses to data/responses.rds\n")

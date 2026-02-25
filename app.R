@@ -128,6 +128,13 @@ ui <- fluidPage(
   tags$head(
     tags$style(HTML(
       "
+      /* Hide minor tick marks on ideology slider */
+      #left_right_scale .irs-grid-pol.small { display: none; }
+
+      /* Mobile-only elements */
+      .mobile-only { display: none; }
+      @media (max-width: 768px) { .mobile-only { display: block; } }
+
       /* Whitespace between survey elements */
       .shiny-input-container {
         margin-bottom: 24px;
@@ -302,6 +309,25 @@ ui <- fluidPage(
         });
         Shiny.setInputValue(group, checked.length > 0 ? checked : null);
       });
+      $(document).ready(function() {
+        Shiny.setInputValue('is_mobile', window.innerWidth <= 768);
+      });
+      $(document).on('shiny:connected', function() {
+        var slider = $('#left_right_scale').data('ionRangeSlider');
+        if (slider) slider.update({grid_num: 10});
+      });
+
+      function startTreatmentTimer(seconds) {
+        var btn = $('#goto_page7_from_6');
+        var msg = $('#treatment_wait_msg');
+        btn.prop('disabled', true);
+        msg.show();
+        setTimeout(function() {
+          btn.prop('disabled', false);
+          msg.hide();
+          $('#treatment_intro_msg').hide();
+        }, seconds * 1000);
+      }
     "
     ))
   ),
@@ -314,13 +340,12 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page0",
-            h4("Information Sheet"),
-            p(em("Principal Investigator: Adam Roberts")),
-            p(
-              "This form describes a research study that is being conducted by Adam Roberts from the ",
-              "University of Rochester's Department of Political Science. The purpose of this study is to ",
-              "understand how voters use information when deciding which candidate or political party to vote for."
-            ),
+            #p(em("Principal Investigator: Adam Roberts")),
+            # p(
+            #   "This form describes a research study that is being conducted by Adam Roberts from the ",
+            #   "University of Rochester's Department of Political Science. The purpose of this study is to ",
+            #   "understand how voters use information when deciding which candidate or political party to vote for."
+            # ),
             p(
               "If you decide to take part in this study, you will be asked to complete a survey that will take ",
               "about 10\u201315 minutes to complete. The surveys will ask questions ",
@@ -329,18 +354,14 @@ ui <- fluidPage(
               "vote choice in the most recent municipal elections."
             ),
             p(
-              "You will be asked to provide your location to identify which municipality you live in, but we ",
-              "will not save this information. Some of the survey questions may be upsetting or make you feel ",
-              "uncomfortable, but not any more uncomfortable than you might feel reading the news. You may ",
-              "withdraw at any time. This study will not collect any direct identifiers, like your name or ",
-              "government ID number. However, we will collect some indirect identifiers, namely the municipality ",
-              "in which you live, political affiliation, and demographic information. All information we collect ",
-              "will be stored in a secure manner and only the principal investigator will have access to it. There ",
-              "are no other expected risks. There are also no expected benefits."
+              "Some survey questions touch on political topics that you may find sensitive, but participation ",
+              "carries no greater risk than reading the news. You may withdraw at any time and for any reason."
             ),
             p(
-              "Your participation in this study is completely voluntary. You are free not to participate or to ",
-              "withdraw at any time, for whatever reason."
+              "You will be asked to enter your home address solely to identify your municipality. Your address ",
+              "will not be saved \u2014 only your municipality, political affiliation, and demographic information ",
+              "will be recorded. This study will not collect direct identifiers such as your name or CURP. All ",
+              "data will be stored securely in the cloud and will be accessible only to the principal investigator."
             ),
             p(
               "For more information or questions about this research you may contact Adam Roberts at ",
@@ -365,6 +386,12 @@ ui <- fluidPage(
               column(
                 12,
                 align = "right",
+                div(
+                  class = "mobile-only",
+                  p(strong(
+                    "For the best experience, we recommend completing this survey in landscape mode."
+                  ))
+                ),
                 actionButton(
                   "goto_page1_from_0",
                   "Entiendo, Continuar \u2192",
@@ -379,7 +406,6 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page1",
-            h4("Find Your Municipality"),
 
             p(strong("Enter your address to find your home municipality:")),
             fluidRow(
@@ -447,12 +473,10 @@ ui <- fluidPage(
               column(
                 12,
                 align = "right",
-                disabled(
-                  actionButton(
-                    "goto_page2_from_1",
-                    "Next \u2192",
-                    class = "btn-primary btn-lg"
-                  )
+                actionButton(
+                  "goto_page2_from_1",
+                  "Next \u2192",
+                  class = "btn-primary btn-lg"
                 )
               )
             )
@@ -468,8 +492,9 @@ ui <- fluidPage(
             ),
             p(
               "The following is a list of news sources that you can re-arrange by dragging and dropping each individual item.",
+              "Please move all items from the 'Available items' bin to the ranking bin.",
               "To make sure that you are paying attention to the question wording, please put ",
-              "Radio in position 1 (top) and Social media is in position 5 (bottom)."
+              "Radio in position 1 (top) and Social media in position 5 (bottom)."
             ),
             tags$hr(),
             bucket_list(
@@ -477,7 +502,7 @@ ui <- fluidPage(
               group_name = "practice_bucket",
               orientation = "horizontal",
               add_rank_list(
-                text = "Available items — drag into slots:",
+                text = "Available items — drag into ranking bin:",
                 labels = c(
                   "Television",
                   "Social media",
@@ -499,15 +524,7 @@ ui <- fluidPage(
             uiOutput("practice_warning"),
             fluidRow(
               column(
-                6,
-                actionButton(
-                  "goto_page1_from_2",
-                  "\u2190 Back",
-                  class = "btn-default btn-lg"
-                )
-              ),
-              column(
-                6,
+                12,
                 align = "right",
                 actionButton(
                   "goto_page3_from_2",
@@ -523,7 +540,6 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page3",
-            h4("Your Municipality"),
 
             tags$div(
               class = "form-group",
@@ -577,8 +593,6 @@ ui <- fluidPage(
             ),
 
             hr(),
-
-            h5(strong("Municipal Governance")),
 
             uiOutput("governance_grid_ui"),
 
@@ -699,15 +713,7 @@ ui <- fluidPage(
             uiOutput("issue_importance_warning"),
             fluidRow(
               column(
-                6,
-                actionButton(
-                  "goto_page1_from_3",
-                  "← Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
+                12,
                 align = "right",
                 actionButton(
                   "goto_page4_from_3",
@@ -723,7 +729,6 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page4",
-            h4("Your Municipality's Performance"),
 
             p(strong(
               "Las siguientes preguntas le pedir\u00e1n que eval\u00fae c\u00f3mo ciertos municipios y partidos \u201cmanejan\u201d la delincuencia no violenta, como los robos. \u201cManejar la delincuencia\u201d aqu\u00ed se refiere a los esfuerzos del gobierno para prevenir el crimen, hacer cumplir la ley y garantizar la seguridad p\u00fablica."
@@ -814,15 +819,7 @@ ui <- fluidPage(
             hr(),
             fluidRow(
               column(
-                6,
-                actionButton(
-                  "goto_page3_from_4",
-                  "← Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
+                12,
                 align = "right",
                 actionButton(
                   "goto_page5_from_4",
@@ -838,7 +835,6 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page5",
-            h4("About You"),
 
             h5(strong("Political Views")),
 
@@ -974,15 +970,7 @@ ui <- fluidPage(
             hr(),
             fluidRow(
               column(
-                6,
-                actionButton(
-                  "goto_page4_from_5",
-                  "← Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
+                12,
                 align = "right",
                 actionButton(
                   "goto_page6_from_5",
@@ -999,20 +987,23 @@ ui <- fluidPage(
           div(
             id = "page6",
 
+            p(
+              id = "treatment_intro_msg",
+              style = "font-style: italic; color: #555;",
+              "Please read the information below. You will be able to continue shortly."
+            ),
+
             uiOutput("treatment_content_ui"),
 
             hr(),
+            p(
+              id = "treatment_wait_msg",
+              style = "display: none; color: #555; font-style: italic;",
+              "Please don't continue until you've read the information above. You will be able to proceed shortly."
+            ),
             fluidRow(
               column(
-                6,
-                actionButton(
-                  "goto_page5_from_6",
-                  "← Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
+                12,
                 align = "right",
                 actionButton(
                   "goto_page7_from_6",
@@ -1028,7 +1019,6 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page7",
-            h4("Post-Treatment Survey"),
 
             # 1. Party handling of crime (coalition ratings)
             p(strong(
@@ -1112,22 +1102,13 @@ ui <- fluidPage(
             hr(),
 
             # 2. Municipality performance (ranking)
-            h5(strong("Your Municipality's Performance")),
 
             uiOutput("municipality_ranking_post_ui"),
 
             hr(),
             fluidRow(
               column(
-                6,
-                actionButton(
-                  "goto_page6_from_7",
-                  "← Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
+                12,
                 align = "right",
                 actionButton(
                   "goto_page8_from_7",
@@ -1249,15 +1230,7 @@ ui <- fluidPage(
             hr(),
             fluidRow(
               column(
-                6,
-                actionButton(
-                  "goto_page7_from_8",
-                  "\u2190 Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
+                12,
                 align = "right",
                 actionButton(
                   "goto_page9_from_8",
@@ -1273,7 +1246,6 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page9",
-            h4("Select Reference Municipalities"),
 
             uiOutput("reference_instructions_text"),
             p(em(
@@ -1341,15 +1313,7 @@ ui <- fluidPage(
             hr(),
             fluidRow(
               column(
-                6,
-                actionButton(
-                  "goto_page8_from_9",
-                  "\u2190 Back",
-                  class = "btn-secondary btn-lg"
-                )
-              ),
-              column(
-                6,
+                12,
                 align = "right",
                 actionButton(
                   "submit",
@@ -1371,7 +1335,6 @@ ui <- fluidPage(
             br(),
             div(
               style = "text-align: center; padding: 50px;",
-              h3(icon("check-circle"), " Thank you!"),
               p("Your survey has been submitted successfully."),
               br(),
               p(style = "color: #6c757d;", "You may now close this window.")
@@ -1389,10 +1352,10 @@ server <- function(input, output, session) {
   make_crime_ranking_grid <- function(home_name, comp_labels, prefix) {
     col_labels <- c(
       "more_than_double" = "More than double",
-      "more" = "More, less than double",
+      "more" = "More but less than double",
       "same" = "About the same",
-      "fewer" = "Fewer, more than half",
-      "less_than_half" = "Fewer, less than half",
+      "fewer" = "Fewer but more than half",
+      "less_than_half" = "Less than half",
       "dont_know" = "Don't know"
     )
     header_cells <- tagList(
@@ -1435,8 +1398,15 @@ server <- function(input, output, session) {
         strong(home_name),
         ", how do you think the number of robberies in these municipalities compares?"
       ),
+      div(
+        class = "mobile-only",
+        p(
+          em("\u21d0 Scroll sideways to see all options \u21d2"),
+          style = "text-align: center; color: #555; margin-bottom: 4px;"
+        )
+      ),
       tags$div(
-        style = "overflow-x: auto; margin-top: 10px;",
+        style = "overflow-x: auto; margin-top: 10px; border: 1px solid #ccc; border-radius: 4px; padding: 4px;",
         tags$table(
           style = "border-collapse: collapse; width: 100%;",
           tags$thead(
@@ -1914,14 +1884,7 @@ server <- function(input, output, session) {
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
   observeEvent(input$goto_page3_from_2, {
-    if (length(input$practice_ranking) < 5) {
-      practice_warning_msg(
-        "Please drag all items into the ranking slots before continuing."
-      )
-    } else {
-      practice_warning_msg(NULL)
-      current_page(3)
-    }
+    current_page(3)
   })
 
   # Page 3 → Page 1
@@ -1956,14 +1919,7 @@ server <- function(input, output, session) {
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
   observeEvent(input$goto_page4_from_3, {
-    if (length(input$issue_importance_ranking) < 5) {
-      issue_importance_warning_msg(
-        "Please drag all issues into the ranking slots before continuing."
-      )
-    } else {
-      issue_importance_warning_msg(NULL)
-      current_page(4)
-    }
+    current_page(4)
   })
 
   # Page 4 → Page 3
@@ -1984,6 +1940,15 @@ server <- function(input, output, session) {
   # Page 5 → Page 6
   observeEvent(input$goto_page6_from_5, {
     current_page(6)
+    duration <- switch(
+      treatment_group(),
+      "control" = 30,
+      "T1" = 30,
+      "T2" = 45,
+      "T3" = 45,
+      "T4" = 45
+    )
+    runjs(paste0("startTreatmentTimer(", duration, ");"))
   })
 
   # Page 6 → Page 5
@@ -2261,11 +2226,12 @@ server <- function(input, output, session) {
 
   # Plain information paragraph (shared by groups 2, 3, and 4)
   plain_info_text <- paste0(
-    "Municipal police forces in Mexico can do a lot to help reduce crime. ",
-    "Specifically, municipal forces can respond to criminal incidents, patrol the streets, ",
-    "and supply valuable information to higher-level operations. ",
+    "Municipal police forces can help reduce crime by responding to criminal incidents, patrolling the streets, ",
+    "and supplying valuable information to higher-level public security operations. ",
     "Decisions about funding and structure of municipal police forces are largely ",
-    "in the hands of municipal presidents. ",
+    "in the hands of municipal presidents."
+  )
+  plain_info_text_last <- paste0(
     "Therefore, municipal governments have some ability to control crime, although many factors that lead to crime ",
     "are out of the government\u2019s hands."
   )
@@ -2279,28 +2245,51 @@ server <- function(input, output, session) {
       "T1" = uiOutput("treatment_plain_info_ui"),
       "T2" = tagList(
         uiOutput("treatment_nonpartisan_ui"),
-        plotOutput("treatment_histogram_nonpartisan", height = "350px")
+        plotOutput("treatment_histogram_nonpartisan", height = "350px"),
+        p(
+          em(
+            "Source: Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
+          ),
+          style = "font-size: 0.85em; color: #555; margin-top: 4px;"
+        )
       ),
       "T3" = tagList(
         uiOutput("treatment_partisan_ui"),
-        plotOutput("treatment_histogram_partisan", height = "350px")
+        plotOutput("treatment_histogram_partisan", height = "350px"),
+        p(
+          em(
+            "Source: Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
+          ),
+          style = "font-size: 0.85em; color: #555; margin-top: 4px;"
+        )
       ),
       "T4" = tagList(
         uiOutput("treatment_same_coalition_ui"),
-        plotOutput("treatment_histogram_same_coalition", height = "350px")
+        plotOutput("treatment_histogram_same_coalition", height = "350px"),
+        p(
+          em(
+            "Source: Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
+          ),
+          style = "font-size: 0.85em; color: #555; margin-top: 4px;"
+        )
       )
     )
   })
 
   # Control (Placebo)
   output$treatment_control_ui <- renderUI({
-    p(
-      "Agave cultivation is a major industry in Mexico, and specialized farming techniques can do a lot ",
-      "to help improve plant health. Specifically, farmers can monitor for invasive pests, implement ",
-      "sustainable harvest cycles, and ensure proper soil drainage to protect the heart of the plant. ",
-      "Decisions about the timing and methods of these agricultural practices are largely in the hands ",
-      "of independent field managers. Therefore, plantation owners have some ability to protect their ",
-      "crops, although many weather patterns that affect agave growth are out of the owners\u2019 hands."
+    tagList(
+      p(
+        "Agave cultivation is a major industry in Mexico, and specialized farming techniques can do a lot ",
+        "to help improve plant health. Specifically, farmers can monitor for invasive pests, implement ",
+        "sustainable harvest cycles, and ensure proper soil drainage to protect the heart of the plant. ",
+        "Decisions about the timing and methods of these agricultural practices are largely in the hands ",
+        "of independent field managers."
+      ),
+      p(strong(
+        "Therefore, plantation owners have some ability to protect their crops, although many weather ",
+        "patterns that affect agave growth are out of the owners\u2019 hands."
+      ))
     )
   })
 
@@ -2309,6 +2298,7 @@ server <- function(input, output, session) {
     change_text <- home_robbery_change_text()
     tagList(
       p(plain_info_text),
+      p(strong(plain_info_text_last)),
       p(strong(change_text))
     )
   })
@@ -2328,13 +2318,13 @@ server <- function(input, output, session) {
 
     tagList(
       p(plain_info_text),
+      p(strong(plain_info_text_last)),
       p(strong(change_text)),
       p(
         paste0(
           "The following graph shows the number of robberies reported in 2025 for ",
           home_name,
-          " and a sample of other municipalities, as recorded by the Secretariado ",
-          "Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
+          " and a sample of other municipalities."
         )
       )
     )
@@ -2358,6 +2348,7 @@ server <- function(input, output, session) {
 
     tagList(
       p(plain_info_text),
+      p(strong(plain_info_text_last)),
       p(strong(change_text)),
       p(
         paste0(
@@ -2365,7 +2356,7 @@ server <- function(input, output, session) {
           home_name,
           " and a sample of other municipalities that are governed by ",
           opposite_label,
-          ", as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
+          "."
         )
       )
     )
@@ -2388,6 +2379,7 @@ server <- function(input, output, session) {
 
     tagList(
       p(plain_info_text),
+      p(strong(plain_info_text_last)),
       p(strong(change_text)),
       p(
         paste0(
@@ -2395,7 +2387,7 @@ server <- function(input, output, session) {
           home_name,
           " and a sample of other municipalities that are governed by ",
           same_label,
-          ", as recorded by the Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
+          "."
         )
       )
     )
@@ -2502,8 +2494,16 @@ server <- function(input, output, session) {
         "Which party or parties do you believe currently govern each of the following municipalities? (select all that apply)"
       ),
       div(
+        class = "mobile-only",
+        p(
+          em("\u21d0 Scroll sideways to see all options \u21d2"),
+          style = "text-align: center; color: #555; margin-bottom: 4px;"
+        )
+      ),
+      div(
         id = "governance_grid",
         class = "governance-grid",
+        style = "border: 1px solid #ccc; border-radius: 4px; padding: 4px;",
         tags$table(
           tags$thead(do.call(tags$tr, header_cells)),
           do.call(tags$tbody, body_rows)
@@ -2533,17 +2533,26 @@ server <- function(input, output, session) {
       )
     }
 
-    ggplot(plot_df, aes(x = municipality, y = robos, fill = fill_group)) +
+    ggplot(
+      plot_df,
+      aes(
+        x = municipality,
+        y = robos,
+        fill = fill_group
+      )
+    ) +
       geom_col(color = "black", linewidth = 0.5) +
       scale_fill_manual(values = fill_values, name = NULL) +
       labs(x = NULL, y = "Robos en 2025") +
+      coord_cartesian(clip = "off") +
       theme_minimal() +
       theme(
         axis.text.x = element_text(angle = 45, hjust = 1, size = 11),
         axis.title.y = element_text(size = 12),
         panel.grid.major.x = element_blank(),
         legend.position = "bottom",
-        legend.box = "horizontal"
+        legend.box = "horizontal",
+        plot.margin = margin(t = 5, r = 5, b = 5, l = 40)
       )
   }
 
@@ -2577,7 +2586,10 @@ server <- function(input, output, session) {
       arrange(robos)
 
     data.frame(
-      municipality = factor(muni_info$NOMGEO, levels = muni_info$NOMGEO),
+      municipality = factor(
+        stringr::str_wrap(muni_info$NOMGEO, width = 15),
+        levels = stringr::str_wrap(muni_info$NOMGEO, width = 15)
+      ),
       robos = muni_info$robos,
       fill_group = muni_info$fill_group
     )
@@ -3196,6 +3208,7 @@ server <- function(input, output, session) {
         input$vote_intention_2027_other
       ),
       Timestamp = as.character(Sys.time()),
+      Is_Mobile = isTRUE(input$is_mobile),
       stringsAsFactors = FALSE
     )
 
