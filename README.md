@@ -38,29 +38,31 @@ The app is also configured for deployment to [shinyapps.io](https://www.shinyapp
 
 ## Survey Flow
 
-The survey consists of 10 pages (0--9):
+The survey consists of 11 pages (0--10):
 
 | Page | Content |
 |------|---------|
 | 0 | Information sheet / consent |
-| 1 | Home municipality selection (searchable dropdown) |
-| 2 | Municipality confirmation |
-| 3 | Political views: party preference, last election vote, governance grid |
-| 4 | Pre-treatment: municipality crime ranking (bucket list), incumbent rating, turnout likelihood, vote intention, issue importance ranking |
-| 5 | Demographics: age, gender, indigenous identity, attention check |
-| 6 | Treatment delivery (robbery statistics with comparison graphs) |
-| 7 | Post-treatment: turnout likelihood, incumbent rating, crime ranking, party allegiance update, vote intention |
-| 8 | Reference municipality selection |
-| 9 | Thank you / confirmation |
+| 1 | Home municipality selection (address geocoding via Nominatim/Photon + dropdown fallback + confirmation) |
+| 2 | Practice drag-and-drop ranking (news sources — attention check) |
+| 3 | Last election vote, governance grid |
+| 4 | Pre-treatment: crime explainer, home municipality crime handling slider, coalition handling sliders, robbery estimate, municipality crime ranking, issue importance ranking |
+| 5 | Political views: left-right scale, party identification, attention check |
+| 6 | Treatment delivery (robbery % change statistics with comparison bar charts) |
+| 7 | Post-treatment: crime explainer, home municipality crime handling slider, coalition handling sliders, municipality crime ranking |
+| 8 | Post-treatment: turnout likelihood, vote intention |
+| 9 | Reference municipality selection |
+| 10 | Thank you / confirmation |
 
 ## Treatment Groups
 
-The experiment has four treatment conditions:
+The experiment has five treatment conditions:
 
 1. **Control** -- Placebo text about agave cultivation
-2. **Plain Information** -- Robbery change statistics for the respondent's home municipality
-3. **Same-Party Comparison** -- Robbery statistics compared to municipalities governed by the same political coalition
-4. **Opposite-Party Comparison** -- Robbery statistics compared to municipalities governed by the opposing coalition
+2. **T1 — Plain Information** -- Robbery % change for the respondent's home municipality only
+3. **T2 — Non-partisan Comparison** -- Robbery change + bar chart vs. randomly sampled same-state municipalities
+4. **T3 — Opposite-coalition Comparison** -- Robbery change + bar chart vs. opposite-coalition same-state municipalities (with party labels)
+5. **T4 — Same-coalition Comparison** -- Robbery change + bar chart vs. same-coalition same-state municipalities (with party labels)
 
 Coalitions are defined as:
 - Coalition A: MORENA, PT, PVEM
@@ -104,13 +106,12 @@ Survey responses
 
 Survey responses are saved to `data/survey_responses.csv`. Each row contains:
 
-- Home municipality and respondent-selected reference municipalities
-- Demographics (age, gender, indigenous identity)
-- Political views (party preference, party strength, last election vote)
-- Governance beliefs (which party governs each municipality)
+- Home municipality (CVEGEO) and respondent-selected reference municipalities
+- Political views (left-right scale, party identification, last election vote)
+- Governance beliefs (governance grid ratings per municipality)
 - Issue importance rankings
-- Pre-treatment measures (crime ranking, incumbent rating, turnout likelihood, vote intention)
-- Post-treatment measures (crime ranking, incumbent rating, turnout likelihood, party allegiance, vote intention)
+- Pre-treatment measures (crime handling sliders, robbery estimate, municipality crime ranking)
+- Treatment group assignment and post-treatment measures (crime handling sliders, municipality crime ranking, turnout likelihood, vote intention)
 - Timestamp
 
 ## License
