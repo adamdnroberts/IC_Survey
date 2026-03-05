@@ -33,3 +33,6 @@ google-service-account.json
 #claude code
 .claude/
 CLAUDE.md
+
+#latex folder (because it has its own git repository)
+latex/
