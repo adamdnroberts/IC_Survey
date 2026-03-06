@@ -830,31 +830,7 @@ ui <- fluidPage(
 
             sliderInput(
               "coalition_pan_pri_prd_crime_rating",
-              "On average, how well do you think municipalities governed by PAN, PRI, or PRD handle crime?",
-              min = 0,
-              max = 100,
-              value = 50
-            ),
-            fluidRow(
-              column(
-                6,
-                p(
-                  "Handles crime extremely poorly",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
-                )
-              ),
-              column(
-                6,
-                p(
-                  "Handles crime extremely well",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
-                )
-              )
-            ),
-
-            sliderInput(
-              "coalition_mc_crime_rating",
-              "On average, how well do you think municipalities governed by MC handle crime?",
+              "On average, how well do you think municipalities governed by PAN, PRI, PRD, or MC handle crime?",
               min = 0,
               max = 100,
               value = 50
@@ -1121,31 +1097,7 @@ ui <- fluidPage(
 
             sliderInput(
               "coalition_pan_pri_prd_crime_rating_post",
-              "On average, how well do you think municipalities governed by PAN, PRI, or PRD handle crime?",
-              min = 0,
-              max = 100,
-              value = 50
-            ),
-            fluidRow(
-              column(
-                6,
-                p(
-                  "Handles crime extremely poorly",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
-                )
-              ),
-              column(
-                6,
-                p(
-                  "Handles crime extremely well",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
-                )
-              )
-            ),
-
-            sliderInput(
-              "coalition_mc_crime_rating_post",
-              "On average, how well do you think municipalities governed by MC handle crime?",
+              "On average, how well do you think municipalities governed by PAN, PRI, PRD, or MC handle crime?",
               min = 0,
               max = 100,
               value = 50
@@ -3288,8 +3240,7 @@ server <- function(input, output, session) {
       ),
       Home_Crime_Handling_Pre = input$home_crime_handling_pre,
       MORENA_Crime_Rating_Pre = input$morena_crime_rating,
-      Coalition_PAN_PRI_PRD_Crime_Rating_Pre = input$coalition_pan_pri_prd_crime_rating,
-      Coalition_MC_Crime_Rating_Pre = input$coalition_mc_crime_rating,
+      Coalition_PAN_PRI_PRD_MC_Crime_Rating_Pre = input$coalition_pan_pri_prd_crime_rating,
       Turnout_Likelihood_Pre = input$turnout_likelihood_pre,
       Vote_Intention_Pre = if (
         is.null(input$vote_intention_pre) ||
@@ -3309,8 +3260,7 @@ server <- function(input, output, session) {
       Home_Crime_Handling_Post = input$home_crime_handling_post,
       Turnout_Likelihood_Post = input$turnout_likelihood,
       MORENA_Crime_Rating_Post = input$morena_crime_rating_post,
-      Coalition_PAN_PRI_PRD_Crime_Rating_Post = input$coalition_pan_pri_prd_crime_rating_post,
-      Coalition_MC_Crime_Rating_Post = input$coalition_mc_crime_rating_post,
+      Coalition_PAN_PRI_PRD_MC_Crime_Rating_Post = input$coalition_pan_pri_prd_crime_rating_post,
       # Post-treatment municipality crime categories (relative to home)
       Crime_Rank_Comp_1_Post = ifelse(
         is.null(input$muni_rank_post_comp_1),
