@@ -57,6 +57,13 @@ all_parties <- magar2024 %>%
 d_geo <- d_geo %>%
   left_join(all_parties, by = c("muni_id" = "CVEGEO"))
 
+# Add area (km²) and centroid coordinates for Mahalanobis matching
+d_geo <- d_geo %>%
+  mutate(area_km2 = as.numeric(sf::st_area(.)) / 1e6)
+muni_centroid_coords <- sf::st_coordinates(sf::st_centroid(d_geo))
+d_geo$centroid_lon <- muni_centroid_coords[, 1]
+d_geo$centroid_lat <- muni_centroid_coords[, 2]
+
 # Coalition definitions for treatment groups
 coalition_a <- c("MORENA", "PT", "PVEM")
 coalition_b <- c("PAN", "PRI", "PRD", "MC")
@@ -71,6 +78,61 @@ get_opposite_parties <- function(party) {
 
 get_coalition_label <- function(parties) {
   paste(parties, collapse = "/")
+}
+
+# Mahalanobis matching on log(population), log(area_km2), log(distance_km).
+# Returns the n closest candidates to home_id by Mahalanobis distance.
+# candidates must contain columns: muni_id, POB_TOTAL, area_km2, centroid_lon, centroid_lat.
+mahal_match_munis <- function(home_id, candidates, n = 4) {
+  if (nrow(candidates) == 0) {
+    return(candidates)
+  }
+  if (nrow(candidates) <= n) {
+    return(candidates)
+  }
+
+  home_row <- d_geo %>%
+    st_drop_geometry() %>%
+    filter(muni_id == home_id)
+
+  if (nrow(home_row) == 0) {
+    return(candidates[seq_len(n), ])
+  }
+
+  # Great-circle distance from home centroid to each candidate centroid (km)
+  home_sf <- sf::st_sfc(
+    sf::st_point(c(home_row$centroid_lon[1], home_row$centroid_lat[1])),
+    crs = 4326
+  )
+  cand_sf <- sf::st_as_sf(
+    candidates,
+    coords = c("centroid_lon", "centroid_lat"),
+    crs = 4326,
+    remove = FALSE
+  )
+  dist_km <- as.numeric(sf::st_distance(home_sf, cand_sf)) / 1000
+
+  # Covariate matrix (log-transformed)
+  X <- cbind(
+    log_pop = log(pmax(candidates$POB_TOTAL, 1)),
+    log_area = log(pmax(candidates$area_km2, 0.01)),
+    log_dist = log(pmax(dist_km, 0.1))
+  )
+
+  # Target: home municipality values; distance target = 0.1 km (prefer nearby)
+  x0 <- c(
+    log_pop = log(max(home_row$POB_TOTAL[1], 1)),
+    log_area = log(max(home_row$area_km2[1], 0.01)),
+    log_dist = log(0.1)
+  )
+
+  cov_X <- cov(X)
+  mahal_dist <- tryCatch(
+    mahalanobis(X, x0, cov_X),
+    error = function(e) rowSums(scale(X)^2)
+  )
+
+  candidates[order(mahal_dist)[seq_len(n)], ]
 }
 
 # Map color palette for governing coalition
@@ -348,10 +410,16 @@ ui <- fluidPage(
             # ),
             p(
               "If you decide to take part in this study, you will be asked to complete a survey that will take ",
-              "about 10\u201315 minutes to complete. The surveys will ask questions ",
+              "about 10 minutes to complete. The surveys will ask questions ",
               "about the municipality you live in, ",
               "demographics, and political topics, including your political preferences, party affiliation, and ",
-              "vote choice in the most recent municipal elections."
+              "vote choice in the most recent municipal elections. ",
+              "For full details about this study, please see the information sheet here: ",
+              tags$a(
+                href = "https://adamdnroberts.github.io/assets/pdf/Information_Sheet_Incumbent_Comparisons.pdf",
+                target = "_blank",
+                "Information Sheet"
+              )
             ),
             p(
               "Some survey questions touch on political topics that you may find sensitive, but participation ",
@@ -359,7 +427,7 @@ ui <- fluidPage(
             ),
             p(
               "You will be asked to enter your home address solely to identify your municipality. Your address ",
-              "will not be saved \u2014 only your municipality, political affiliation, and demographic information ",
+              "will not be saved. Only your municipality, political affiliation, and demographic information ",
               "will be recorded. This study will not collect direct identifiers such as your name or CURP. All ",
               "data will be stored securely in the cloud and will be accessible only to the principal investigator."
             ),
@@ -1433,6 +1501,12 @@ server <- function(input, output, session) {
     sample(c("control", "T1", "T2", "T3", "T4"), 1)
   )
 
+  # For control/T1, randomly assign which type of comparison municipalities
+  # are shown in the governance grid and crime ranking (independent of treatment)
+  control_t1_comp_type <- reactiveVal(
+    sample(c("nonpartisan", "opposite", "same"), 1)
+  )
+
   # Generate unique respondent ID at session start
   respondent_id <- paste0(
     format(Sys.time(), "%Y%m%d_%H%M%S"),
@@ -1609,121 +1683,181 @@ server <- function(input, output, session) {
     ignoreNULL = FALSE
   )
 
-  # Set comparison municipalities when home municipality is found
+  # Set comparison municipalities (T3: opposite-coalition) when home municipality is found
   observeEvent(found_municipality(), {
     home_id <- found_municipality()
     req(!is.null(home_id))
 
-    home_info <- d_geo %>%
+    home_party <- d_geo %>%
       st_drop_geometry() %>%
-      filter(muni_id == home_id)
+      filter(muni_id == home_id) %>%
+      pull(governing_party) %>%
+      `[`(1)
 
-    home_state <- home_info$NOM_ENT[1]
-    home_party <- home_info$governing_party[1]
+    # TODO: handle home municipalities with NA governing_party (no coalition data) —
+    # currently get_opposite_parties(NA) returns coalition_b by default, which may
+    # not be appropriate. Consider excluding these respondents from T3 or prompting
+    # a manual party entry.
     opposite_coalition <- get_opposite_parties(home_party)
 
-    # Get comparison municipalities (large cities, opposite coalition, excluding home)
-    comp_munis <- d_geo %>%
+    candidates <- d_geo %>%
       st_drop_geometry() %>%
       filter(
         governing_party %in% opposite_coalition,
         muni_id != home_id,
-        muni_id %in% large_munis
+        muni_id %in% large_munis,
+        !is.na(POB_TOTAL),
+        !is.na(area_km2)
       ) %>%
-      select(muni_id, NOMGEO, NOM_ENT)
+      select(
+        muni_id,
+        NOMGEO,
+        NOM_ENT,
+        POB_TOTAL,
+        area_km2,
+        centroid_lon,
+        centroid_lat
+      )
 
-    # Fallback: if no opposite-coalition large municipalities, use any large city
-    if (nrow(comp_munis) == 0) {
-      comp_munis <- d_geo %>%
+    # Fallback: any large city if no opposite-coalition candidates
+    # TODO: also triggers when home_party is NA — should be handled upstream
+    if (nrow(candidates) == 0) {
+      candidates <- d_geo %>%
         st_drop_geometry() %>%
         filter(
           muni_id != home_id,
-          muni_id %in% large_munis
+          muni_id %in% large_munis,
+          !is.na(POB_TOTAL),
+          !is.na(area_km2)
         ) %>%
-        select(muni_id, NOMGEO, NOM_ENT)
+        select(
+          muni_id,
+          NOMGEO,
+          NOM_ENT,
+          POB_TOTAL,
+          area_km2,
+          centroid_lon,
+          centroid_lat
+        )
     }
 
-    # Randomly select up to 4 comparison municipalities
-    if (nrow(comp_munis) > 4) {
-      comp_munis <- comp_munis %>% slice_sample(n = 4)
-    }
+    comp_munis <- mahal_match_munis(home_id, candidates) %>%
+      select(muni_id, NOMGEO, NOM_ENT)
 
     comparison_municipalities(comp_munis)
   })
 
-  # Set non-partisan comparison municipalities when home municipality is found
+  # Set non-partisan comparison municipalities (T2) when home municipality is found
   observeEvent(found_municipality(), {
     home_id <- found_municipality()
     req(!is.null(home_id))
 
-    home_info <- d_geo %>%
-      st_drop_geometry() %>%
-      filter(muni_id == home_id)
-
-    home_state <- home_info$NOM_ENT[1]
-
-    # Get comparison municipalities (large cities, any party, excluding home)
-    comp_munis_np <- d_geo %>%
+    # TODO: remove large_munis filter so all municipalities are eligible for T2
+    candidates <- d_geo %>%
       st_drop_geometry() %>%
       filter(
         muni_id != home_id,
-        muni_id %in% large_munis
+        muni_id %in% large_munis,
+        !is.na(POB_TOTAL),
+        !is.na(area_km2)
       ) %>%
-      select(muni_id, NOMGEO, NOM_ENT)
+      select(
+        muni_id,
+        NOMGEO,
+        NOM_ENT,
+        POB_TOTAL,
+        area_km2,
+        centroid_lon,
+        centroid_lat
+      )
 
-    # Randomly select up to 4 comparison municipalities
-    if (nrow(comp_munis_np) > 4) {
-      comp_munis_np <- comp_munis_np %>% slice_sample(n = 4)
-    }
+    comp_munis_np <- mahal_match_munis(home_id, candidates) %>%
+      select(muni_id, NOMGEO, NOM_ENT)
 
     comp_munis_nonpartisan_rv(comp_munis_np)
   })
 
-  # Set same-coalition comparison municipalities when home municipality is found
+  # Set same-coalition comparison municipalities (T4) when home municipality is found
   observeEvent(found_municipality(), {
     home_id <- found_municipality()
     req(!is.null(home_id))
 
-    home_info <- d_geo %>%
+    home_party <- d_geo %>%
       st_drop_geometry() %>%
-      filter(muni_id == home_id)
+      filter(muni_id == home_id) %>%
+      pull(governing_party) %>%
+      `[`(1)
 
-    home_party <- home_info$governing_party[1]
+    # TODO: handle home municipalities with NA governing_party (no coalition data) —
+    # same issue as T3: get_same_coalition_parties(NA) defaults to coalition_b.
     same_coalition <- get_same_coalition_parties(home_party)
 
-    comp_munis_sc <- d_geo %>%
+    candidates <- d_geo %>%
       st_drop_geometry() %>%
       filter(
         governing_party %in% same_coalition,
         muni_id != home_id,
-        muni_id %in% large_munis
+        muni_id %in% large_munis,
+        !is.na(POB_TOTAL),
+        !is.na(area_km2)
       ) %>%
-      select(muni_id, NOMGEO, NOM_ENT)
+      select(
+        muni_id,
+        NOMGEO,
+        NOM_ENT,
+        POB_TOTAL,
+        area_km2,
+        centroid_lon,
+        centroid_lat
+      )
 
-    # Fallback: any large city
-    if (nrow(comp_munis_sc) == 0) {
-      comp_munis_sc <- d_geo %>%
+    # Fallback: any large city if no same-coalition candidates
+    # TODO: also triggers when home_party is NA — should be handled upstream
+    if (nrow(candidates) == 0) {
+      candidates <- d_geo %>%
         st_drop_geometry() %>%
-        filter(muni_id != home_id, muni_id %in% large_munis) %>%
-        select(muni_id, NOMGEO, NOM_ENT)
+        filter(
+          muni_id != home_id,
+          muni_id %in% large_munis,
+          !is.na(POB_TOTAL),
+          !is.na(area_km2)
+        ) %>%
+        select(
+          muni_id,
+          NOMGEO,
+          NOM_ENT,
+          POB_TOTAL,
+          area_km2,
+          centroid_lon,
+          centroid_lat
+        )
     }
 
-    if (nrow(comp_munis_sc) > 4) {
-      comp_munis_sc <- comp_munis_sc %>% slice_sample(n = 4)
-    }
+    comp_munis_sc <- mahal_match_munis(home_id, candidates) %>%
+      select(muni_id, NOMGEO, NOM_ENT)
 
     comp_munis_same_coalition_rv(comp_munis_sc)
   })
 
-  # Return the comparison municipalities appropriate for the assigned treatment group
+  # Return the comparison municipalities appropriate for the assigned treatment group.
+  # For T2: always non-partisan. For T3: opposite-coalition. For T4: same-coalition.
+  # For control/T1: randomly assigned type (control_t1_comp_type).
   active_comp_munis <- reactive({
     tg <- treatment_group()
-    if (tg %in% c("control", "T1", "T2")) {
+    if (tg == "T2") {
       comp_munis_nonpartisan_rv()
     } else if (tg == "T3") {
       comparison_municipalities()
-    } else {
+    } else if (tg == "T4") {
       comp_munis_same_coalition_rv()
+    } else {
+      # control or T1: use the randomly assigned comparison type
+      switch(
+        control_t1_comp_type(),
+        "nonpartisan" = comp_munis_nonpartisan_rv(),
+        "opposite" = comparison_municipalities(),
+        "same" = comp_munis_same_coalition_rv()
+      )
     }
   })
 
@@ -3072,6 +3206,11 @@ server <- function(input, output, session) {
       # (home is the fixed reference point)
       # Comparison municipality names (for reference)
       Treatment_Group = treatment_group(),
+      Control_T1_Comp_Type = ifelse(
+        treatment_group() %in% c("control", "T1"),
+        control_t1_comp_type(),
+        NA_character_
+      ),
       Comparison_Muni_1 = {
         comp <- active_comp_munis()
         if (is.null(comp) || nrow(comp) < 1) {
