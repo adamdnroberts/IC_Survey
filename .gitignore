@@ -14,6 +14,8 @@ data/*.mbtiles
 data/*.csv
 data/*.rds
 
+raw/
+
 # Large PDFs
 *.pdf
 
@@ -36,3 +38,6 @@ CLAUDE.md
 
 #latex folder (because it has its own git repository)
 latex/
+
+#misc scripts
+laer_replication/
