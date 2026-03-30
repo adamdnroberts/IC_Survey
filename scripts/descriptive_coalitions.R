@@ -3,6 +3,7 @@ library(sf)
 library(igraph)
 library(ggraph)
 library(tidyr)
+library(fixest)
 
 d_geo <- st_read("data/00mun_simplified.geojson", quiet = TRUE)
 d_geo$muni_id <- d_geo$CVEGEO
@@ -16,21 +17,58 @@ all_parties <- magar2024 %>%
       grepl("pan", l01) ~ "PAN",
       grepl("pri|prd", l01) ~ "PRI",
       grepl("mc", l01) ~ "MC",
+      l01 == "0" ~ NA_character_,
+      !is.na(l01) & l01 != "" ~ "Otro",
       TRUE ~ NA_character_
     ),
     coalition_label = case_when(
       grepl("morena|pvem|pt", l01) ~ "MORENA/PVEM/PT",
       grepl("pan|pri|prd", l01) ~ "PAN/PRI/PRD",
       grepl("mc", l01) ~ "MC",
+      l01 == "0" ~ NA_character_,
+      !is.na(l01) & l01 != "" ~ "Otro",
       TRUE ~ NA_character_
     )
   ) %>%
   select(CVEGEO, governing_party, coalition_label)
 
+excluded_states <- c(
+  "Ciudad de México",
+  "Durango",
+  "Oaxaca",
+  "Veracruz de Ignacio de la Llave"
+)
+
 d <- d_geo %>%
   mutate(area_km2 = as.numeric(sf::st_area(.)) / 1e6) %>%
   st_drop_geometry() %>%
-  left_join(all_parties, by = c("muni_id" = "CVEGEO"))
+  left_join(all_parties, by = c("muni_id" = "CVEGEO")) %>%
+  filter(!NOM_ENT %in% excluded_states)
+
+# ── Non-main-party municipalities in analysis sample ─────────────────────────
+
+cat(
+  "── Non-main-party municipalities (analysis sample) ─────────────────────\n"
+)
+cat("Total municipalities (excl. states):", nrow(d), "\n")
+cat(
+  "Governed by main parties:           ",
+  sum(!is.na(d$governing_party) & d$governing_party != "Otro"),
+  "\n"
+)
+cat(
+  "Not governed by main parties:       ",
+  sum(is.na(d$governing_party) | d$governing_party == "Otro"),
+  "\n\n"
+)
+test <- d %>%
+  filter(is.na(governing_party) | governing_party == "Otro") %>%
+  left_join(
+    magar2024 %>%
+      mutate(CVEGEO = sprintf("%05d", inegi)) %>%
+      select(CVEGEO, l01),
+    by = c("muni_id" = "CVEGEO")
+  )
 
 # ── Municipalities by coalition ───────────────────────────────────────────────
 
@@ -91,8 +129,14 @@ known_parties <- c("morena", "pvem", "pt", "pan", "pri", "prd", "mc")
 party_matrix <- sapply(known_parties, function(p) grepl(p, magar2024$l01))
 colnames(party_matrix) <- toupper(known_parties)
 
+# Add "Otro" column: municipalities not matched by any known party and not coded 0
+otro_col <- !rowSums(party_matrix) &
+  magar2024$l01 != "0" &
+  !is.na(magar2024$l01)
+party_matrix <- cbind(party_matrix, OTRO = otro_col)
+
 # Build edge list: one row per party pair, weight = # municipalities co-governed
-pair_list <- combn(toupper(known_parties), 2, simplify = FALSE)
+pair_list <- combn(colnames(party_matrix), 2, simplify = FALSE)
 edges <- do.call(
   rbind,
   lapply(pair_list, function(pair) {
@@ -101,7 +145,8 @@ edges <- do.call(
   })
 )
 
-g <- graph_from_data_frame(edges, directed = FALSE)
+all_nodes <- data.frame(name = colnames(party_matrix))
+g <- graph_from_data_frame(edges, directed = FALSE, vertices = all_nodes)
 
 coalition_colors <- c(
   MORENA = "#B2182B",
@@ -110,7 +155,8 @@ coalition_colors <- c(
   PAN = "#2166AC",
   PRI = "#2166AC",
   PRD = "#2166AC",
-  MC = "#F28E2B"
+  MC = "#F28E2B",
+  OTRO = "#888888"
 )
 coalition_labels <- c(
   MORENA = "MORENA/PT/PVEM",
@@ -119,7 +165,8 @@ coalition_labels <- c(
   PAN = "PAN/PRI/PRD",
   PRI = "PAN/PRI/PRD",
   PRD = "PAN/PRI/PRD",
-  MC = "MC"
+  MC = "MC",
+  OTRO = "Otro"
 )
 
 V(g)$coalition <- coalition_labels[V(g)$name]
@@ -133,7 +180,8 @@ node_positions <- list(
   PAN = c(0.5, 0.1),
   PRI = c(0.65, -0.2),
   PRD = c(0.35, -0.2),
-  MC = c(0.0, 0.4)
+  MC = c(0.0, 0.4),
+  OTRO = c(0.0, -0.45)
 )
 layout_coords <- do.call(rbind, node_positions[V(g)$name])
 network_plot <- ggraph(g, layout = layout_coords) +
@@ -151,7 +199,8 @@ network_plot <- ggraph(g, layout = layout_coords) +
     values = c(
       "MORENA/PT/PVEM" = "#B2182B",
       "PAN/PRI/PRD" = "#2166AC",
-      "MC" = "#F28E2B"
+      "MC" = "#F28E2B",
+      "Otro" = "#888888"
     ),
     name = "Coalition"
   ) +

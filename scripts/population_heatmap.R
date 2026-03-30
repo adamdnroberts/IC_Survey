@@ -1,128 +1,8 @@
 library(sf)
 library(ggplot2)
 library(dplyr)
+library(tidyr)
 
-# Load municipality geometries with population data
-d_geo <- st_read("data/00mun_simplified.geojson", quiet = TRUE)
-
-# Log-transform population for better color contrast
-d_geo <- d_geo %>%
-  mutate(pop_log = log10(ifelse(POB_TOTAL == 0, 1, POB_TOTAL)))
-
-# ggplot(d_geo) +
-#   geom_sf(aes(fill = pop_log), color = NA) +
-#   scale_fill_viridis_c(
-#     name = "Population",
-#     breaks = c(3, 4, 5, 6, 7),
-#     labels = c("1K", "10K", "100K", "1M", "10M"),
-#     option = "inferno",
-#     na.value = "grey80"
-#   ) +
-#   theme_void() +
-#   theme(
-#     legend.position = "bottom",
-#     legend.key.width = unit(2, "cm"),
-#     plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
-#     plot.subtitle = element_text(hjust = 0.5, size = 11, color = "grey40")
-#   ) +
-#   labs(
-#     title = "Population by Municipality in Mexico",
-#     subtitle = "Source: INEGI"
-#   )
-#
-# ggsave("output/population_heatmap.pdf", width = 12, height = 8)
-# ggsave("output/population_heatmap.png", width = 12, height = 8, dpi = 300)
-
-# Binned population map
-d_geo <- d_geo %>%
-  mutate(
-    pop_bin = cut(
-      POB_TOTAL,
-      breaks = c(0, 10e3, 50e3, 100e3, 500e3, 1e6, 2e6, Inf),
-      labels = c(
-        "<10K",
-        "10K-50K",
-        "50K-100K",
-        "100K-500K",
-        "500K-1M",
-        "1M-2M",
-        ">2M"
-      ),
-      include.lowest = TRUE
-    )
-  )
-
-# ggplot(d_geo) +
-#   geom_sf(aes(fill = pop_bin), color = NA) +
-#   scale_fill_viridis_d(
-#     name = "Population",
-#     option = "inferno",
-#     na.value = "grey80"
-#   ) +
-#   theme_void() +
-#   theme(
-#     legend.position = "bottom",
-#     plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
-#     plot.subtitle = element_text(hjust = 0.5, size = 11, color = "grey40")
-#   ) +
-#   labs(
-#     title = "Population by Municipality in Mexico (Binned)",
-#     subtitle = "Source: INEGI"
-#   )
-#
-# ggsave("output/population_heatmap_binned.pdf", width = 12, height = 8)
-# ggsave("output/population_heatmap_binned.png", width = 12, height = 8, dpi = 300)
-
-# Map of Estado de México, Morelos, and Puebla
-border_states <- c("15", "17", "21")
-
-d_border <- d_geo %>%
-  filter(CVE_ENT %in% border_states) %>%
-  mutate(
-    pop_bin = cut(
-      POB_TOTAL,
-      breaks = c(0, 10e3, 50e3, 100e3, 500e3, 1e6, 2e6, Inf),
-      labels = c(
-        "<10K",
-        "10K-50K",
-        "50K-100K",
-        "100K-500K",
-        "500K-1M",
-        "1M-2M",
-        ">2M"
-      ),
-      include.lowest = TRUE
-    )
-  )
-
-ggplot(d_border) +
-  geom_sf(aes(fill = pop_bin), color = "white", linewidth = 0.05) +
-  scale_fill_viridis_d(
-    name = "Population",
-    option = "inferno",
-    na.value = "grey80"
-  ) +
-  theme_void() +
-  theme(
-    legend.position = "bottom",
-    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
-    plot.subtitle = element_text(hjust = 0.5, size = 11, color = "grey40")
-  ) +
-  labs(
-    title = "Population by Municipality: Estado de M\u00e9xico, Morelos & Puebla",
-    subtitle = "Source: INEGI"
-  )
-
-ggsave("output/population_heatmap_edomex_border.pdf", width = 12, height = 8)
-ggsave(
-  "output/population_heatmap_edomex_border.png",
-  width = 12,
-  height = 8,
-  dpi = 300
-)
-
-# Population summary statistics by state (all states)
-# Use AGEEML for complete population data (geojson has nulls for some states)
 ageeml <- read.csv(
   "references/AGEEML_202512121054579_utf.csv",
   colClasses = c(CVEGEO = "character")
@@ -130,54 +10,127 @@ ageeml <- read.csv(
   select(CVEGEO, POB_AGEEML = POB_TOTAL) %>%
   mutate(POB_AGEEML = as.numeric(POB_AGEEML))
 
-pop_summary <- d_geo %>%
-  st_drop_geometry() %>%
+d_geo <- st_read("data/00mun_simplified.geojson", quiet = TRUE)
+d_geo$muni_id <- d_geo$CVEGEO
+
+excluded_states <- c(
+  "Ciudad de México",
+  "Durango",
+  "Oaxaca",
+  "Veracruz de Ignacio de la Llave"
+)
+
+# Join population — keep all states so excluded states can still appear as neighbors
+d <- d_geo %>%
   left_join(ageeml, by = "CVEGEO") %>%
-  mutate(pop = coalesce(POB_TOTAL, POB_AGEEML)) %>%
-  filter(!is.na(pop)) %>%
-  group_by(NOM_ENT) %>%
-  summarise(
-    n_munis = n(),
-    mean_pop = round(mean(pop)),
-    median_pop = round(median(pop)),
-    min_pop = min(pop),
-    max_pop = max(pop),
-    .groups = "drop"
-  )
+  mutate(pop = coalesce(POB_TOTAL, POB_AGEEML))
 
-cat("\nPopulation summary by state:\n")
-print(as.data.frame(pop_summary))
+# First quartile of population across all non-Oaxaca municipalities
+q1_pop <- quantile(d$pop, 0.25, na.rm = TRUE)
+cat(sprintf("Q1 population: %s\n", format(q1_pop, big.mark = ",")))
 
-# Box and whiskers plot of municipal population by state
-pop_plot_data <- d_geo %>%
-  st_drop_geometry() %>%
-  left_join(ageeml, by = "CVEGEO") %>%
-  mutate(pop = coalesce(POB_TOTAL, POB_AGEEML)) %>%
-  filter(!is.na(pop))
+# Project to EPSG:6372 (Mexico ITRF2008, metres) for accurate distances
+d_proj <- st_transform(d, 6372)
+centroids <- st_centroid(d_proj)
 
-# Order states by median population
-state_order <- pop_plot_data %>%
-  group_by(NOM_ENT) %>%
-  summarise(med = median(pop)) %>%
-  arrange(med) %>%
-  pull(NOM_ENT)
+# Full pairwise distance matrix (metres)
+dist_mat <- st_distance(centroids, centroids)
 
-pop_plot_data$NOM_ENT <- factor(pop_plot_data$NOM_ENT, levels = state_order)
+# For each municipality, find the 10 closest others and count how many have pop > Q1
+n_neighbors <- 5
 
-ggplot(pop_plot_data, aes(x = NOM_ENT, y = pop)) +
-  geom_boxplot(outlier.size = 0.8, outlier.alpha = 0.5, fill = "#0072B2", alpha = 0.3) +
-  scale_y_log10(labels = scales::comma) +
-  coord_flip() +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
-    axis.text.y = element_text(size = 8)
+get_max_dist_km <- function(threshold) {
+  idx <- which(!is.na(d_proj$pop) & d_proj$pop > threshold)
+  sapply(seq_len(nrow(d_proj)), function(i) {
+    candidates <- setdiff(idx, i)
+    dists <- as.numeric(dist_mat[i, candidates])
+    nearest_dists <- sort(dists)[seq_len(min(n_neighbors, length(candidates)))]
+    max(nearest_dists) / 1000
+  })
+}
+
+plot_df <- data.frame(
+  max_dist_km = c(
+    get_max_dist_km(quantile(d$pop, 0.25, na.rm = TRUE)),
+    get_max_dist_km(quantile(d$pop, 0.50, na.rm = TRUE))
+  ),
+  threshold = rep(c("Q1", "Median"), each = nrow(d_proj)),
+  NOM_ENT = rep(d_proj$NOM_ENT, times = 2)
+)
+
+plot_df <- plot_df %>% filter(!NOM_ENT %in% excluded_states)
+
+median_lines <- plot_df %>%
+  group_by(threshold) %>%
+  summarise(med = median(max_dist_km, na.rm = TRUE), .groups = "drop")
+
+p90_lines <- plot_df %>%
+  group_by(threshold) %>%
+  summarise(p90 = quantile(max_dist_km, 0.9, na.rm = TRUE), .groups = "drop")
+
+ggplot(plot_df, aes(x = max_dist_km, fill = threshold)) +
+  geom_histogram(bins = 50, alpha = 0.5, position = "identity") +
+  geom_vline(
+    data = median_lines,
+    aes(xintercept = med, color = threshold),
+    linetype = "dashed",
+    linewidth = 0.8
+  ) +
+  geom_vline(
+    data = p90_lines,
+    aes(xintercept = p90, color = threshold),
+    linetype = "dotted",
+    linewidth = 0.8
+  ) +
+  geom_text(
+    data = subset(median_lines, threshold == "Q1"),
+    aes(x = med, label = sprintf("%.0f km", med), color = threshold),
+    y = Inf,
+    vjust = 1.5,
+    hjust = -0.1,
+    size = 3,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    data = subset(median_lines, threshold == "Median"),
+    aes(x = med, label = sprintf("%.0f km", med), color = threshold),
+    y = Inf,
+    vjust = 3.5,
+    hjust = -0.1,
+    size = 3,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    data = subset(p90_lines, threshold == "Q1"),
+    aes(x = p90, label = sprintf("%.0f km", p90), color = threshold),
+    y = Inf,
+    vjust = 5.5,
+    hjust = -0.1,
+    size = 3,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    data = subset(p90_lines, threshold == "Median"),
+    aes(x = p90, label = sprintf("%.0f km", p90), color = threshold),
+    y = Inf,
+    vjust = 7.5,
+    hjust = -0.1,
+    size = 3,
+    show.legend = FALSE
+  ) +
+  scale_fill_manual(values = c("Q1" = "#0072B2", "Median" = "#E69F00")) +
+  scale_color_manual(
+    values = c("Q1" = "#0072B2", "Median" = "#E69F00"),
+    guide = "none"
   ) +
   labs(
-    title = "Municipal Population by State",
-    x = NULL,
-    y = "Population (log scale)"
-  )
+    x = "Distance to 5th nearest neighbor (km)",
+    y = "Count",
+    fill = "Population threshold",
+    title = "Distance to 5th Nearest Neighbor Above Population Threshold"
+  ) +
+  theme_classic() +
+  theme(legend.position = "bottom")
 
-ggsave("output/population_boxplot.pdf", width = 10, height = 10)
-ggsave("output/population_boxplot.png", width = 10, height = 10, dpi = 300)
+ggsave("output/neighbor_dist_histogram.pdf", width = 8, height = 5)
+ggsave("output/neighbor_dist_histogram.png", width = 8, height = 5, dpi = 300)

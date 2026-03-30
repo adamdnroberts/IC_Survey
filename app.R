@@ -27,6 +27,22 @@ if (!file.exists("data/robo_2025.rds")) {
 }
 robo_data <- readRDS("data/robo_2025.rds")
 
+# Load pre-computed nearest-10 municipality lookup
+if (!file.exists("data/nearest10.rds")) {
+  stop(
+    "Missing data/nearest10.rds. Run: source('scripts/precompute_nearest10.R')"
+  )
+}
+nearest10 <- readRDS("data/nearest10.rds")
+
+# Top 20 municipalities by population (for benchmark selection)
+top20_munis <- d_geo %>%
+  st_drop_geometry() %>%
+  filter(!is.na(POB_TOTAL)) %>%
+  arrange(desc(POB_TOTAL)) %>%
+  slice_head(n = 20) %>%
+  pull(muni_id)
+
 # Filter to large cities (200k+ population) and state capitals
 large_munis <- d_geo %>%
   st_drop_geometry() %>%
@@ -65,11 +81,17 @@ d_geo$centroid_lon <- muni_centroid_coords[, 1]
 d_geo$centroid_lat <- muni_centroid_coords[, 2]
 
 # Coalition definitions for treatment groups
-coalition_a <- c("MORENA", "PT", "PVEM")
-coalition_b <- c("PAN", "PRI", "PRD", "MC")
+coalition_a <- c("MORENA", "PVEM", "PT")
+coalition_b <- c("PAN", "PRI", "PRD")
 
 get_same_coalition_parties <- function(party) {
-  if (party %in% coalition_a) coalition_a else coalition_b
+  if (party %in% coalition_a) {
+    coalition_a
+  } else if (party %in% coalition_b) {
+    coalition_b
+  } else {
+    c("MC")
+  }
 }
 
 get_opposite_parties <- function(party) {
@@ -760,6 +782,52 @@ ui <- fluidPage(
           )
         ),
 
+        # Page 15: Benchmark Municipality Selection
+        hidden(
+          div(
+            id = "page15",
+            uiOutput("benchmark_instructions_text"),
+            hr(),
+            uiOutput("benchmark_list"),
+            hr(),
+            fluidRow(
+              column(
+                12,
+                align = "right",
+                actionButton(
+                  "goto_page2_from_15",
+                  "Next \u2192",
+                  class = "btn-primary btn-lg"
+                )
+              )
+            )
+          )
+        ),
+
+        # Page 16: Screen-out (home municipality not governed by a main party)
+        hidden(
+          div(
+            id = "page16",
+            br(),
+            br(),
+            br(),
+            div(
+              style = "text-align: center; padding: 50px;",
+              p(
+                icon("info-circle"),
+                tags$strong(" Thank you for your interest."),
+                style = "font-size: 1.2em;"
+              ),
+              br(),
+              p(
+                "Unfortunately, you do not meet the criteria for this study, so you are not eligible to participate."
+              ),
+              br(),
+              p(style = "color: #6c757d;", "You may now close this window.")
+            )
+          )
+        ),
+
         # Page 3: Practice Drag-and-Drop
         hidden(
           div(
@@ -769,7 +837,7 @@ ui <- fluidPage(
             ),
             p(
               "To make sure you are paying attention, please rank them in this order: ",
-              "Radio first, then Online news websites, Television, Print newspapers, and Social media last."
+              "Radio first, Online news websites second, Television third, Print newspapers fourth, and Social media last."
             ),
             tags$hr(),
             slot_ranker_ui(
@@ -1021,7 +1089,31 @@ ui <- fluidPage(
 
             sliderInput(
               "coalition_pan_pri_prd_crime_rating",
-              "On average, how well do you think municipalities governed by PAN, PRI, PRD, or MC handle crime?",
+              "On average, how well do you think municipalities governed by PAN, PRI, or PRD handle crime?",
+              min = 0,
+              max = 100,
+              value = 50
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Handles crime extremely poorly",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Handles crime extremely well",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
+            ),
+
+            sliderInput(
+              "mc_crime_rating",
+              "On average, how well do you think municipalities governed by MC handle crime?",
               min = 0,
               max = 100,
               value = 50
@@ -1044,17 +1136,42 @@ ui <- fluidPage(
             ),
 
             hr(),
-
-            uiOutput("robbery_estimate_ui"),
-
-            hr(),
             fluidRow(
               column(
                 12,
                 align = "right",
                 actionButton(
                   "goto_page6_from_5",
-                  "Next →",
+                  "Next \u2192",
+                  class = "btn-primary btn-lg"
+                )
+              )
+            )
+          )
+        ),
+
+        # Page 17: Robbery estimate
+        hidden(
+          div(
+            id = "page17",
+            p(
+              "Robbery rates are measured per 100,000 inhabitants so that municipalities of different sizes can be fairly compared.",
+              "For example, a municipality with 1,000 robberies and 2 million residents has a lower crime rate than one with 500 robberies",
+              "and only 100,000 residents, even though it recorded more robberies in absolute terms.",
+              "In 2025,",
+              strong(
+                "half of all municipalities had fewer than 79 robberies per 100,000 people, and half had more."
+              )
+            ),
+            uiOutput("robbery_estimate_ui"),
+            hr(),
+            fluidRow(
+              column(
+                12,
+                align = "right",
+                actionButton(
+                  "goto_page6_from_17",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -1193,118 +1310,123 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 2: Select Reference Municipalities
-        hidden(
-          div(
-            id = "page2",
+        # Page 2: Select Reference Municipalities (commented out)
+        if (FALSE) {
+          hidden(
+            div(
+              id = "page2",
 
-            uiOutput("reference_instructions_text"),
-            p(em(
-              "(You can select multiple municipalities by clicking on them. Selected municipalities will be highlighted in ",
-              tags$span(style = "color: #9B59B6; font-weight: bold;", "purple"),
-              ". Click again to deselect. Your home municipality is outlined in green.)"
-            )),
-            p(
-              class = "mobile-only",
-              style = "color: #856404; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 8px 12px;",
-              icon("rotate"),
-              " ",
-              "For the best experience, we strongly recommend rotating your phone to landscape mode for this question."
-            ),
+              uiOutput("reference_instructions_text"),
+              p(em(
+                "(You can select multiple municipalities by clicking on them. Selected municipalities will be highlighted in ",
+                tags$span(
+                  style = "color: #9B59B6; font-weight: bold;",
+                  "purple"
+                ),
+                ". Click again to deselect. Your home municipality is outlined in green.)"
+              )),
+              p(
+                class = "mobile-only",
+                style = "color: #856404; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 8px 12px;",
+                icon("rotate"),
+                " ",
+                "For the best experience, we strongly recommend rotating your phone to landscape mode for this question."
+              ),
 
-            fluidRow(
-              column(
-                6,
-                selectizeInput(
-                  "muni_search",
-                  "Search for a municipality by name:",
-                  choices = NULL,
-                  options = list(
-                    placeholder = "Type to search municipalities..."
+              fluidRow(
+                column(
+                  6,
+                  selectizeInput(
+                    "muni_search",
+                    "Search for a municipality by name:",
+                    choices = NULL,
+                    options = list(
+                      placeholder = "Type to search municipalities..."
+                    )
+                  )
+                ),
+                column(
+                  3,
+                  style = "margin-top: 25px;",
+                  actionButton(
+                    "zoom_search",
+                    "Zoom",
+                    icon = icon("crosshairs"),
+                    class = "btn-info",
+                    style = "width: 100%;"
+                  )
+                ),
+                column(
+                  3,
+                  style = "margin-top: 25px;",
+                  actionButton(
+                    "zoom_home",
+                    "Zoom to Home",
+                    icon = icon("home"),
+                    class = "btn-primary",
+                    style = "width: 100%;"
                   )
                 )
               ),
-              column(
-                3,
-                style = "margin-top: 25px;",
-                actionButton(
-                  "zoom_search",
-                  "Zoom",
-                  icon = icon("crosshairs"),
-                  class = "btn-info",
-                  style = "width: 100%;"
+
+              p(
+                style = "color: #856404; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 8px 12px; font-size: 0.9em;",
+                icon("info-circle"),
+                " ",
+                tags$strong("Note for researchers:"),
+                " Respondents will only see one map view. The toggle below is for preview purposes only."
+              ),
+
+              div(
+                style = "margin-bottom: 8px;",
+                tags$label(style = "margin-right: 10px;", "Map view:"),
+                div(
+                  class = "btn-group",
+                  role = "group",
+                  tags$button(
+                    class = "btn btn-sm btn-default",
+                    onclick = "setMapMode(this, 'borders')",
+                    "Borders only"
+                  ),
+                  tags$button(
+                    class = "btn btn-sm btn-default active",
+                    onclick = "setMapMode(this, 'parties')",
+                    "Parties"
+                  ),
+                  tags$button(
+                    class = "btn btn-sm btn-default",
+                    onclick = "setMapMode(this, 'population')",
+                    "Population"
+                  )
                 )
               ),
-              column(
-                3,
-                style = "margin-top: 25px;",
-                actionButton(
-                  "zoom_home",
-                  "Zoom to Home",
-                  icon = icon("home"),
-                  class = "btn-primary",
-                  style = "width: 100%;"
-                )
-              )
-            ),
 
-            p(
-              style = "color: #856404; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 8px 12px; font-size: 0.9em;",
-              icon("info-circle"),
-              " ",
-              tags$strong("Note for researchers:"),
-              " Respondents will only see one map view. The toggle below is for preview purposes only."
-            ),
-
-            div(
-              style = "margin-bottom: 8px;",
-              tags$label(style = "margin-right: 10px;", "Map view:"),
               div(
-                class = "btn-group",
-                role = "group",
-                tags$button(
-                  class = "btn btn-sm btn-default",
-                  onclick = "setMapMode(this, 'borders')",
-                  "Borders only"
-                ),
-                tags$button(
-                  class = "btn btn-sm btn-default active",
-                  onclick = "setMapMode(this, 'parties')",
-                  "Parties"
-                ),
-                tags$button(
-                  class = "btn btn-sm btn-default",
-                  onclick = "setMapMode(this, 'population')",
-                  "Population"
-                )
-              )
-            ),
+                class = "map-fullwidth",
+                leafletOutput("map_page2", height = 450),
+                p(em(
+                  style = "color: #6c757d; font-size: 0.9em;",
+                  "Note: May take a few seconds for map to load."
+                ))
+              ),
 
-            div(
-              class = "map-fullwidth",
-              leafletOutput("map_page2", height = 450),
-              p(em(
-                style = "color: #6c757d; font-size: 0.9em;",
-                "Note: May take a few seconds for map to load."
-              ))
-            ),
+              uiOutput("selected_munis_display"),
 
-            uiOutput("selected_munis_display"),
-
-            hr(),
-            fluidRow(
-              column(
-                12,
-                align = "right",
-                actionButton(
-                  "goto_page3_from_2",
-                  "Next \u2192",
-                  class = "btn-primary btn-lg"
+              hr(),
+              fluidRow(
+                column(
+                  12,
+                  align = "right",
+                  actionButton(
+                    "goto_page3_from_2",
+                    "Next \u2192",
+                    class = "btn-primary btn-lg"
+                  )
                 )
               )
             )
           )
-        ),
+        }, # end if (FALSE)
 
         # Page 10: Thank you screen
         hidden(
@@ -1499,7 +1621,31 @@ ui <- fluidPage(
             ),
             sliderInput(
               "coalition_pan_pri_prd_crime_rating_post",
-              "On average, how well do you think municipalities governed by PAN, PRI, PRD, or MC handle crime?",
+              "On average, how well do you think municipalities governed by PAN, PRI, or PRD handle crime?",
+              min = 0,
+              max = 100,
+              value = 50
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "Handles crime extremely poorly",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "Handles crime extremely well",
+                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
+                )
+              )
+            ),
+
+            sliderInput(
+              "mc_crime_rating_post",
+              "On average, how well do you think municipalities governed by MC handle crime?",
               min = 0,
               max = 100,
               value = 50
@@ -1741,6 +1887,42 @@ server <- function(input, output, session) {
   comparison_municipalities <- reactiveVal(NULL) # Stores comparison muni data for ranking & graph
   comp_munis_nonpartisan_rv <- reactiveVal(NULL) # Stores non-partisan comparison munis
   comp_munis_same_coalition_rv <- reactiveVal(NULL) # Stores same-coalition comparison munis
+  mc_opp_coalition_rv <- reactiveVal(NULL) # Randomly chosen opposition coalition for MC home municipalities
+  benchmark_candidates <- reactiveVal(NULL) # 15 candidate munis shown on page 15
+  selected_benchmarks <- reactiveVal(character()) # IDs selected by respondent
+
+  # Populate benchmark candidates when home municipality is confirmed
+  observeEvent(found_municipality(), {
+    req(found_municipality())
+    home_id <- found_municipality()
+    all_ids <- d_geo %>% st_drop_geometry() %>% pull(muni_id)
+
+    # Pool 1: 5 from nearest 10
+    nn_ids <- nearest10 %>%
+      filter(muni_id == home_id) %>%
+      pull(neighbor_id)
+    pool1 <- if (length(nn_ids) >= 5) sample(nn_ids, 5) else nn_ids
+
+    # Pool 2: 5 from top 20 largest (deduplicate against pool1 and home)
+    top20_cands <- setdiff(top20_munis, c(home_id, pool1))
+    pool2 <- if (length(top20_cands) >= 5) {
+      sample(top20_cands, 5)
+    } else {
+      top20_cands
+    }
+
+    # Pool 3: 5 random from remainder (excluding home, pool1, pool2)
+    remaining <- setdiff(all_ids, c(home_id, pool1, pool2))
+    pool3 <- if (length(remaining) >= 5) sample(remaining, 5) else remaining
+
+    candidates <- d_geo %>%
+      st_drop_geometry() %>%
+      filter(muni_id %in% sample(c(pool1, pool2, pool3))) %>%
+      select(muni_id, NOMGEO, NOM_ENT)
+
+    benchmark_candidates(candidates)
+    selected_benchmarks(character())
+  })
 
   # Randomly assign treatment group for this respondent at session start
   treatment_group <- reactiveVal(
@@ -1776,7 +1958,7 @@ server <- function(input, output, session) {
 
     disable("geocode_btn")
     updateActionButton(session, "geocode_btn", label = "Searching...")
-    show("loading_msg")
+    shinyjs::show("loading_msg")
     output$geocode_result <- renderUI({})
 
     tryCatch(
@@ -1834,7 +2016,7 @@ server <- function(input, output, session) {
             found_municipality(muni_id)
             found_address_coords(list(lon = lon, lat = lat))
 
-            hide("loading_msg")
+            shinyjs::hide("loading_msg")
             enable("geocode_btn")
             updateActionButton(
               session,
@@ -1855,7 +2037,7 @@ server <- function(input, output, session) {
               )
             })
           } else {
-            hide("loading_msg")
+            shinyjs::hide("loading_msg")
             enable("geocode_btn")
             updateActionButton(
               session,
@@ -1876,7 +2058,7 @@ server <- function(input, output, session) {
             })
           }
         } else {
-          hide("loading_msg")
+          shinyjs::hide("loading_msg")
           enable("geocode_btn")
           updateActionButton(
             session,
@@ -1899,7 +2081,7 @@ server <- function(input, output, session) {
         }
       },
       error = function(e) {
-        hide("loading_msg")
+        shinyjs::hide("loading_msg")
         enable("geocode_btn")
         updateActionButton(
           session,
@@ -1919,14 +2101,10 @@ server <- function(input, output, session) {
     )
   })
 
-  # Reference municipalities dropdown → sets selected_map_munis
-  observeEvent(
-    input$reference_munis_dropdown,
-    {
-      selected_map_munis(input$reference_munis_dropdown)
-    },
-    ignoreNULL = FALSE
-  )
+  # Reference municipalities dropdown → sets selected_map_munis (commented out with page 2)
+  # observeEvent(input$reference_munis_dropdown, {
+  #   selected_map_munis(input$reference_munis_dropdown)
+  # }, ignoreNULL = FALSE)
 
   # Set comparison municipalities (T3: opposite-coalition) when home municipality is found
   observeEvent(found_municipality(), {
@@ -1939,7 +2117,14 @@ server <- function(input, output, session) {
       pull(governing_party) %>%
       `[`(1)
 
-    opposite_coalition <- get_opposite_parties(home_party)
+    if (!is.na(home_party) && home_party == "MC") {
+      opp <- sample(list(coalition_a, coalition_b), 1)[[1]]
+      mc_opp_coalition_rv(opp)
+      opposite_coalition <- opp
+    } else {
+      mc_opp_coalition_rv(NULL)
+      opposite_coalition <- get_opposite_parties(home_party)
+    }
 
     candidates <- d_geo %>%
       st_drop_geometry() %>%
@@ -2089,24 +2274,25 @@ server <- function(input, output, session) {
     }
   })
 
-  # Show appropriate page
+  # Show appropriate page and scroll to top
   observe({
-    pages <- c(paste0("page", 0:14))
+    pages <- c(paste0("page", 0:17))
     lapply(pages, hide)
-    show(paste0("page", current_page()))
+    shinyjs::show(paste0("page", current_page()))
+    runjs("window.scrollTo(0, 0);")
   })
 
   # Show/hide home confirmation section based on whether municipality is found
   observe({
     if (!is.null(found_municipality())) {
-      show("home_confirmation_section")
+      shinyjs::show("home_confirmation_section")
       updateSelectInput(
         session,
         "dropdown_municipality",
         selected = found_municipality()
       )
     } else {
-      hide("home_confirmation_section")
+      shinyjs::hide("home_confirmation_section")
     }
   })
 
@@ -2206,7 +2392,7 @@ server <- function(input, output, session) {
     has_home <- !is.null(found_municipality())
 
     if (has_home) {
-      enable("goto_page2_from_1")
+      shinyjs::delay(3000, enable("goto_page2_from_1"))
     } else {
       disable("goto_page2_from_1")
     }
@@ -2218,35 +2404,41 @@ server <- function(input, output, session) {
     current_page(1)
   })
 
-  # Page 1 → Page 2 (Reference Municipality)
+  # Page 1 → Page 3 (Practice ranking), or Page 16 (screen-out) if home muni has no main-party government
   observeEvent(input$goto_page2_from_1, {
-    current_page(2)
+    home_id <- found_municipality()
+    home_party <- d_geo %>%
+      st_drop_geometry() %>%
+      filter(muni_id == home_id) %>%
+      pull(governing_party) %>%
+      `[`(1)
+    if (is.na(home_party)) {
+      current_page(16)
+    } else {
+      current_page(3)
+    }
   })
 
-  # Page 2 → Page 1
-  observeEvent(input$goto_page1_from_3, {
-    current_page(1)
+  # Page 15 → Page 4 (benchmark → issue importance ranking)
+  observeEvent(input$goto_page2_from_15, {
+    current_page(4)
   })
 
-  # Page 2 → Page 3 (attention check: Radio #1, Social media #5 — validation TODO)
+  # Page 2 → Page 1 (commented out with page 2)
+  # observeEvent(input$goto_page1_from_3, { current_page(1) })
+
+  # Page 3 → Page 15 (practice ranking → benchmark selection)
   practice_warning_msg <- reactiveVal(NULL)
   output$practice_warning <- renderUI({
     msg <- practice_warning_msg()
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
   observeEvent(input$goto_page4_from_3, {
-    current_page(4)
+    current_page(15)
   })
 
-  # Page 3 → Page 1
-  observeEvent(input$goto_page1_from_4, {
-    current_page(1)
-  })
-
-  # Page 2 → Page 3 (Reference Municipalities → Practice)
-  observeEvent(input$goto_page3_from_2, {
-    current_page(3)
-  })
+  # Page 2 → Page 3 (commented out with page 2)
+  # observeEvent(input$goto_page3_from_2, { current_page(3) })
 
   # Page 3 → Page 4
   issue_importance_warning_msg <- reactiveVal(NULL)
@@ -2263,8 +2455,13 @@ server <- function(input, output, session) {
     current_page(4)
   })
 
-  # Page 4 → Page 5
+  # Page 5 → Page 17 (robbery estimate)
   observeEvent(input$goto_page6_from_5, {
+    current_page(17)
+  })
+
+  # Page 17 → Page 6
+  observeEvent(input$goto_page6_from_17, {
     current_page(6)
   })
 
@@ -2455,7 +2652,7 @@ server <- function(input, output, session) {
     numericInput(
       "robbery_estimate",
       paste0(
-        "How many robberies per 100,000 residents do you think were reported in ",
+        "How many robberies per 100,000 people do you think were reported in ",
         muni_name,
         " in 2025?"
       ),
@@ -2465,14 +2662,13 @@ server <- function(input, output, session) {
     )
   })
 
-  # Reference instructions text with dynamic municipality name
-  output$reference_instructions_text <- renderUI({
+  # Benchmark instructions text with dynamic municipality name (page 15)
+  output$benchmark_instructions_text <- renderUI({
     req(!is.null(found_municipality()))
     muni_data <- d_geo %>%
       st_drop_geometry() %>%
       filter(muni_id == found_municipality())
     muni_name <- paste0(muni_data$NOMGEO, ", ", muni_data$NOM_ENT)
-
     p(strong(
       "Governments are often judged by comparing them to others. ",
       paste0(
@@ -2483,120 +2679,393 @@ server <- function(input, output, session) {
     ))
   })
 
-  # Display selected municipality names as removable chips
-  output$selected_munis_display <- renderUI({
-    ids <- selected_map_munis()
-    if (length(ids) == 0) {
-      return(p(
-        style = "color: #6c757d; font-style: italic;",
-        "No municipalities selected yet."
-      ))
-    }
-    names_df <- d_geo %>%
-      st_drop_geometry() %>%
-      filter(muni_id %in% ids) %>%
-      mutate(full_name = paste0(NOMGEO, ", ", NOM_ENT))
-    tagList(
-      p(strong("Selected municipalities:")),
-      div(
-        style = "display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;",
-        lapply(seq_len(nrow(names_df)), function(i) {
-          muni_id_val <- names_df$muni_id[i]
-          tags$span(
-            style = paste0(
-              "display: inline-flex; align-items: center; background-color: #9B59B6; ",
-              "color: white; border-radius: 16px; padding: 4px 12px; font-size: 0.9em;"
-            ),
-            names_df$full_name[i],
-            tags$button(
-              "\u00d7",
-              style = paste0(
-                "background: none; border: none; color: white; font-size: 1.1em; ",
-                "cursor: pointer; margin-left: 8px; padding: 0; line-height: 1;"
-              ),
-              onclick = sprintf(
-                "Shiny.setInputValue('remove_muni', '%s', {priority: 'event'});",
-                muni_id_val
-              )
-            )
-          )
-        })
-      )
+  # Benchmark municipality checklist (page 15)
+  output$benchmark_list <- renderUI({
+    cands <- benchmark_candidates()
+    req(!is.null(cands) && nrow(cands) > 0)
+    checkboxGroupInput(
+      "benchmark_selected",
+      label = NULL,
+      choiceNames = lapply(seq_len(nrow(cands)), function(i) {
+        paste0(cands$NOMGEO[i], ", ", cands$NOM_ENT[i])
+      }),
+      choiceValues = as.list(cands$muni_id),
+      selected = character(0)
     )
   })
 
-  # Remove municipality when chip ✕ is clicked
-  observeEvent(input$remove_muni, {
-    id <- input$remove_muni
-    selected_map_munis(setdiff(selected_map_munis(), id))
-    leafletProxy("map_page2") %>%
-      addPolygons(
-        data = d_geo[d_geo$muni_id == id, ],
-        layerId = id,
-        fillColor = ~ coalition_pal(coalition_label),
-        fillOpacity = 0.55,
-        color = "#555555",
-        weight = 0.4,
-        label = ~ paste0(
-          NOMGEO,
-          ", ",
-          NOM_ENT,
-          ifelse(
-            !is.na(coalition_label),
-            paste0(" \u2014 ", coalition_label),
-            ""
-          )
-        ),
-        highlightOptions = highlightOptions(
-          weight = 2,
-          color = "#222222",
-          fillOpacity = 0.75,
-          bringToFront = TRUE
-        )
-      )
+  observeEvent(input$benchmark_selected, {
+    val <- input$benchmark_selected
+    selected_benchmarks(if (is.null(val)) character(0) else val)
   })
 
-  # Map view mode toggle (borders / parties / population)
-  observeEvent(
-    input$map_view_mode,
-    {
-      mode <- input$map_view_mode
-      home_id <- found_municipality()
-      selected_ids <- selected_map_munis()
-      exclude_ids <- c(home_id, selected_ids)
-      base_data <- d_geo[!d_geo$muni_id %in% exclude_ids, ]
-      proxy <- leafletProxy("map_page2")
+  # Reference instructions text (commented out with page 2)
+  # output$reference_instructions_text <- renderUI({ ... })
 
-      if (mode == "borders") {
-        proxy %>%
-          clearControls() %>%
-          addPolygons(
-            data = base_data,
-            layerId = ~muni_id,
-            fillColor = "#DDDDDD",
-            fillOpacity = 0.5,
-            color = "#555555",
-            weight = 0.4,
-            label = ~ paste0(NOMGEO, ", ", NOM_ENT),
-            highlightOptions = highlightOptions(
-              weight = 2,
-              color = "#222222",
-              fillOpacity = 0.7,
-              bringToFront = TRUE
+  # Display selected municipality names as removable chips (commented out with page 2)
+  if (FALSE) {
+    output$selected_munis_display <- renderUI({
+      ids <- selected_map_munis()
+      if (length(ids) == 0) {
+        return(p(
+          style = "color: #6c757d; font-style: italic;",
+          "No municipalities selected yet."
+        ))
+      }
+      names_df <- d_geo %>%
+        st_drop_geometry() %>%
+        filter(muni_id %in% ids) %>%
+        mutate(full_name = paste0(NOMGEO, ", ", NOM_ENT))
+      tagList(
+        p(strong("Selected municipalities:")),
+        div(
+          style = "display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;",
+          lapply(seq_len(nrow(names_df)), function(i) {
+            muni_id_val <- names_df$muni_id[i]
+            tags$span(
+              style = paste0(
+                "display: inline-flex; align-items: center; background-color: #9B59B6; ",
+                "color: white; border-radius: 16px; padding: 4px 12px; font-size: 0.9em;"
+              ),
+              names_df$full_name[i],
+              tags$button(
+                "\u00d7",
+                style = paste0(
+                  "background: none; border: none; color: white; font-size: 1.1em; ",
+                  "cursor: pointer; margin-left: 8px; padding: 0; line-height: 1;"
+                ),
+                onclick = sprintf(
+                  "Shiny.setInputValue('remove_muni', '%s', {priority: 'event'});",
+                  muni_id_val
+                )
+              )
             )
-          ) %>%
-          addLegend(
-            position = "bottomright",
-            colors = c("#9B59B6", "#27AE60"),
-            labels = c("Selected", "Your municipality"),
-            opacity = 0.8
+          })
+        )
+      )
+    })
+  }
+
+  # Page 2 map observers (commented out with page 2)
+  if (FALSE) {
+    observeEvent(input$remove_muni, {
+      id <- input$remove_muni
+      selected_map_munis(setdiff(selected_map_munis(), id))
+      leafletProxy("map_page2") %>%
+        addPolygons(
+          data = d_geo[d_geo$muni_id == id, ],
+          layerId = id,
+          fillColor = ~ coalition_pal(coalition_label),
+          fillOpacity = 0.55,
+          color = "#555555",
+          weight = 0.4,
+          label = ~ paste0(
+            NOMGEO,
+            ", ",
+            NOM_ENT,
+            ifelse(
+              !is.na(coalition_label),
+              paste0(" \u2014 ", coalition_label),
+              ""
+            )
+          ),
+          highlightOptions = highlightOptions(
+            weight = 2,
+            color = "#222222",
+            fillOpacity = 0.75,
+            bringToFront = TRUE
           )
-      } else if (mode == "parties") {
-        proxy %>%
-          clearControls() %>%
+        )
+    })
+  }
+
+  if (FALSE) {
+    # Map view mode toggle (borders / parties / population)
+    observeEvent(
+      input$map_view_mode,
+      {
+        mode <- input$map_view_mode
+        home_id <- found_municipality()
+        selected_ids <- selected_map_munis()
+        exclude_ids <- c(home_id, selected_ids)
+        base_data <- d_geo[!d_geo$muni_id %in% exclude_ids, ]
+        proxy <- leafletProxy("map_page2")
+
+        if (mode == "borders") {
+          proxy %>%
+            clearControls() %>%
+            addPolygons(
+              data = base_data,
+              layerId = ~muni_id,
+              fillColor = "#DDDDDD",
+              fillOpacity = 0.5,
+              color = "#555555",
+              weight = 0.4,
+              label = ~ paste0(NOMGEO, ", ", NOM_ENT),
+              highlightOptions = highlightOptions(
+                weight = 2,
+                color = "#222222",
+                fillOpacity = 0.7,
+                bringToFront = TRUE
+              )
+            ) %>%
+            addLegend(
+              position = "bottomright",
+              colors = c("#9B59B6", "#27AE60"),
+              labels = c("Selected", "Your municipality"),
+              opacity = 0.8
+            )
+        } else if (mode == "parties") {
+          proxy %>%
+            clearControls() %>%
+            addPolygons(
+              data = base_data,
+              layerId = ~muni_id,
+              fillColor = ~ coalition_pal(coalition_label),
+              fillOpacity = 0.55,
+              color = "#555555",
+              weight = 0.4,
+              label = ~ paste0(
+                NOMGEO,
+                ", ",
+                NOM_ENT,
+                ifelse(
+                  !is.na(coalition_label),
+                  paste0(" — ", coalition_label),
+                  ""
+                )
+              ),
+              highlightOptions = highlightOptions(
+                weight = 2,
+                color = "#222222",
+                fillOpacity = 0.75,
+                bringToFront = TRUE
+              )
+            ) %>%
+            addLegend(
+              position = "bottomright",
+              colors = c(
+                unname(coalition_map_colors),
+                "#D3D3D3",
+                "#9B59B6",
+                "#27AE60"
+              ),
+              labels = c(
+                names(coalition_map_colors),
+                "Other",
+                "Selected",
+                "Your municipality"
+              ),
+              title = "Governing coalition",
+              opacity = 0.8
+            )
+        } else if (mode == "population") {
+          proxy %>%
+            clearControls() %>%
+            addPolygons(
+              data = base_data,
+              layerId = ~muni_id,
+              fillColor = ~ pop_pal(POB_TOTAL),
+              fillOpacity = 0.7,
+              color = "#555555",
+              weight = 0.4,
+              label = ~ paste0(
+                NOMGEO,
+                ", ",
+                NOM_ENT,
+                ifelse(
+                  !is.na(POB_TOTAL),
+                  paste0(" — Pop: ", format(POB_TOTAL, big.mark = ",")),
+                  ""
+                )
+              ),
+              highlightOptions = highlightOptions(
+                weight = 2,
+                color = "#222222",
+                fillOpacity = 0.85,
+                bringToFront = TRUE
+              )
+            ) %>%
+            addLegend(
+              position = "bottomright",
+              pal = pop_pal,
+              values = d_geo$POB_TOTAL,
+              title = "Population",
+              opacity = 0.8,
+              labFormat = labelFormat(big.mark = ",")
+            ) %>%
+            addLegend(
+              position = "bottomright",
+              colors = c("#9B59B6", "#27AE60"),
+              labels = c("Selected", "Your municipality"),
+              opacity = 0.8
+            )
+        }
+
+        # Re-draw selected municipalities on top
+        if (length(selected_ids) > 0) {
+          proxy %>%
+            addPolygons(
+              data = d_geo[d_geo$muni_id %in% selected_ids, ],
+              group = "selected",
+              layerId = ~muni_id,
+              fillColor = "#9B59B6",
+              fillOpacity = 0.6,
+              color = "#6C3483",
+              weight = 1.2,
+              label = ~ paste0(NOMGEO, ", ", NOM_ENT),
+              highlightOptions = highlightOptions(
+                weight = 2,
+                color = "#4A235A",
+                fillOpacity = 0.75,
+                bringToFront = TRUE
+              )
+            )
+        }
+
+        # Re-draw home municipality on top
+        if (!is.null(home_id)) {
+          proxy %>%
+            clearGroup("found_muni") %>%
+            addPolygons(
+              data = d_geo[d_geo$muni_id == home_id, ],
+              group = "found_muni",
+              fillColor = "#27AE60",
+              fillOpacity = 0.4,
+              color = "#27AE60",
+              weight = 3,
+              label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
+            )
+        }
+      },
+      ignoreNULL = TRUE
+    )
+  }
+
+  # Page 2 Map - Interactive map for reference municipality selection (commented out with page 2)
+  if (FALSE) {
+    output$map_page2 <- renderLeaflet({
+      home_id <- found_municipality()
+
+      map <- leaflet(d_geo) %>%
+        addTiles() %>%
+        addPolygons(
+          layerId = ~muni_id,
+          fillColor = ~ coalition_pal(coalition_label),
+          fillOpacity = 0.55,
+          color = "#555555",
+          weight = 0.4,
+          label = ~ paste0(
+            NOMGEO,
+            ", ",
+            NOM_ENT,
+            ifelse(!is.na(coalition_label), paste0(" — ", coalition_label), "")
+          ),
+          highlightOptions = highlightOptions(
+            weight = 2,
+            color = "#222222",
+            fillOpacity = 0.75,
+            bringToFront = TRUE
+          )
+        ) %>%
+        addLegend(
+          position = "bottomright",
+          colors = c(
+            unname(coalition_map_colors),
+            "#D3D3D3",
+            "#9B59B6",
+            "#27AE60"
+          ),
+          labels = c(
+            names(coalition_map_colors),
+            "Other",
+            "Selected",
+            "Your municipality"
+          ),
+          title = "Governing coalition",
+          opacity = 0.8
+        ) %>%
+        fitBounds(lng1 = -115.0, lat1 = 16.0, lng2 = -88.0, lat2 = 30.5)
+
+      if (!is.null(home_id)) {
+        home_data <- d_geo[d_geo$muni_id == home_id, ]
+        home_coords <- found_address_coords()
+
+        map <- map %>%
           addPolygons(
-            data = base_data,
-            layerId = ~muni_id,
+            data = home_data,
+            group = "found_muni",
+            fillColor = "#27AE60",
+            fillOpacity = 0.4,
+            color = "#27AE60",
+            weight = 3,
+            label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
+          )
+
+        if (!is.null(home_coords)) {
+          map <- map %>%
+            addMarkers(
+              lng = home_coords$lon,
+              lat = home_coords$lat,
+              popup = "Your address",
+              group = "address_marker"
+            )
+        }
+      }
+
+      map
+    })
+  }
+
+  if (FALSE) {
+    # Click-to-toggle municipality selection on page 2 map
+    observeEvent(input$map_page2_shape_click, {
+      id <- input$map_page2_shape_click$id
+      req(id)
+      req(!is.null(found_municipality()))
+
+      # Clicking home municipality just zooms to it
+      if (id == found_municipality()) {
+        muni_data <- d_geo %>% filter(muni_id == found_municipality())
+        centroid <- st_centroid(st_geometry(muni_data))
+        coords <- st_coordinates(centroid)
+
+        leafletProxy("map_page2") %>%
+          setView(lng = coords[1], lat = coords[2], zoom = 8) %>%
+          clearGroup("found_muni") %>%
+          addPolygons(
+            data = muni_data,
+            group = "found_muni",
+            fillColor = "#27AE60",
+            fillOpacity = 0.4,
+            color = "#27AE60",
+            weight = 3,
+            label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
+          )
+
+        if (!is.null(found_address_coords())) {
+          address_coords <- found_address_coords()
+          leafletProxy("map_page2") %>%
+            clearGroup("address_marker") %>%
+            addMarkers(
+              lng = address_coords$lon,
+              lat = address_coords$lat,
+              popup = "Your address",
+              group = "address_marker"
+            )
+        }
+        return()
+      }
+
+      current <- selected_map_munis()
+      is_deselecting <- id %in% current
+
+      if (is_deselecting) {
+        selected_map_munis(setdiff(current, id))
+        leafletProxy("map_page2") %>%
+          addPolygons(
+            data = d_geo[d_geo$muni_id == id, ],
+            layerId = id,
             fillColor = ~ coalition_pal(coalition_label),
             fillOpacity = 0.55,
             color = "#555555",
@@ -2617,74 +3086,14 @@ server <- function(input, output, session) {
               fillOpacity = 0.75,
               bringToFront = TRUE
             )
-          ) %>%
-          addLegend(
-            position = "bottomright",
-            colors = c(
-              unname(coalition_map_colors),
-              "#D3D3D3",
-              "#9B59B6",
-              "#27AE60"
-            ),
-            labels = c(
-              names(coalition_map_colors),
-              "Other",
-              "Selected",
-              "Your municipality"
-            ),
-            title = "Governing coalition",
-            opacity = 0.8
           )
-      } else if (mode == "population") {
-        proxy %>%
-          clearControls() %>%
+      } else {
+        selected_map_munis(c(current, id))
+        leafletProxy("map_page2") %>%
           addPolygons(
-            data = base_data,
-            layerId = ~muni_id,
-            fillColor = ~ pop_pal(POB_TOTAL),
-            fillOpacity = 0.7,
-            color = "#555555",
-            weight = 0.4,
-            label = ~ paste0(
-              NOMGEO,
-              ", ",
-              NOM_ENT,
-              ifelse(
-                !is.na(POB_TOTAL),
-                paste0(" — Pop: ", format(POB_TOTAL, big.mark = ",")),
-                ""
-              )
-            ),
-            highlightOptions = highlightOptions(
-              weight = 2,
-              color = "#222222",
-              fillOpacity = 0.85,
-              bringToFront = TRUE
-            )
-          ) %>%
-          addLegend(
-            position = "bottomright",
-            pal = pop_pal,
-            values = d_geo$POB_TOTAL,
-            title = "Population",
-            opacity = 0.8,
-            labFormat = labelFormat(big.mark = ",")
-          ) %>%
-          addLegend(
-            position = "bottomright",
-            colors = c("#9B59B6", "#27AE60"),
-            labels = c("Selected", "Your municipality"),
-            opacity = 0.8
-          )
-      }
-
-      # Re-draw selected municipalities on top
-      if (length(selected_ids) > 0) {
-        proxy %>%
-          addPolygons(
-            data = d_geo[d_geo$muni_id %in% selected_ids, ],
+            data = d_geo[d_geo$muni_id == id, ],
             group = "selected",
-            layerId = ~muni_id,
+            layerId = id,
             fillColor = "#9B59B6",
             fillOpacity = 0.6,
             color = "#6C3483",
@@ -2699,12 +3108,12 @@ server <- function(input, output, session) {
           )
       }
 
-      # Re-draw home municipality on top
-      if (!is.null(home_id)) {
-        proxy %>%
+      # Keep home municipality highlighted on top
+      if (!is.null(found_municipality())) {
+        leafletProxy("map_page2") %>%
           clearGroup("found_muni") %>%
           addPolygons(
-            data = d_geo[d_geo$muni_id == home_id, ],
+            data = d_geo[d_geo$muni_id == found_municipality(), ],
             group = "found_muni",
             fillColor = "#27AE60",
             fillOpacity = 0.4,
@@ -2713,112 +3122,10 @@ server <- function(input, output, session) {
             label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
           )
       }
-    },
-    ignoreNULL = TRUE
-  )
-
-  # Page 2 Map - Interactive map for reference municipality selection
-  output$map_page2 <- renderLeaflet({
-    home_id <- found_municipality()
-
-    map <- leaflet(d_geo) %>%
-      addTiles() %>%
-      addPolygons(
-        layerId = ~muni_id,
-        fillColor = ~ coalition_pal(coalition_label),
-        fillOpacity = 0.55,
-        color = "#555555",
-        weight = 0.4,
-        label = ~ paste0(
-          NOMGEO,
-          ", ",
-          NOM_ENT,
-          ifelse(!is.na(coalition_label), paste0(" — ", coalition_label), "")
-        ),
-        highlightOptions = highlightOptions(
-          weight = 2,
-          color = "#222222",
-          fillOpacity = 0.75,
-          bringToFront = TRUE
-        )
-      ) %>%
-      addLegend(
-        position = "bottomright",
-        colors = c(
-          unname(coalition_map_colors),
-          "#D3D3D3",
-          "#9B59B6",
-          "#27AE60"
-        ),
-        labels = c(
-          names(coalition_map_colors),
-          "Other",
-          "Selected",
-          "Your municipality"
-        ),
-        title = "Governing coalition",
-        opacity = 0.8
-      ) %>%
-      fitBounds(lng1 = -115.0, lat1 = 16.0, lng2 = -88.0, lat2 = 30.5)
-
-    if (!is.null(home_id)) {
-      home_data <- d_geo[d_geo$muni_id == home_id, ]
-      home_coords <- found_address_coords()
-
-      map <- map %>%
-        addPolygons(
-          data = home_data,
-          group = "found_muni",
-          fillColor = "#27AE60",
-          fillOpacity = 0.4,
-          color = "#27AE60",
-          weight = 3,
-          label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
-        )
-
-      if (!is.null(home_coords)) {
-        map <- map %>%
-          addMarkers(
-            lng = home_coords$lon,
-            lat = home_coords$lat,
-            popup = "Your address",
-            group = "address_marker"
-          )
-      }
-    }
-
-    map
-  })
-
-  # Click-to-toggle municipality selection on page 8 map
-  observeEvent(input$map_page2_shape_click, {
-    id <- input$map_page2_shape_click$id
-    req(id)
-    req(!is.null(found_municipality()))
-
-    # Clicking home municipality just zooms to it
-    if (id == found_municipality()) {
-      muni_data <- d_geo %>% filter(muni_id == found_municipality())
-      centroid <- st_centroid(st_geometry(muni_data))
-      coords <- st_coordinates(centroid)
-
-      leafletProxy("map_page2") %>%
-        setView(lng = coords[1], lat = coords[2], zoom = 8) %>%
-        clearGroup("found_muni") %>%
-        addPolygons(
-          data = muni_data,
-          group = "found_muni",
-          fillColor = "#27AE60",
-          fillOpacity = 0.4,
-          color = "#27AE60",
-          weight = 3,
-          label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
-        )
 
       if (!is.null(found_address_coords())) {
         address_coords <- found_address_coords()
         leafletProxy("map_page2") %>%
-          clearGroup("address_marker") %>%
           addMarkers(
             lng = address_coords$lon,
             lat = address_coords$lat,
@@ -2826,168 +3133,102 @@ server <- function(input, output, session) {
             group = "address_marker"
           )
       }
-      return()
-    }
+    })
+  }
 
-    current <- selected_map_munis()
-    is_deselecting <- id %in% current
+  if (FALSE) {
+    # Search box: auto-select and highlight searched municipality
+    observeEvent(input$muni_search, {
+      req(input$muni_search != "")
+      muni_id <- input$muni_search
+      muni_data <- d_geo %>% filter(muni_id == !!muni_id)
+      req(nrow(muni_data) > 0)
 
-    if (is_deselecting) {
-      selected_map_munis(setdiff(current, id))
-      leafletProxy("map_page2") %>%
-        addPolygons(
-          data = d_geo[d_geo$muni_id == id, ],
-          layerId = id,
-          fillColor = ~ coalition_pal(coalition_label),
-          fillOpacity = 0.55,
-          color = "#555555",
-          weight = 0.4,
-          label = ~ paste0(
-            NOMGEO,
-            ", ",
-            NOM_ENT,
-            ifelse(!is.na(coalition_label), paste0(" — ", coalition_label), "")
-          ),
-          highlightOptions = highlightOptions(
-            weight = 2,
-            color = "#222222",
-            fillOpacity = 0.75,
-            bringToFront = TRUE
-          )
-        )
-    } else {
-      selected_map_munis(c(current, id))
-      leafletProxy("map_page2") %>%
-        addPolygons(
-          data = d_geo[d_geo$muni_id == id, ],
-          group = "selected",
-          layerId = id,
-          fillColor = "#9B59B6",
-          fillOpacity = 0.6,
-          color = "#6C3483",
-          weight = 1.2,
-          label = ~ paste0(NOMGEO, ", ", NOM_ENT),
-          highlightOptions = highlightOptions(
-            weight = 2,
-            color = "#4A235A",
-            fillOpacity = 0.75,
-            bringToFront = TRUE
-          )
-        )
-    }
+      if (!is.null(found_municipality()) && muni_id != found_municipality()) {
+        current <- selected_map_munis()
+        if (!(muni_id %in% current)) {
+          selected_map_munis(c(current, muni_id))
 
-    # Keep home municipality highlighted on top
-    if (!is.null(found_municipality())) {
-      leafletProxy("map_page2") %>%
-        clearGroup("found_muni") %>%
-        addPolygons(
-          data = d_geo[d_geo$muni_id == found_municipality(), ],
-          group = "found_muni",
-          fillColor = "#27AE60",
-          fillOpacity = 0.4,
-          color = "#27AE60",
-          weight = 3,
-          label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
-        )
-    }
-
-    if (!is.null(found_address_coords())) {
-      address_coords <- found_address_coords()
-      leafletProxy("map_page2") %>%
-        addMarkers(
-          lng = address_coords$lon,
-          lat = address_coords$lat,
-          popup = "Your address",
-          group = "address_marker"
-        )
-    }
-  })
-
-  # Search box: auto-select and highlight searched municipality
-  observeEvent(input$muni_search, {
-    req(input$muni_search != "")
-    muni_id <- input$muni_search
-    muni_data <- d_geo %>% filter(muni_id == !!muni_id)
-    req(nrow(muni_data) > 0)
-
-    if (!is.null(found_municipality()) && muni_id != found_municipality()) {
-      current <- selected_map_munis()
-      if (!(muni_id %in% current)) {
-        selected_map_munis(c(current, muni_id))
-
-        leafletProxy("map_page2") %>%
-          clearGroup("selected") %>%
-          clearGroup("found_muni") %>%
-          addPolygons(
-            data = d_geo[d_geo$muni_id %in% selected_map_munis(), ],
-            group = "selected",
-            layerId = ~muni_id,
-            fillColor = "#9B59B6",
-            fillOpacity = 0.6,
-            color = "#6C3483",
-            weight = 1.2,
-            label = ~ paste0(NOMGEO, ", ", NOM_ENT),
-            highlightOptions = highlightOptions(
-              weight = 2,
-              color = "#4A235A",
-              fillOpacity = 0.75,
-              bringToFront = TRUE
-            )
-          ) %>%
-          addPolygons(
-            data = d_geo[d_geo$muni_id == found_municipality(), ],
-            group = "found_muni",
-            fillColor = "#27AE60",
-            fillOpacity = 0.6,
-            color = "#1E8449",
-            weight = 2,
-            label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
-          )
-
-        if (!is.null(found_address_coords())) {
-          address_coords <- found_address_coords()
           leafletProxy("map_page2") %>%
-            addMarkers(
-              lng = address_coords$lon,
-              lat = address_coords$lat,
-              popup = "Your address",
-              group = "address_marker"
+            clearGroup("selected") %>%
+            clearGroup("found_muni") %>%
+            addPolygons(
+              data = d_geo[d_geo$muni_id %in% selected_map_munis(), ],
+              group = "selected",
+              layerId = ~muni_id,
+              fillColor = "#9B59B6",
+              fillOpacity = 0.6,
+              color = "#6C3483",
+              weight = 1.2,
+              label = ~ paste0(NOMGEO, ", ", NOM_ENT),
+              highlightOptions = highlightOptions(
+                weight = 2,
+                color = "#4A235A",
+                fillOpacity = 0.75,
+                bringToFront = TRUE
+              )
+            ) %>%
+            addPolygons(
+              data = d_geo[d_geo$muni_id == found_municipality(), ],
+              group = "found_muni",
+              fillColor = "#27AE60",
+              fillOpacity = 0.6,
+              color = "#1E8449",
+              weight = 2,
+              label = ~ paste0(NOMGEO, ", ", NOM_ENT, " (Your municipality)")
             )
+
+          if (!is.null(found_address_coords())) {
+            address_coords <- found_address_coords()
+            leafletProxy("map_page2") %>%
+              addMarkers(
+                lng = address_coords$lon,
+                lat = address_coords$lat,
+                popup = "Your address",
+                group = "address_marker"
+              )
+          }
         }
       }
-    }
-  })
+    })
+  }
 
-  # Zoom to searched municipality
-  observeEvent(input$zoom_search, {
-    req(input$muni_search != "")
-    muni_id <- input$muni_search
-    muni_data <- d_geo %>% filter(muni_id == !!muni_id)
-    req(nrow(muni_data) > 0)
+  if (FALSE) {
+    # Zoom to searched municipality
+    observeEvent(input$zoom_search, {
+      req(input$muni_search != "")
+      muni_id <- input$muni_search
+      muni_data <- d_geo %>% filter(muni_id == !!muni_id)
+      req(nrow(muni_data) > 0)
 
-    centroid <- st_centroid(st_geometry(muni_data))
-    coords <- st_coordinates(centroid)
-    leafletProxy("map_page2") %>%
-      setView(lng = coords[1], lat = coords[2], zoom = 8)
-  })
+      centroid <- st_centroid(st_geometry(muni_data))
+      coords <- st_coordinates(centroid)
+      leafletProxy("map_page2") %>%
+        setView(lng = coords[1], lat = coords[2], zoom = 8)
+    })
+  }
 
-  # Clear search and reset map view
-  observeEvent(input$clear_search, {
-    updateSelectizeInput(session, "muni_search", selected = character(0))
-    leafletProxy("map_page2") %>%
-      fitBounds(lng1 = -115.0, lat1 = 16.0, lng2 = -88.0, lat2 = 30.5)
-  })
+  if (FALSE) {
+    # Clear search and reset map view
+    observeEvent(input$clear_search, {
+      updateSelectizeInput(session, "muni_search", selected = character(0))
+      leafletProxy("map_page2") %>%
+        fitBounds(lng1 = -115.0, lat1 = 16.0, lng2 = -88.0, lat2 = 30.5)
+    })
+  }
 
-  # Zoom to home municipality
-  observeEvent(input$zoom_home, {
-    home_id <- found_municipality()
-    req(home_id)
-    home_data <- d_geo[d_geo$muni_id == home_id, ]
-    centroid <- st_centroid(st_geometry(home_data))
-    coords <- st_coordinates(centroid)
-    leafletProxy("map_page2") %>%
-      setView(lng = coords[1], lat = coords[2], zoom = 8)
-  })
+  if (FALSE) {
+    # Zoom to home municipality
+    observeEvent(input$zoom_home, {
+      home_id <- found_municipality()
+      req(home_id)
+      home_data <- d_geo[d_geo$muni_id == home_id, ]
+      centroid <- st_centroid(st_geometry(home_data))
+      coords <- st_coordinates(centroid)
+      leafletProxy("map_page2") %>%
+        setView(lng = coords[1], lat = coords[2], zoom = 8)
+    })
+  }
 
   # Submit button - now includes page 3 survey responses
   observeEvent(input$submit, {
@@ -3018,6 +3259,21 @@ server <- function(input, output, session) {
       Respondent_ID = respondent_id,
       Found_Municipality = found_muni_name,
       Found_Municipality_ID = found_municipality(),
+      Benchmark_Candidate_Municipalities = {
+        cands <- benchmark_candidates()
+        if (is.null(cands) || nrow(cands) == 0) {
+          NA_character_
+        } else {
+          paste(cands$muni_id, collapse = ";")
+        }
+      },
+      Benchmark_Selected_Municipalities = if (
+        length(selected_benchmarks()) == 0
+      ) {
+        NA_character_
+      } else {
+        paste(selected_benchmarks(), collapse = ";")
+      },
       Map_Selected_Municipalities = map_munis_names,
       # Demographics
       Age = ifelse(
@@ -3150,7 +3406,8 @@ server <- function(input, output, session) {
       ),
       Home_Crime_Handling_Pre = input$home_crime_handling_pre,
       MORENA_Crime_Rating_Pre = input$morena_crime_rating,
-      Coalition_PAN_PRI_PRD_MC_Crime_Rating_Pre = input$coalition_pan_pri_prd_crime_rating,
+      Coalition_PAN_PRI_PRD_Crime_Rating_Pre = input$coalition_pan_pri_prd_crime_rating,
+      MC_Crime_Rating_Pre = input$mc_crime_rating,
       Turnout_Likelihood_Pre = input$turnout_likelihood_pre,
       Vote_Intention_Pre = if (
         is.null(input$vote_intention_pre) ||
@@ -3246,7 +3503,8 @@ server <- function(input, output, session) {
       # Post-treatment outcomes
       Home_Crime_Handling_Post = input$home_crime_handling_post,
       MORENA_Crime_Rating_Post = input$morena_crime_rating_post,
-      Coalition_PAN_PRI_PRD_MC_Crime_Rating_Post = input$coalition_pan_pri_prd_crime_rating_post,
+      Coalition_PAN_PRI_PRD_Crime_Rating_Post = input$coalition_pan_pri_prd_crime_rating_post,
+      MC_Crime_Rating_Post = input$mc_crime_rating_post,
       Crime_Rank_Comp_1_Post = ifelse(
         is.null(input$muni_rank_post_comp_1),
         NA_character_,
@@ -3551,7 +3809,7 @@ server <- function(input, output, session) {
     paste0(
       "Keeping this in mind, there were ",
       format(round(home_rate, 1), nsmall = 1),
-      " robberies per 100,000 residents reported in ",
+      " robberies per 100,000 people reported in ",
       home_name,
       " in 2025."
     )
@@ -3642,9 +3900,9 @@ server <- function(input, output, session) {
       p(strong(plain_info_text_last)),
       p(strong(change_text)),
       p(paste0(
-        "The following graph shows the robbery rate per 100,000 residents in 2025 for ",
+        "The following graph shows the robbery rate per 100,000 people in 2025 for ",
         home_name,
-        " and a sample of other municipalities."
+        " and a sample of similar municipalities."
       ))
     )
   })
@@ -3655,7 +3913,12 @@ server <- function(input, output, session) {
     home_info <- d_geo %>% st_drop_geometry() %>% filter(muni_id == home_id)
     home_name <- home_info$NOMGEO[1]
     home_party <- home_info$governing_party[1]
-    opposite_coalition <- get_opposite_parties(home_party)
+    if (home_party == "MC") {
+      opposite_coalition <- mc_opp_coalition_rv()
+      req(!is.null(opposite_coalition))
+    } else {
+      opposite_coalition <- get_opposite_parties(home_party)
+    }
     opposite_label <- get_coalition_label(opposite_coalition)
     change_text <- home_robbery_change_text()
     tagList(
@@ -3663,9 +3926,9 @@ server <- function(input, output, session) {
       p(strong(plain_info_text_last)),
       p(strong(change_text)),
       p(paste0(
-        "The following graph shows the robbery rate per 100,000 residents in 2025 for ",
+        "The following graph shows the robbery rate per 100,000 people in 2025 for ",
         home_name,
-        " and a sample of other municipalities that are governed by ",
+        " and a sample of similar municipalities that are governed by ",
         opposite_label,
         "."
       ))
@@ -3686,9 +3949,9 @@ server <- function(input, output, session) {
       p(strong(plain_info_text_last)),
       p(strong(change_text)),
       p(paste0(
-        "The following graph shows the robbery rate per 100,000 residents in 2025 for ",
+        "The following graph shows the robbery rate per 100,000 people in 2025 for ",
         home_name,
-        " and a sample of other municipalities that are governed by ",
+        " and a sample of similar municipalities that are governed by ",
         same_label,
         "."
       ))
@@ -3713,7 +3976,10 @@ server <- function(input, output, session) {
         "Comparison" = "#E69F00"
       )
     }
-    ggplot(plot_df, aes(x = municipality, y = rate_per_100k, fill = fill_group)) +
+    ggplot(
+      plot_df,
+      aes(x = municipality, y = rate_per_100k, fill = fill_group)
+    ) +
       geom_col(color = "black", linewidth = 0.5) +
       scale_fill_manual(values = fill_values, name = NULL) +
       labs(x = NULL, y = "Robos por 100,000 personas en 2025") +
@@ -3804,7 +4070,6 @@ server <- function(input, output, session) {
     "treatment_histogram_same_coalition",
     suspendWhenHidden = FALSE
   )
-
 }
 
 shinyApp(ui = ui, server = server)

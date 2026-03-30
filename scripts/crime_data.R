@@ -105,7 +105,25 @@ robo_data <- robo_data %>%
   )
 
 summary(robo_data$rate_per_100k)
-hist(log1p(robo_data$rate_per_100k), main = "Log robbery rate per 100k, all municipalities")
+hist(
+  log1p(robo_data$rate_per_100k),
+  main = "Log robbery rate per 100k, all municipalities"
+)
+
+hist(
+  robo_data$rate_per_100k,
+  main = "Robbery rate per 100k, all municipalities",
+  breaks = 100
+)
+
+ggplot(robo_data, aes(x = rate_per_100k, weight = POB_TOTAL)) +
+  geom_histogram(bins = 60, fill = "steelblue", color = "white") +
+  labs(
+    title = "Robbery rate per 100k, municipalities weighted by population",
+    x = "Robbery rate per 100k",
+    y = "Total population"
+  ) +
+  theme_minimal()
 
 # Save as RDS for use in app.R
 saveRDS(robo_data, "data/robo_2025.rds")

@@ -1,0 +1,130 @@
+Data Collected at Each Step:
+
+Note: The survey is a two-wave design. Wave 1 is completed first; respondents are recontacted approximately 5 days later for Wave 2.
+
+════════════════════════════════════════
+WAVE 1
+════════════════════════════════════════
+
+Step: 1
+Page Title: Information Sheet / Consent
+Data Collected: No data collected. Respondent reads consent information and proceeds.
+────────────────────────────────────────
+Step: 2
+Page Title: Find Your Municipality
+Data Collected: Home municipality name and INEGI code (CVEGEO). Address text entered by
+respondent is used for geocoding only and is not stored.
+────────────────────────────────────────
+Step: 3
+Page Title: Practice Drag-and-Drop
+Data Collected: No data stored. Respondent completes a practice news-source ranking task
+(Radio → Online news → Television → Print → Social media) to familiarize themselves
+with the drag-and-drop interface. Correct placement is validated before advancing but
+the ranking itself is not saved.
+────────────────────────────────────────
+Step: 4
+Page Title: Benchmark Municipality Selection
+Data Collected: (1) List of up to 20 candidate municipalities presented to the respondent
+(INEGI IDs, semicolon-separated); (2) which of those municipalities the respondent
+selected as useful comparisons for their home municipality (INEGI IDs, semicolon-separated).
+────────────────────────────────────────
+Step: 5
+Page Title: Political Views & Voting
+Data Collected:
+  - Last municipal election vote (party or parties; select all that apply)
+  - Pre-treatment turnout likelihood for 2027 elections (0–100 slider)
+  - Pre-treatment vote intention for 2027 elections (party or parties; select all that apply)
+  - Issue importance ranking (drag-and-drop ordering of 5 issues: crime/security,
+    economy/inflation, unemployment/low wages, corruption, education/health services;
+    recorded as numeric ranks 1–5)
+────────────────────────────────────────
+Step: 6
+Page Title: Your Municipality's Performance
+Data Collected:
+  - Home municipality crime handling rating — pre-treatment (0–100 slider)
+  - MORENA/PT/PVEM municipalities crime handling rating — pre-treatment (0–100 slider)
+  - PAN/PRI/PRD municipalities crime handling rating — pre-treatment (0–100 slider)
+  - MC municipalities crime handling rating — pre-treatment (0–100 slider)
+────────────────────────────────────────
+Step: 7
+Page Title: Robbery Estimate
+Data Collected: Respondent's estimate of their home municipality's robbery rate per
+100,000 inhabitants in 2025 (numeric entry).
+────────────────────────────────────────
+Step: 8
+Page Title: About You (Political Views)
+Data Collected:
+  - Left-right ideological self-placement (0–10 slider; 0 = left, 10 = right)
+  - Party identification — 1st choice (radio button: PAN/PRI/PRD/PVEM/PT/MC/MORENA/
+    None/Other)
+  - Party identification — 2nd choice (optional dropdown)
+  - Party identification — 3rd choice (optional dropdown)
+────────────────────────────────────────
+
+════════════════════════════════════════
+WAVE 2 (recontact ~5 days later)
+════════════════════════════════════════
+
+Step: 9
+Page Title: Attention Check
+Data Collected: Response to embedded attention check item — a 5-point Likert scale
+(strongly disagree to strongly agree) about a neutral statement; correct answer is
+"Somewhat agree."
+────────────────────────────────────────
+Step: 10
+Page Title: Governance Grid
+Data Collected: Respondent's beliefs about which party currently governs their home
+municipality and each of the 4 algorithmically-selected comparison municipalities
+(checkbox selection per municipality; parties: PAN/PRI/PRD/PVEM/PT/MC/MORENA/
+Don't know).
+────────────────────────────────────────
+Step: 11
+Page Title: Pre-Treatment Municipality Crime Ranking
+Data Collected: For each of the 4 comparison municipalities, respondent's belief about
+how the comparison municipality's robbery rate compares to their home municipality
+(5-point scale: more than double / more / same / fewer / less than half + don't know).
+────────────────────────────────────────
+Step: 12
+Page Title: Treatment Delivery
+Data Collected: No survey responses collected. Respondent reads the assigned treatment
+condition (one of five arms: control/agave placebo, T1/plain information, T2/non-partisan
+comparison, T3/opposite-coalition comparison, T4/same-coalition comparison). A minimum
+reading timer is enforced before advancing.
+────────────────────────────────────────
+Step: 13
+Page Title: Post-Treatment Crime Questions
+Data Collected:
+  - Home municipality crime handling rating — post-treatment (0–100 slider; repeated)
+  - MORENA/PT/PVEM municipalities crime handling rating — post-treatment (0–100 slider; repeated)
+  - PAN/PRI/PRD municipalities crime handling rating — post-treatment (0–100 slider; repeated)
+  - MC municipalities crime handling rating — post-treatment (0–100 slider; repeated)
+  - Post-treatment crime ranking for each of the 4 comparison municipalities (same
+    5-point scale as Step 11; repeated)
+────────────────────────────────────────
+Step: 14
+Page Title: Post-Treatment Turnout & Vote Intention
+Data Collected:
+  - Post-treatment turnout likelihood for 2027 elections (0–100 slider; repeated)
+  - Post-treatment vote intention for 2027 elections (party or parties; select all
+    that apply; repeated)
+────────────────────────────────────────
+
+════════════════════════════════════════
+METADATA SAVED AT SUBMISSION
+════════════════════════════════════════
+
+The following fields are recorded automatically at the time the survey is submitted
+and are not directly entered by the respondent:
+
+  - Respondent ID (unique identifier: timestamp + 8-character random string)
+  - Treatment group assignment (control / T1 / T2 / T3 / T4)
+  - Comparison type for control/T1 arms (which comparison set was displayed)
+  - Comparison municipality names (1–4) and INEGI codes
+  - Benchmark candidate municipalities shown to respondent (INEGI IDs)
+  - Benchmark municipalities selected by respondent (INEGI IDs)
+  - Submission timestamp
+  - Device type (mobile vs. desktop)
+
+Note: Age, gender, and indigenous self-identification appear as fields in the data
+output but are not currently collected via survey questions — these are expected to
+be provided by Netquest from panel profile data.
