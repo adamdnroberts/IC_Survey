@@ -1,0 +1,13 @@
+name: IC_Survey_English
+title: IC_Survey_English
+username: adamdnroberts
+account: adamdnroberts
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17031070
+bundleId: 11788482
+url: https://adamdnroberts.shinyapps.io/IC_Survey_English/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .claude/commands/overleaf-sync.md|.claude/commands/sync-docs.md|.claude/settings.local.json|.claude/skills/overleaf-sync/SKILL.md|.claude/skills/sync-docs/SKILL.md|.lintr|app.R|CLAUDE.md|deploy_app.R|Information_Sheet_Incumbent_Comparisons.doc|pull_responses.R|README.md|code|docs|latex|output|references

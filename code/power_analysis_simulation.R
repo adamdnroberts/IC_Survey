@@ -1,79 +1,76 @@
 library(dplyr)
 library(purrr)
 library(ggplot2)
+library(ggrepel)
 
 set.seed(42)
 
-# simulation parameters
-n_reps <- 200
-sample_n <- 6000
-n_groups <- 7
-treatment <- rep(0:(n_groups - 1), floor(sample_n / n_groups))
-# treatment_group <- factor(ifelse(
-#   treatment <= 2,
-#   "Woman",
-#   ifelse(treatment <= 4, "Black", "Mormon")
-# ))
-# treatment_group <- relevel(treatment_group, ref = "Woman")
-# loss <- ifelse(treatment %% 2 == 0, 1, 0)
-interact <- rep(0:1, each = 7, length.out = length(treatment))
+n_reps <- 1000
 
-treatment_factor <- factor(treatment)
-
-X <- model.matrix(~ treatment_factor * interact)
+# Power analysis for the estimating equation:
+#
+#   y_i = α0 + α1 CW_i + α2 RW_i
+#           + Σ δ_k T_ik
+#           + Σ β_k (T_ik × CW_i)
+#           + Σ γ_k (T_ik × RW_i)
+#           + ε_i
+#
+# CW_i ~ U(-4, 4): crime wrongness (actual minus prior crime rank, range -4 to 4)
+# RW_i ~ U(-4, 4): relative ranking wrongness
+# Treatment arms: control (baseline), T1, T2, T3, T4, control2
+# Power is computed for a single coefficient of interest (default: T1 x CW)
 
 simulate_power <- function(
-  beta0 = 50,
-  beta1 = 0,
-  beta2 = 0,
-  beta3 = 1,
-  beta4 = 1,
-  beta5 = 1,
-  beta6 = 1,
-  interact = -1,
+  alpha0 = 50, # intercept
+  alpha1 = 0, # main effect of CW (control group)
+  alpha2 = 0, # main effect of RW (control group)
+  delta = c(0, 0, 0, 0), # main effects of T1–T4
+  beta = c(0, 0, 0, 0), # T_k x CW interaction coefficients
+  gamma = c(0, 0, 0, 0), # T_k x RW interaction coefficients
+  sd_cw = 1.5, # SD of CW ~ N(0, sd_cw); ~1–2 ranks off on a 1–5 scale
+  sd_rw = 1.5, # SD of RW ~ rounded N(0, sd_rw), clamped to integers in [-4, 4]
   sd_error = 20,
-  coef_of_interest = "treatment_factor1",
-  comparison_coef = "treatment_factor2"
+  sample_n = 4000,
+  n_groups = 6,
+  coef_of_interest = "treatment_factor1:CW"
 ) {
+  treatment <- rep(0:(n_groups - 1), floor(sample_n / n_groups))
+  treatment_factor <- factor(treatment)
+  n_obs <- length(treatment)
+
   p_values <- numeric(n_reps)
   r2_values <- numeric(n_reps)
-  coef_diffs <- numeric(n_reps)
-  p_values_diff <- numeric(n_reps)
+  sd_outcomes <- numeric(n_reps)
+  sd_RW <- numeric(n_reps)
 
   for (i in 1:n_reps) {
-    if (i %% 200 == 0) {
-      cat(
-        "effect:",
-        beta1,
-        ", sd:",
-        sd_error,
-        ", rep:",
-        i,
-        "\n"
-      )
-    }
+    CW <- rnorm(n_obs, mean = 0, sd = sd_cw)
+    RW <- pmin(4L, pmax(-4L, round(rnorm(n_obs, mean = 0, sd = sd_rw))))
 
-    # --- simulate data inline (replaces create_outcome)
-    y_raw <- beta0 +
-      beta1 * X[, "treatment_factor1"] +
-      beta2 * X[, "treatment_factor2"] +
-      beta3 * X[, "treatment_factor3"] +
-      beta4 * X[, "treatment_factor4"] +
-      beta5 * X[, "treatment_factor5"] +
-      beta6 * X[, "treatment_factor6"] +
-      interact * X[, "interact"] +
-      beta1 * interact * X[, "treatment_factor1:interact"] +
-      beta2 * interact * X[, "treatment_factor2:interact"] +
-      beta3 * interact * X[, "treatment_factor3:interact"] +
-      beta4 * interact * X[, "treatment_factor4:interact"] +
-      beta5 * interact * X[, "treatment_factor5:interact"] +
-      beta6 * interact * X[, "treatment_factor6:interact"] +
-      rnorm(length(treatment), mean = 0, sd = sd_error)
-    #bio_raw <- signal + error
-    # transform to bounded outcome
-    #y <- bio_raw #1 / (1 + exp(-bio_raw))
+    X <- model.matrix(~ treatment_factor * CW + treatment_factor * RW)
+
+    y_raw <- alpha0 +
+      alpha1 * CW +
+      alpha2 * RW +
+      delta[1] * (treatment_factor == 1) +
+      delta[2] * (treatment_factor == 2) +
+      delta[3] * (treatment_factor == 3) +
+      delta[4] * (treatment_factor == 4) +
+      beta[1] * (treatment_factor == 1) * CW +
+      beta[2] * (treatment_factor == 2) * CW +
+      beta[3] * (treatment_factor == 3) * CW +
+      beta[4] * (treatment_factor == 4) * CW +
+      gamma[1] * (treatment_factor == 1) * RW +
+      gamma[2] * (treatment_factor == 2) * RW +
+      gamma[3] * (treatment_factor == 3) * RW +
+      gamma[4] * (treatment_factor == 4) * RW +
+      rnorm(n_obs, mean = 0, sd = sd_error)
+
     y <- pmin(100, pmax(0, round(y_raw)))
-    # linear model
+
+    sd_outcomes[i] <- sd(y)
+    sd_RW[i] <- sd(CW)
+
     fit <- lm.fit(X, y)
     residuals <- fit$residuals
     rss <- sum(residuals^2)
@@ -85,170 +82,111 @@ simulate_power <- function(
     XtX_inv <- chol2inv(fit$qr$qr[1:fit$rank, 1:fit$rank, drop = FALSE])
     se <- sqrt(diag(XtX_inv) * sigma2)
 
-    idx1 <- which(colnames(X) == coef_of_interest)
-    t_stat <- fit$coefficients[idx1] / se[idx1]
+    idx <- which(colnames(X) == coef_of_interest)
+    t_stat <- fit$coefficients[idx] / se[idx]
     p_values[i] <- 2 * pt(abs(t_stat), df_resid, lower.tail = FALSE)
-
-    idx2 <- which(colnames(X) == comparison_coef)
-
-    coef_diff <- coef_diffs[i] <- fit$coefficients[idx1] -
-      fit$coefficients[idx2]
-    se_diff <- sqrt(
-      XtX_inv[idx1, idx1] *
-        sigma2 +
-        XtX_inv[idx2, idx2] * sigma2 -
-        2 * XtX_inv[idx1, idx2] * sigma2
-    )
-    t_stat_diff <- coef_diff / se_diff
-    p_values_diff[i] <- 2 * pt(abs(t_stat_diff), df_resid, lower.tail = FALSE)
   }
 
-  result <- tibble(
-    beta1 = beta1,
+  tibble(
+    gamma_t2_rw = gamma[2],
     sd_error = sd_error,
+    sample_n = sample_n,
     power = mean(p_values < 0.05),
     mean_r2 = mean(r2_values),
-    mean_coef_diff = mean(coef_diffs),
-    coef_diff_power = mean(p_values_diff < 0.05)
+    mean_sd_outcome = mean(sd_outcomes),
+    sd_RW = mean(sd_RW)
   )
-
-  # # NEW: Add mean difference if calculated
-  # if (!is.null(comparison_coef)) {
-  #   result$mean_coef_diff <- mean(coef_diffs)
-  #   result$sd_coef_diff <- sd(coef_diffs)
-  # }
 }
 
-# --- simulation grid ---
+# ── Simulation grid ───────────────────────────────────────────────────────────
+# Vary T2 x RW effect size and sample size; all other interactions set to zero
+
 params <- expand.grid(
-  beta1 = seq(0, 20, by = 1) #,
-  #sd_error = seq(0.1, 0.5, by = 0.1)
+  gamma_t2 = c(2, 3, 4),
+  sample_n = seq(500, 4500, by = 100)
 )
 
+n_sims     <- nrow(params)
+total_reps <- n_sims * n_reps
+done_reps  <- 0
 
-start_time <- Sys.time()
-power_results <- pmap_dfr(
-  params,
-  ~ simulate_power(
-    beta1 = ..1,
-    sd_error = 20, #..2,
-    coef_of_interest = "treatment_factor1"
+power_list <- vector("list", n_sims)
+for (j in seq_len(n_sims)) {
+  power_list[[j]] <- simulate_power(
+    gamma    = c(0, params$gamma_t2[j], 0, 0),
+    sample_n = params$sample_n[j],
+    coef_of_interest = "treatment_factor2:RW"
   )
-)
+  done_reps <- done_reps + n_reps
+  cat(sprintf("\r  %d%% complete  (%d / %d reps)",
+              round(100 * done_reps / total_reps),
+              done_reps, total_reps))
+}
+cat("\n")
+power_results <- bind_rows(power_list)
 
-end_time <- Sys.time()
-run_time <- end_time - start_time
-print(run_time)
+# Cohen's d approximation for the T2 x RW interaction
+power_results <- power_results %>%
+  mutate(
+    cohens_d_raw = gamma_t2_rw * sd_RW / mean_sd_outcome,
+    cohens_d = round(cohens_d_raw * 20) / 20
+  )
 
-power_results$cohens_d <- power_results$beta1 /
-  power_results$sd_error
+# ── 80% power crossings ───────────────────────────────────────────────────────
 
-# --- plots ---
-# Interpolate exact crossing point
-crossings_precise <- power_results %>%
-  group_by(sd_error) %>%
-  arrange(cohens_d) %>%
+crossings <- power_results %>%
+  group_by(gamma_t2_rw) %>%
+  arrange(sample_n) %>%
   mutate(
     next_power = lead(power),
-    next_effect = lead(cohens_d)
+    next_n = lead(sample_n)
   ) %>%
   filter(
     (power < 0.8 & next_power >= 0.8) |
       (power > 0.8 & next_power <= 0.8)
   ) %>%
   mutate(
-    # Linear interpolation
-    effect_at_80 = cohens_d +
-      (0.8 - power) * (next_effect - cohens_d) / (next_power - power)
+    n_at_80 = sample_n +
+      (0.8 - power) * (next_n - sample_n) / (next_power - power)
   ) %>%
   slice(1) %>%
   ungroup() %>%
-  mutate(power_80 = 0.8) # Exact y-value
+  mutate(power_80 = 0.8)
+
+# ── Plot ──────────────────────────────────────────────────────────────────────
 
 power_line_graph <- ggplot(
   power_results,
-  aes(x = cohens_d, y = power)
+  aes(x = sample_n, y = power, color = as.factor(cohens_d))
 ) +
   geom_line() +
   geom_hline(yintercept = 0.8, linetype = "dashed", color = "red") +
   geom_point(
-    data = crossings_precise,
-    aes(x = effect_at_80, y = power_80),
+    data = crossings,
+    aes(x = n_at_80, y = power_80),
     size = 3,
     shape = 21,
     fill = "white"
   ) +
-  geom_text(
-    data = crossings_precise,
-    aes(x = effect_at_80, y = power_80, label = sprintf("%.2f", effect_at_80)),
+  geom_text_repel(
+    data = crossings,
+    aes(x = n_at_80, y = power_80, label = sprintf("N = %.0f", n_at_80)),
     nudge_y = 0.05,
     size = 3,
     show.legend = FALSE
   ) +
   labs(
-    #title = "Estimated Power vs True Interaction Effect",
-    #subtitle = "Interaction loss effect compared to woman winning effect",
-    x = "True Effect (Cohen's d)",
-    y = "Power (fraction of p < 0.05)"
+    color = "Cohen's d (T2 x RW)",
+    x = "Total Sample Size",
+    y = "Power",
+    title = "Power analysis: T2 x RW interaction (gamma_2)"
   ) +
   theme_classic()
 
-power_line_graph
-
-crossings_precise <- power_results %>%
-  group_by(sd_error) %>%
-  arrange(cohens_d) %>%
-  mutate(
-    next_power = lead(coef_diff_power),
-    next_effect = lead(cohens_d)
-  ) %>%
-  filter(
-    (coef_diff_power < 0.8 & next_power >= 0.8) |
-      (coef_diff_power > 0.8 & next_power <= 0.8)
-  ) %>%
-  mutate(
-    # Linear interpolation
-    effect_at_80 = cohens_d +
-      (0.8 - coef_diff_power) *
-        (next_effect - cohens_d) /
-        (next_power - coef_diff_power)
-  ) %>%
-  slice(1) %>%
-  ungroup() %>%
-  mutate(power_80 = 0.8) # Exact y-value
-
-coef_diff_power_line_graph <- ggplot(
-  power_results,
-  aes(x = cohens_d, y = coef_diff_power)
-) +
-  geom_line() +
-  geom_hline(yintercept = 0.8, linetype = "dashed", color = "red") +
-  geom_point(
-    data = crossings_precise,
-    aes(x = effect_at_80, y = power_80),
-    size = 3,
-    shape = 21,
-    fill = "white"
-  ) +
-  geom_text(
-    data = crossings_precise,
-    aes(x = effect_at_80, y = power_80, label = sprintf("%.2f", effect_at_80)),
-    nudge_y = 0.05,
-    size = 3,
-    show.legend = FALSE
-  ) +
-  labs(
-    #title = "Estimated Power vs True Interaction Effect",
-    #subtitle = "Interaction loss effect compared to woman winning effect",
-    x = "True Effect (Cohen's d)",
-    y = "Power (fraction of p < 0.05)"
-  ) +
-  theme_classic()
-
-#coef_diff_power_line_graph
+print(power_line_graph)
 
 ggsave(
-  "docs/power_graph.pdf",
+  "latex/images/power_graph.pdf",
   plot = power_line_graph,
   width = 6,
   height = 4

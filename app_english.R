@@ -246,7 +246,7 @@ slot_ranker_ui <- function(
       tags$button(
         class = "remove-item",
         onclick = "removeFromSlot(this);",
-        title = "Quitar",
+        title = "Remove",
         "\u00d7"
       )
     )
@@ -651,23 +651,46 @@ ui <- fluidPage(
             #   "University of Rochester's Department of Political Science. The purpose of this study is to ",
             #   "understand how voters use information when deciding which candidate or political party to vote for."
             # ),
-            p(strong(
-              "Por favor, lea esta hoja informativa antes de continuar."
-            )),
-            tags$iframe(
-              src = "Information_Sheet_Informational_Comparisons_Spanish.pdf",
-              width = "100%",
-              height = "500px",
-              style = "border: 1px solid #ccc; border-radius: 4px;"
+            p(
+              "If you decide to take part in this study, you will be asked to complete a survey that will take ",
+              "about 10 minutes to complete. The surveys will ask questions ",
+              "about the municipality you live in, ",
+              "demographics, and political topics, including your political preferences, party affiliation, and ",
+              "vote choice in the most recent municipal elections. ",
+              "For full details about this study, please see the information sheet here: ",
+              tags$a(
+                href = "https://adamdnroberts.github.io/assets/pdf/Information_Sheet_Incumbent_Comparisons.pdf",
+                target = "_blank",
+                "Information Sheet"
+              )
             ),
             p(
-              style = "margin-top: 0.5em; font-size: 0.9em;",
-              "Si no puede ver el documento, ",
+              "Some survey questions touch on political topics that you may find sensitive, but participation ",
+              "carries no greater risk than reading the news. You may withdraw at any time and for any reason."
+            ),
+            p(
+              "You will be asked to enter your home address solely to identify your municipality. Your address ",
+              "will not be saved. Only your municipality, political affiliation, and demographic information ",
+              "will be recorded. This study will not collect direct identifiers such as your name or CURP. All ",
+              "data will be stored securely in the cloud and will be accessible only to the principal investigator."
+            ),
+            p(
+              "For more information or questions about this research you may contact Adam Roberts at ",
               tags$a(
-                href = "https://adamdnroberts.github.io/assets/pdf/Information_Sheet_Informational_Comparisons_Spanish.pdf",
-                target = "_blank",
-                "haga clic aqu\u00ed para abrirlo."
-              )
+                href = "mailto:arober48@ur.rochester.edu",
+                "arober48@ur.rochester.edu"
+              ),
+              ". Please contact the University of Rochester Research Subjects Review Board at 265 Crittenden Blvd., ",
+              "CU 420628, Rochester, NY 14642, ",
+              "Telephone +1 (585) 276-0005 or +1 (877) 449-4441 for the following reasons:"
+            ),
+            tags$ul(
+              tags$li(
+                "You wish to talk to someone other than the research staff about your rights as a research subject;"
+              ),
+              tags$li("To voice concerns about the research;"),
+              tags$li("To provide input concerning the research process;"),
+              tags$li("In the event the study staff could not be reached.")
             ),
             hr(),
             fluidRow(
@@ -677,7 +700,7 @@ ui <- fluidPage(
                 div(
                   class = "mobile-only",
                   p(strong(
-                    "Para una mejor experiencia, le recomendamos completar esta encuesta en modo horizontal."
+                    "For the best experience, we recommend completing this survey in landscape mode."
                   ))
                 ),
                 actionButton(
@@ -695,23 +718,21 @@ ui <- fluidPage(
           div(
             id = "page1",
 
-            p(strong(
-              "Ingrese su dirección para encontrar su municipio de origen:"
-            )),
+            p(strong("Enter your address to find your home municipality:")),
             fluidRow(
               column(
                 9,
                 textInput(
                   "address",
                   NULL,
-                  placeholder = "p. ej., Av. Yucatán 147, Roma Nte., Cuauhtémoc, CDMX"
+                  placeholder = "e.g., Av. Yucatán 147, Roma Nte., Cuauhtémoc, CDMX"
                 )
               ),
               column(
                 3,
                 actionButton(
                   "geocode_btn",
-                  "Buscar",
+                  "Search",
                   class = "btn-info",
                   style = "margin-top: 0px; width: 100%;"
                 )
@@ -725,9 +746,9 @@ ui <- fluidPage(
                   "background-color: #e7f3ff; border-radius: 4px;"
                 ),
                 icon("spinner", class = "fa-spin"),
-                tags$strong(" Buscando su dirección..."),
+                tags$strong(" Searching for your address..."),
                 tags$br(),
-                tags$small("Esto puede tomar algunos segundos.")
+                tags$small("This may take a few seconds.")
               )
             ),
             uiOutput("geocode_result"),
@@ -738,23 +759,20 @@ ui <- fluidPage(
                 id = "home_confirmation_section",
                 hr(),
                 p(
-                  "Por favor, confirme que la siguiente información es correcta antes de continuar:"
+                  "Please confirm that the following information is correct before continuing:"
                 ),
                 uiOutput("home_municipality_summary"),
                 selectInput(
                   "dropdown_municipality",
-                  "¿No es correcto? Busque su dirección nuevamente o seleccione su municipio de la lista:",
-                  choices = c(
-                    "-- Seleccione un municipio --" = "",
-                    muni_choices
-                  ),
+                  "Not right? Search your address again or select your municipality from the list:",
+                  choices = c("-- Select a municipality --" = "", muni_choices),
                   selected = "",
                   selectize = TRUE,
                   width = "100%"
                 ),
                 actionButton(
                   "clear_selection_btn",
-                  "Limpiar selección",
+                  "Clear Selection",
                   icon = icon("refresh"),
                   class = "btn-secondary"
                 )
@@ -768,7 +786,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page2_from_1",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -790,36 +808,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page2_from_15",
-                  "Siguiente \u2192",
-                  class = "btn-primary btn-lg"
-                )
-              )
-            )
-          )
-        ),
-
-        # Page 18: Additional municipality selection (all-Mexico dropdown)
-        hidden(
-          div(
-            id = "page18",
-            uiOutput("additional_munis_instructions_text"),
-            selectizeInput(
-              "additional_munis_dropdown",
-              label = NULL,
-              choices = NULL,
-              multiple = TRUE,
-              options = list(
-                placeholder = "Escriba para buscar municipios..."
-              )
-            ),
-            hr(),
-            fluidRow(
-              column(
-                12,
-                align = "right",
-                actionButton(
-                  "goto_page4_from_18",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -838,15 +827,15 @@ ui <- fluidPage(
               style = "text-align: center; padding: 50px;",
               p(
                 icon("info-circle"),
-                tags$strong(" Gracias por su interés."),
+                tags$strong(" Thank you for your interest."),
                 style = "font-size: 1.2em;"
               ),
               br(),
               p(
-                "Lamentablemente, no cumple con los criterios para este estudio, por lo que no es elegible para participar."
+                "Unfortunately, you do not meet the criteria for this study, so you are not eligible to participate."
               ),
               br(),
-              p(style = "color: #6c757d;", "Ahora puede cerrar esta ventana.")
+              p(style = "color: #6c757d;", "You may now close this window.")
             )
           )
         ),
@@ -856,24 +845,24 @@ ui <- fluidPage(
           div(
             id = "page3",
             p(
-              "La siguiente es una lista de fuentes de noticias que puede reorganizar arrastrando y soltando cada elemento."
+              "The following is a list of news sources that you can re-arrange by dragging and dropping each individual item."
             ),
             p(
-              "Para asegurarnos de que está leyendo con atención, por favor clasifíquelas en este orden: ",
-              "Radio primero, Sitios de noticias en línea segundo, Televisión tercero, Periódicos impresos cuarto, y Redes sociales último."
+              "To make sure you are paying attention, please rank them in this order: ",
+              "Radio first, Online news websites second, Television third, Print newspapers fourth, and Social media last."
             ),
             tags$hr(),
             slot_ranker_ui(
               "practice_ranking",
               items = c(
-                "Televisión",
-                "Redes sociales",
-                "Sitios de noticias en línea",
+                "Television",
+                "Social media",
+                "Online news websites",
                 "Radio",
-                "Periódicos impresos"
+                "Print newspapers"
               ),
-              source_label = "Elementos disponibles:",
-              slots_label = "Su clasificación:"
+              source_label = "Available items:",
+              slots_label = "Your ranking:"
             ),
             tags$hr(),
             uiOutput("practice_warning"),
@@ -883,7 +872,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page4_from_3",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -899,7 +888,7 @@ ui <- fluidPage(
             tags$div(
               class = "form-group",
               tags$label(
-                "¿Por cuál partido o partidos votó en la última elección municipal? (seleccione todos los que correspondan)"
+                "Which party or parties did you vote for in the last municipal election? (select all that apply)"
               ),
               tags$div(
                 class = "party-radio-group",
@@ -934,16 +923,16 @@ ui <- fluidPage(
                   "Movimiento_Ciudadano_logo.png"
                 ),
                 party_checkbox_choice("morena", "MORENA", "Morena_logo.png"),
-                party_checkbox_choice("did_not_vote", "No voté"),
-                party_checkbox_choice("dont_remember", "No recuerdo"),
-                party_checkbox_choice("other", "Otro")
+                party_checkbox_choice("did_not_vote", "Did not vote"),
+                party_checkbox_choice("dont_remember", "Don't remember"),
+                party_checkbox_choice("other", "Other")
               )
             ),
             hidden(
               textInput(
                 "last_election_vote_other",
-                "Por favor, especifique el partido:",
-                placeholder = "Ingrese el nombre del partido..."
+                "Please specify the party:",
+                placeholder = "Enter party name..."
               )
             ),
 
@@ -951,7 +940,7 @@ ui <- fluidPage(
 
             sliderInput(
               "turnout_likelihood_pre",
-              "¿Qué tan probable es que vote en las elecciones locales de 2027 en una escala de 0 a 100, donde 0 significa 'definitivamente no votaré' y 100 significa 'ciertamente votaré'?",
+              "How likely are you to vote in the 2027 local elections on a scale of 0 to 100, where 0 means 'definitely won't vote' and 100 means 'certainly will vote'?",
               min = 0,
               max = 100,
               value = 50
@@ -960,14 +949,14 @@ ui <- fluidPage(
               column(
                 6,
                 p(
-                  "Definitivamente no votaré",
+                  "Definitely won't vote",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
                 )
               ),
               column(
                 6,
                 p(
-                  "Ciertamente votaré",
+                  "Certainly will vote",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
                 )
               )
@@ -978,7 +967,7 @@ ui <- fluidPage(
             tags$div(
               class = "form-group",
               tags$label(
-                "¿Por cuál partido o partidos tiene intención de votar en la próxima elección municipal? (seleccione todos los que correspondan)"
+                "Which party or parties do you intend to vote for in the next municipal election? (select all that apply)"
               ),
               tags$div(
                 class = "party-radio-group",
@@ -1026,17 +1015,17 @@ ui <- fluidPage(
                 ),
                 party_checkbox_choice(
                   "undecided",
-                  "Indeciso",
+                  "Undecided",
                   group = "vote_intention_pre"
                 ),
                 party_checkbox_choice(
                   "will_not_vote",
-                  "No votaré",
+                  "Will not vote",
                   group = "vote_intention_pre"
                 ),
                 party_checkbox_choice(
                   "other",
-                  "Otro",
+                  "Other",
                   group = "vote_intention_pre"
                 )
               )
@@ -1044,8 +1033,8 @@ ui <- fluidPage(
             hidden(
               textInput(
                 "vote_intention_pre_other",
-                "Por favor, especifique el partido:",
-                placeholder = "Ingrese el nombre del partido..."
+                "Please specify the party:",
+                placeholder = "Enter party name..."
               )
             ),
 
@@ -1053,9 +1042,7 @@ ui <- fluidPage(
 
             # Importance of Issues, language loosely based on Mitofsky
             # public opinion survey (see Google Drive reference)
-            h5(strong(
-              "\u00bfQu\u00e9 tan importantes son los siguientes temas para usted? Ord\u00e9nelos de m\u00e1s a menos importante."
-            )),
+            h5(strong("Issue Importance")),
             div(
               id = "issue_importance_wrapper",
               uiOutput("issue_importance_ui")
@@ -1070,7 +1057,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page5_from_4",
-                  "Siguiente →",
+                  "Next →",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -1091,7 +1078,7 @@ ui <- fluidPage(
 
             sliderInput(
               "morena_crime_rating",
-              "En promedio, ¿qué tan bien cree que los municipios gobernados por MORENA, PT o PVEM manejan el crimen?",
+              "On average, how well do you think municipalities governed by MORENA, PT, or PVEM handle crime?",
               min = 0,
               max = 100,
               value = 50
@@ -1100,14 +1087,14 @@ ui <- fluidPage(
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente mal",
+                  "Handles crime extremely poorly",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
                 )
               ),
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente bien",
+                  "Handles crime extremely well",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
                 )
               )
@@ -1115,7 +1102,7 @@ ui <- fluidPage(
 
             sliderInput(
               "coalition_pan_pri_prd_crime_rating",
-              "En promedio, ¿qué tan bien cree que los municipios gobernados por PAN, PRI o PRD manejan el crimen?",
+              "On average, how well do you think municipalities governed by PAN, PRI, or PRD handle crime?",
               min = 0,
               max = 100,
               value = 50
@@ -1124,14 +1111,14 @@ ui <- fluidPage(
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente mal",
+                  "Handles crime extremely poorly",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
                 )
               ),
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente bien",
+                  "Handles crime extremely well",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
                 )
               )
@@ -1139,7 +1126,7 @@ ui <- fluidPage(
 
             sliderInput(
               "mc_crime_rating",
-              "En promedio, ¿qué tan bien cree que los municipios gobernados por MC manejan el crimen?",
+              "On average, how well do you think municipalities governed by MC handle crime?",
               min = 0,
               max = 100,
               value = 50
@@ -1148,14 +1135,14 @@ ui <- fluidPage(
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente mal",
+                  "Handles crime extremely poorly",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
                 )
               ),
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente bien",
+                  "Handles crime extremely well",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
                 )
               )
@@ -1172,7 +1159,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page6_from_5",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -1185,12 +1172,12 @@ ui <- fluidPage(
           div(
             id = "page17",
             p(
-              "Las tasas de robo se miden por cada 100,000 habitantes para que los municipios de diferentes tamaños puedan compararse de manera justa.",
-              "Por ejemplo, un municipio con 1,000 robos y 2 millones de habitantes tiene una tasa de criminalidad más baja que uno con 500 robos",
-              "y solo 100,000 habitantes, aunque haya registrado más robos en términos absolutos.",
-              "En 2025,",
+              "Robbery rates are measured per 100,000 inhabitants so that municipalities of different sizes can be fairly compared.",
+              "For example, a municipality with 1,000 robberies and 2 million residents has a lower crime rate than one with 500 robberies",
+              "and only 100,000 residents, even though it recorded more robberies in absolute terms.",
+              "In 2025,",
               strong(
-                "la mitad de todos los municipios tuvo menos de 79 robos por cada 100,000 personas, y la otra mitad tuvo más."
+                "half of all municipalities had fewer than 79 robberies per 100,000 people, and half had more."
               )
             ),
             uiOutput("robbery_estimate_ui"),
@@ -1201,7 +1188,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page6_from_17",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -1214,12 +1201,12 @@ ui <- fluidPage(
           div(
             id = "page6",
 
-            h5(strong("Opiniones Políticas")),
+            h5(strong("Political Views")),
 
             sliderInput(
               "left_right_scale",
-              "En política, a veces se habla de ser 'izquierda' o 'derecha' en una escala ideológica, donde más a la derecha significa más conservador.
-              ¿Dónde se ubicaría usted en esta escala?",
+              "In politics, people sometimes talk being 'left' or 'right' on an ideological scale, where further right means more conservative.
+              Where would you place yourself on this scale?",
               min = 0,
               max = 10,
               value = 5,
@@ -1229,14 +1216,14 @@ ui <- fluidPage(
               column(
                 6,
                 p(
-                  "Izquierda",
+                  "Left",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
                 )
               ),
               column(
                 6,
                 p(
-                  "Derecha",
+                  "Right",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
                 )
               )
@@ -1249,7 +1236,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page11_from_6",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -1366,7 +1353,7 @@ ui <- fluidPage(
                   align = "right",
                   actionButton(
                     "goto_page3_from_2",
-                    "Siguiente \u2192",
+                    "Next \u2192",
                     class = "btn-primary btn-lg"
                   )
                 )
@@ -1386,11 +1373,11 @@ ui <- fluidPage(
               style = "text-align: center; padding: 50px;",
               p(
                 icon("check-circle"),
-                tags$strong(" ¡Gracias! Su respuesta ha sido enviada."),
+                tags$strong(" Thank you! Your response has been submitted."),
                 style = "font-size: 1.2em; color: #28a745;"
               ),
               br(),
-              p(style = "color: #6c757d;", "Ahora puede cerrar esta ventana.")
+              p(style = "color: #6c757d;", "You may now close this window.")
             )
           )
         ),
@@ -1406,13 +1393,13 @@ ui <- fluidPage(
               ),
               h4(
                 icon("flag"),
-                " Fin de la Fase 1",
+                " End of Wave 1",
                 style = "color: #856404; margin-top: 0;"
               ),
               p(
-                strong("Nota para investigadores:"),
-                " En el estudio en vivo, la encuesta termina aquí y los participantes ",
-                "serán recontactados para la próxima fase."
+                strong("Note for researchers:"),
+                " In the live study, the survey ends here and participants ",
+                "will be re-contacted for the next wave."
               )
             ),
             hr(),
@@ -1422,7 +1409,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page7_from_11",
-                  "Continuar a la Fase 2 \u2192",
+                  "Continue to Wave 2 \u2192",
                   class = "btn-warning btn-lg"
                 )
               )
@@ -1437,16 +1424,16 @@ ui <- fluidPage(
             radioButtons(
               "attention_check",
               paste(
-                "La agricultura sostenible es un tema importante para muchos mexicanos.",
-                "Queremos asegurarnos de que está leyendo cada pregunta con atención.",
-                "Para confirmar que está leyendo con atención, por favor seleccione 'De acuerdo en parte' a continuación."
+                "Sustainable farming is an important issue for many Mexicans.",
+                "We want to make sure you are reading each question carefully.",
+                "To ensure you are reading each question carefully, please select 'Somewhat agree' below."
               ),
               choices = c(
-                "Totalmente en desacuerdo" = "strongly_disagree",
-                "En desacuerdo en parte" = "somewhat_disagree",
-                "Ni de acuerdo ni en desacuerdo" = "neutral",
-                "De acuerdo en parte" = "somewhat_agree",
-                "Totalmente de acuerdo" = "strongly_agree"
+                "Strongly disagree" = "strongly_disagree",
+                "Somewhat disagree" = "somewhat_disagree",
+                "Neither agree nor disagree" = "neutral",
+                "Somewhat agree" = "somewhat_agree",
+                "Strongly agree" = "strongly_agree"
               ),
               selected = character(0)
             ),
@@ -1457,7 +1444,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page7_from_14",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -1477,7 +1464,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page8_from_7",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -1497,7 +1484,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page9_from_8",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -1512,14 +1499,14 @@ ui <- fluidPage(
             p(
               id = "treatment_intro_msg",
               style = "font-style: italic; color: #555;",
-              "Por favor, lea la información a continuación. Podrá continuar en breve."
+              "Please read the information below. You will be able to continue shortly."
             ),
             uiOutput("treatment_content_ui"),
             hr(),
             p(
               id = "treatment_wait_msg",
               style = "display: none; color: #555; font-style: italic;",
-              "Por favor, no continúe hasta que haya leído la información anterior. Podrá proceder en breve."
+              "Please don't continue until you've read the information above. You will be able to proceed shortly."
             ),
             fluidRow(
               column(
@@ -1527,7 +1514,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page12_from_9",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -1545,7 +1532,7 @@ ui <- fluidPage(
             uiOutput("home_crime_handling_post_ui"),
             sliderInput(
               "morena_crime_rating_post",
-              "En promedio, ¿qué tan bien cree que los municipios gobernados por MORENA, PT o PVEM manejan el crimen?",
+              "On average, how well do you think municipalities governed by MORENA, PT, or PVEM handle crime?",
               min = 0,
               max = 100,
               value = 50
@@ -1554,21 +1541,21 @@ ui <- fluidPage(
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente mal",
+                  "Handles crime extremely poorly",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
                 )
               ),
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente bien",
+                  "Handles crime extremely well",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
                 )
               )
             ),
             sliderInput(
               "coalition_pan_pri_prd_crime_rating_post",
-              "En promedio, ¿qué tan bien cree que los municipios gobernados por PAN, PRI o PRD manejan el crimen?",
+              "On average, how well do you think municipalities governed by PAN, PRI, or PRD handle crime?",
               min = 0,
               max = 100,
               value = 50
@@ -1577,14 +1564,14 @@ ui <- fluidPage(
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente mal",
+                  "Handles crime extremely poorly",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
                 )
               ),
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente bien",
+                  "Handles crime extremely well",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
                 )
               )
@@ -1592,7 +1579,7 @@ ui <- fluidPage(
 
             sliderInput(
               "mc_crime_rating_post",
-              "En promedio, ¿qué tan bien cree que los municipios gobernados por MC manejan el crimen?",
+              "On average, how well do you think municipalities governed by MC handle crime?",
               min = 0,
               max = 100,
               value = 50
@@ -1601,14 +1588,14 @@ ui <- fluidPage(
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente mal",
+                  "Handles crime extremely poorly",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
                 )
               ),
               column(
                 6,
                 p(
-                  "Maneja el crimen extremadamente bien",
+                  "Handles crime extremely well",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
                 )
               )
@@ -1622,7 +1609,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "goto_page13_from_12",
-                  "Siguiente \u2192",
+                  "Next \u2192",
                   class = "btn-primary btn-lg"
                 )
               )
@@ -1636,7 +1623,7 @@ ui <- fluidPage(
             id = "page13",
             sliderInput(
               "turnout_likelihood",
-              "¿Qué tan probable es que vote en las elecciones locales de 2027 en una escala de 0 a 100, donde 0 significa 'definitivamente no votaré' y 100 significa 'ciertamente votaré'?",
+              "How likely are you to vote in the 2027 local elections on a scale of 0 to 100, where 0 means 'definitely won't vote' and 100 means 'certainly will vote'?",
               min = 0,
               max = 100,
               value = 50
@@ -1645,14 +1632,14 @@ ui <- fluidPage(
               column(
                 6,
                 p(
-                  "Definitivamente no votaré",
+                  "Definitely won't vote",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
                 )
               ),
               column(
                 6,
                 p(
-                  "Ciertamente votaré",
+                  "Certainly will vote",
                   style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
                 )
               )
@@ -1661,7 +1648,7 @@ ui <- fluidPage(
             tags$div(
               class = "form-group",
               tags$label(
-                "¿Por cuál partido o partidos tiene intención de votar en la próxima elección municipal? (seleccione todos los que correspondan)"
+                "Which party or parties do you intend to vote for in the next municipal election? (select all that apply)"
               ),
               tags$div(
                 class = "party-radio-group",
@@ -1709,17 +1696,17 @@ ui <- fluidPage(
                 ),
                 party_checkbox_choice(
                   "undecided",
-                  "Indeciso",
+                  "Undecided",
                   group = "vote_intention_2027"
                 ),
                 party_checkbox_choice(
                   "will_not_vote",
-                  "No votaré",
+                  "Will not vote",
                   group = "vote_intention_2027"
                 ),
                 party_checkbox_choice(
                   "other",
-                  "Otro",
+                  "Other",
                   group = "vote_intention_2027"
                 )
               )
@@ -1727,8 +1714,8 @@ ui <- fluidPage(
             hidden(
               textInput(
                 "vote_intention_2027_other",
-                "Por favor, especifique el partido:",
-                placeholder = "Ingrese el nombre del partido..."
+                "Please specify the party:",
+                placeholder = "Enter party name..."
               )
             ),
             hr(),
@@ -1738,7 +1725,7 @@ ui <- fluidPage(
                 align = "right",
                 actionButton(
                   "submit",
-                  "Enviar encuesta",
+                  "Submit Survey",
                   class = "btn-success btn-lg",
                   icon = icon("check")
                 )
@@ -1756,16 +1743,16 @@ server <- function(input, output, session) {
   # Returns "more_than_double", "more", "same", "fewer", "less_than_half", "dont_know", or NA
   make_crime_ranking_grid <- function(home_name, comp_labels, prefix) {
     col_labels <- c(
-      "more_than_double" = "Más del doble",
-      "more" = "Más pero menos del doble",
-      "same" = "Aproximadamente igual",
-      "fewer" = "Menos pero más de la mitad",
-      "less_than_half" = "Menos de la mitad",
-      "dont_know" = "No sé"
+      "more_than_double" = "More than double",
+      "more" = "More but less than double",
+      "same" = "About the same",
+      "fewer" = "Fewer but more than half",
+      "less_than_half" = "Less than half",
+      "dont_know" = "Don't know"
     )
     header_cells <- tagList(
       tags$th(
-        "Municipio",
+        "Municipality",
         style = "text-align: left; padding: 6px 10px; min-width: 160px;"
       ),
       lapply(names(col_labels), function(val) {
@@ -1799,15 +1786,15 @@ server <- function(input, output, session) {
     })
     tagList(
       p(
-        "Comparado con ",
+        "Compared to ",
         strong(home_name),
-        ", ¿cómo cree que es el número de robos en estos municipios?"
+        ", how do you think the number of robberies in these municipalities compares?"
       ),
       div(
         class = "mobile-only",
         p(
           em(
-            "\u21d0 Puede que necesite desplácese hacia los lados para ver todas las opciones \u21d2"
+            "\u21d0 You may need to scroll sideways to see all options \u21d2"
           ),
           style = "text-align: center; color: #555; margin-bottom: 4px;"
         )
@@ -1929,20 +1916,12 @@ server <- function(input, output, session) {
     server = TRUE
   )
 
-  # Populate all-Mexico dropdown for page 18
-  updateSelectizeInput(
-    session,
-    "additional_munis_dropdown",
-    choices = muni_choices,
-    server = TRUE
-  )
-
   # Geocode address and find municipality
   observeEvent(input$geocode_btn, {
     req(input$address)
 
     disable("geocode_btn")
-    updateActionButton(session, "geocode_btn", label = "Buscando...")
+    updateActionButton(session, "geocode_btn", label = "Searching...")
     shinyjs::show("loading_msg")
     output$geocode_result <- renderUI({})
 
@@ -2006,7 +1985,7 @@ server <- function(input, output, session) {
             updateActionButton(
               session,
               "geocode_btn",
-              label = "Buscar",
+              label = "Search",
               icon = NULL
             )
 
@@ -2017,12 +1996,7 @@ server <- function(input, output, session) {
                   "background-color: #d4e9f7; border-radius: 4px;"
                 ),
                 icon("check-circle"),
-                tags$strong(paste(
-                  " Encontrado: ",
-                  muni_name,
-                  ", ",
-                  muni_state
-                )),
+                tags$strong(paste(" Found: ", muni_name, ", ", muni_state)),
                 tags$br()
               )
             })
@@ -2032,7 +2006,7 @@ server <- function(input, output, session) {
             updateActionButton(
               session,
               "geocode_btn",
-              label = "Buscar",
+              label = "Search",
               icon = NULL
             )
 
@@ -2043,7 +2017,7 @@ server <- function(input, output, session) {
                   "background-color: #fff3cd; border-radius: 4px;"
                 ),
                 icon("exclamation-triangle"),
-                " Dirección encontrada, pero no está dentro de nuestra base de datos de municipios."
+                " Address found, but not within our municipality database."
               )
             })
           }
@@ -2053,7 +2027,7 @@ server <- function(input, output, session) {
           updateActionButton(
             session,
             "geocode_btn",
-            label = "Buscar",
+            label = "Search",
             icon = NULL
           )
 
@@ -2061,10 +2035,10 @@ server <- function(input, output, session) {
             tags$div(
               style = "color: #721c24; margin-top: 10px; padding: 10px; background-color: #f8d7da; border-radius: 4px;",
               icon("times-circle"),
-              " No se pudo encontrar esa dirección.",
+              " Could not find that address.",
               tags$br(),
               tags$small(
-                "Por favor, intente simplificar su dirección o verificar la ortografía."
+                "Please try simplifying your address or checking spelling."
               )
             )
           })
@@ -2076,7 +2050,7 @@ server <- function(input, output, session) {
         updateActionButton(
           session,
           "geocode_btn",
-          label = "Buscar",
+          label = "Search",
           icon = NULL
         )
 
@@ -2084,7 +2058,7 @@ server <- function(input, output, session) {
           tags$div(
             style = "color: #721c24; margin-top: 10px; padding: 10px; background-color: #f8d7da; border-radius: 4px;",
             icon("times-circle"),
-            " Error al buscar la dirección."
+            " Error searching for address."
           )
         })
       }
@@ -2355,17 +2329,8 @@ server <- function(input, output, session) {
     }
   })
 
-  # Page 15 → Page 18 (benchmark → additional municipality dropdown)
+  # Page 15 → Page 4 (benchmark → issue importance ranking)
   observeEvent(input$goto_page2_from_15, {
-    current_page(18)
-  })
-
-  # Page 18 → Page 4 (additional municipality dropdown → issue importance ranking)
-  observeEvent(input$goto_page4_from_18, {
-    additional <- input$additional_munis_dropdown
-    if (!is.null(additional) && length(additional) > 0) {
-      selected_benchmarks(unique(c(selected_benchmarks(), additional)))
-    }
     current_page(4)
   })
 
@@ -2506,7 +2471,7 @@ server <- function(input, output, session) {
 
     div(
       style = "background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px;",
-      h5(icon("info-circle"), " Su municipio:"),
+      h5(icon("info-circle"), " Your Home Municipality:"),
       tags$p(
         tags$span(
           home_muni,
@@ -2530,8 +2495,8 @@ server <- function(input, output, session) {
     slot_ranker_ui(
       "issue_importance_ranking",
       items = issue_labels_randomized,
-      source_label = "Problemas disponibles:",
-      slots_label = "Su clasificación (1 = más importante, 5 = menos importante):"
+      source_label = "Available issues:",
+      slots_label = "Your ranking (1 = most important, 5 = least important):"
     )
   })
 
@@ -2556,9 +2521,9 @@ server <- function(input, output, session) {
       sliderInput(
         "home_crime_handling_pre",
         paste0(
-          "¿Qué tan bien cree que el gobierno de ",
+          "How well do you think the government of ",
           muni_name,
-          " maneja el crimen?"
+          " handles crime?"
         ),
         min = 0,
         max = 100,
@@ -2568,14 +2533,14 @@ server <- function(input, output, session) {
         column(
           6,
           p(
-            "Maneja el crimen extremadamente mal",
+            "Handles crime extremely poorly",
             style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
           )
         ),
         column(
           6,
           p(
-            "Maneja el crimen extremadamente bien",
+            "Handles crime extremely well",
             style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
           )
         )
@@ -2598,9 +2563,9 @@ server <- function(input, output, session) {
     numericInput(
       "robbery_estimate",
       paste0(
-        "¿Cuántos robos por cada 100,000 personas cree que fueron reportados en ",
+        "How many robberies per 100,000 people do you think were reported in ",
         muni_name,
-        " en 2025?"
+        " in 2025?"
       ),
       value = NULL,
       min = 0,
@@ -2615,37 +2580,14 @@ server <- function(input, output, session) {
       st_drop_geometry() %>%
       filter(muni_id == found_municipality())
     muni_name <- paste0(muni_data$NOMGEO, ", ", muni_data$NOM_ENT)
-    tagList(
-      p(strong(
-        "Los gobiernos a menudo son evaluados comparándolos con otros. ",
-        "Por ejemplo, se puede evaluar si un gobierno está haciendo un buen trabajo comparándolo con lo que logran otros municipios. ",
-        paste0(
-          "Si pudiera elegir con qué municipios comparar a ",
-          muni_name,
-          ", ¿cuál elegiría de esta lista?"
-        )
-      )),
-      p(
-        "Si tiene en mente algún municipio que no figura en esta lista, tendrá la oportunidad de elegir otros municipios en la página siguiente."
-      )
-    )
-  })
-
-  # Additional municipality instructions text (page 18)
-  output$additional_munis_instructions_text <- renderUI({
-    req(!is.null(found_municipality()))
-    muni_data <- d_geo %>%
-      st_drop_geometry() %>%
-      filter(muni_id == found_municipality())
-    muni_name <- paste0(muni_data$NOMGEO, ", ", muni_data$NOM_ENT)
-    tagList(
-      p(strong(paste0(
-        "Si tiene en mente algún otro municipio con el que le gustaría comparar a ",
+    p(strong(
+      "Governments are often judged by comparing them to others. ",
+      paste0(
+        "If you could choose which municipalities to compare to ",
         muni_name,
-        ", puede buscarlo y seleccionarlo a continuación."
-      ))),
-      p("Si ya eligió todos los municipios que deseaba en la página anterior, puede continuar.")
-    )
+        ", which would you pick?"
+      )
+    ))
   })
 
   # Benchmark municipality checklist (page 15)
@@ -3754,7 +3696,7 @@ server <- function(input, output, session) {
 
     if (!save_success) {
       showNotification(
-        "Error: Su respuesta no pudo ser guardada. Por favor, intente de nuevo o contacte al investigador.",
+        "Error: Your response could not be saved. Please try again or contact the researcher.",
         type = "error",
         duration = NULL
       )
@@ -3773,9 +3715,9 @@ server <- function(input, output, session) {
       sliderInput(
         "home_crime_handling_post",
         paste0(
-          "¿Qué tan bien cree que el gobierno de ",
+          "How well do you think the government of ",
           muni_name,
-          " maneja el crimen?"
+          " handles crime?"
         ),
         min = 0,
         max = 100,
@@ -3785,14 +3727,14 @@ server <- function(input, output, session) {
         column(
           6,
           p(
-            "Maneja el crimen extremadamente mal",
+            "Handles crime extremely poorly",
             style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
           )
         ),
         column(
           6,
           p(
-            "Maneja el crimen extremadamente bien",
+            "Handles crime extremely well",
             style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
           )
         )
@@ -3806,7 +3748,7 @@ server <- function(input, output, session) {
     comp_munis <- active_comp_munis()
     if (is.null(home_id) || is.null(comp_munis)) {
       return(p(em(
-        "Por favor, encuentre primero su municipio de origen para ver las opciones de clasificación."
+        "Please find your home municipality first to see the ranking options."
       )))
     }
     home_info <- d_geo %>% st_drop_geometry() %>% filter(muni_id == home_id)
@@ -3820,7 +3762,7 @@ server <- function(input, output, session) {
     comp_munis <- active_comp_munis()
     if (is.null(home_id) || is.null(comp_munis)) {
       return(p(em(
-        "Por favor, encuentre primero su municipio de origen para ver las opciones de clasificación."
+        "Please find your home municipality first to see the ranking options."
       )))
     }
     home_info <- d_geo %>% st_drop_geometry() %>% filter(muni_id == home_id)
@@ -3838,7 +3780,7 @@ server <- function(input, output, session) {
     comp_munis <- active_comp_munis()
 
     if (is.null(home_id)) {
-      return(p(em("Por favor, encuentre primero su municipio de origen.")))
+      return(p(em("Please find your home municipality first.")))
     }
 
     home_info <- d_geo %>% st_drop_geometry() %>% filter(muni_id == home_id)
@@ -3870,8 +3812,8 @@ server <- function(input, output, session) {
       "PT",
       "MC",
       "MORENA",
-      "Otro",
-      "No\nsé"
+      "Other",
+      "Don't\nknow"
     )
     party_values <- c(
       "pan",
@@ -3886,7 +3828,7 @@ server <- function(input, output, session) {
     )
 
     header_cells <- c(
-      list(tags$th("Municipio")),
+      list(tags$th("Municipality")),
       lapply(party_labels, function(lbl) tags$th(HTML(gsub("\n", "<br>", lbl))))
     )
 
@@ -3908,14 +3850,12 @@ server <- function(input, output, session) {
 
     tagList(
       p(
-        "¿Qué partido o partidos cree que actualmente gobiernan cada uno de los siguientes municipios? (seleccione todos los que correspondan)"
+        "Which party or parties do you believe currently govern each of the following municipalities? (select all that apply)"
       ),
       div(
         class = "mobile-only",
         p(
-          em(
-            "\u21d0 Desplácese hacia los lados para ver todas las opciones \u21d2"
-          ),
+          em("\u21d0 Scroll sideways to see all options \u21d2"),
           style = "text-align: center; color: #555; margin-bottom: 4px;"
         )
       ),
@@ -3935,7 +3875,7 @@ server <- function(input, output, session) {
   output$nearest5_governance_ui <- renderUI({
     nn5 <- nearest5_rv()
     if (is.null(nn5) || nrow(nn5) == 0) {
-      return(p(em("Por favor, encuentre primero su municipio de origen.")))
+      return(p(em("Please find your home municipality first.")))
     }
 
     party_labels <- c(
@@ -3946,8 +3886,8 @@ server <- function(input, output, session) {
       "PT",
       "MC",
       "MORENA",
-      "Otro",
-      "No\nsé"
+      "Other",
+      "Don't\nknow"
     )
     party_values <- c(
       "pan",
@@ -3962,7 +3902,7 @@ server <- function(input, output, session) {
     )
 
     header_cells <- c(
-      list(tags$th("Municipio")),
+      list(tags$th("Municipality")),
       lapply(party_labels, function(lbl) tags$th(HTML(gsub("\n", "<br>", lbl))))
     )
 
@@ -3985,14 +3925,12 @@ server <- function(input, output, session) {
 
     tagList(
       p(
-        "¿Qué partido o partidos cree que actualmente gobiernan cada uno de los siguientes municipios, que están geográficamente cerca de su municipio de origen? (seleccione todos los que correspondan)"
+        "Which party or parties do you believe currently govern each of the following municipalities, which are geographically close to your home municipality? (select all that apply)"
       ),
       div(
         class = "mobile-only",
         p(
-          em(
-            "\u21d0 Desplácese hacia los lados para ver todas las opciones \u21d2"
-          ),
+          em("\u21d0 Scroll sideways to see all options \u21d2"),
           style = "text-align: center; color: #555; margin-bottom: 4px;"
         )
       ),
@@ -4026,22 +3964,22 @@ server <- function(input, output, session) {
       home_rate
     )
     paste0(
-      "Teniendo esto en cuenta, se reportaron ",
+      "Keeping this in mind, there were ",
       format(round(home_rate, 1), nsmall = 1),
-      " robos por cada 100,000 personas en ",
+      " robberies per 100,000 people reported in ",
       home_name,
-      " en 2025."
+      " in 2025."
     )
   })
 
   plain_info_text <- paste0(
-    "Las fuerzas de la policía municipal pueden ayudar a reducir el crimen respondiendo a incidentes delictivos, patrullando las calles, ",
-    "y proporcionando información valiosa a operaciones de seguridad pública de niveles superiores. ",
-    "Las decisiones sobre el financiamiento y la estructura de las fuerzas de la policía municipal están en gran medida en manos de los presidentes municipales."
+    "Municipal police forces can help reduce crime by responding to criminal incidents, patrolling the streets, ",
+    "and supplying valuable information to higher-level public security operations. ",
+    "Decisions about funding and structure of municipal police forces are largely in the hands of municipal presidents."
   )
   plain_info_text_last <- paste0(
-    "Por lo tanto, los gobiernos municipales tienen cierta capacidad para controlar el crimen, aunque muchos factores que conducen al crimen ",
-    "están fuera del control del gobierno."
+    "Therefore, municipal governments have some ability to control crime, although many factors that lead to crime ",
+    "are out of the government\u2019s hands."
   )
 
   output$treatment_content_ui <- renderUI({
@@ -4051,7 +3989,7 @@ server <- function(input, output, session) {
       "control" = tagList(
         uiOutput("treatment_control_ui"),
         p(
-          em("Fuente: WorldClim v2.1 (Fick & Hijmans, 2017)."),
+          em("Source: WorldClim v2.1 (Fick & Hijmans, 2017)."),
           style = "font-size: 0.85em; color: #555; margin-top: 4px;"
         )
       ),
@@ -4071,7 +4009,7 @@ server <- function(input, output, session) {
         plotOutput("treatment_histogram_partisan", height = "350px"),
         p(
           em(
-            "Fuente: Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
+            "Source: Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
           ),
           style = "font-size: 0.85em; color: #555; margin-top: 4px;"
         )
@@ -4107,9 +4045,9 @@ server <- function(input, output, session) {
       pull(precip_mm)
     precip_text <- if (length(home_precip) > 0 && !is.na(home_precip[1])) {
       paste0(
-        "En 2025, ",
+        "In 2025, ",
         home_name,
-        " tuvo una precipitación anual promedio de ",
+        " had an average annual rainfall of ",
         round(home_precip[1]),
         " mm."
       )
@@ -4118,13 +4056,14 @@ server <- function(input, output, session) {
     }
     tagList(
       p(
-        "Los niveles de precipitación varían significativamente entre los municipios mexicanos y están determinados por ",
-        "la geografía, la altitud y los sistemas climáticos regionales. Los patrones climáticos estacionales, las corrientes ",
-        "oceánicas y las tendencias climáticas a largo plazo desempeñan un papel en la cantidad de lluvia que recibe una zona."
+        "Rainfall levels vary significantly across Mexican municipalities and are shaped by ",
+        "geography, elevation, and regional climate systems. Seasonal weather patterns, ocean ",
+        "currents, and long-term climate trends all play a role in determining how much rain ",
+        "an area receives."
       ),
       p(strong(
-        "Por lo tanto, la precipitación en cualquier municipio está determinada principalmente por factores naturales ",
-        "y geográficos."
+        "Therefore, rainfall in any given municipality is primarily determined by natural ",
+        "and geographic factors."
       )),
       if (!is.null(precip_text)) p(strong(precip_text))
     )
@@ -4150,9 +4089,9 @@ server <- function(input, output, session) {
       p(strong(plain_info_text_last)),
       p(strong(change_text)),
       p(paste0(
-        "El siguiente gráfico muestra la tasa de robos por cada 100,000 personas en 2025 para ",
+        "The following graph shows the robbery rate per 100,000 people in 2025 for ",
         home_name,
-        " y una muestra de municipios similares."
+        " and a sample of similar municipalities."
       ))
     )
   })
@@ -4176,9 +4115,9 @@ server <- function(input, output, session) {
       p(strong(plain_info_text_last)),
       p(strong(change_text)),
       p(paste0(
-        "El siguiente gráfico muestra la tasa de robos por cada 100,000 personas en 2025 para ",
+        "The following graph shows the robbery rate per 100,000 people in 2025 for ",
         home_name,
-        " y una muestra de municipios similares gobernados por ",
+        " and a sample of similar municipalities that are governed by ",
         opposite_label,
         "."
       ))
@@ -4199,9 +4138,9 @@ server <- function(input, output, session) {
       p(strong(plain_info_text_last)),
       p(strong(change_text)),
       p(paste0(
-        "El siguiente gráfico muestra la tasa de robos por cada 100,000 personas en 2025 para ",
+        "The following graph shows the robbery rate per 100,000 people in 2025 for ",
         home_name,
-        " y una muestra de municipios similares gobernados por ",
+        " and a sample of similar municipalities that are governed by ",
         same_label,
         "."
       ))
@@ -4211,7 +4150,7 @@ server <- function(input, output, session) {
   build_treatment_plot <- function(plot_df, show_party = FALSE) {
     if (show_party) {
       fill_values <- c(
-        "Su municipio" = "#666666",
+        "Your municipality" = "#666666",
         "MORENA/PVEM/PT" = "#8B0000",
         "PAN/PRI/PRD" = "#00308F",
         "MC" = "#FF5722",
@@ -4222,8 +4161,8 @@ server <- function(input, output, session) {
       ]
     } else {
       fill_values <- c(
-        "Su municipio" = "#666666",
-        "Comparación" = "#E69F00"
+        "Your municipality" = "#666666",
+        "Comparison" = "#E69F00"
       )
     }
     ggplot(
@@ -4265,10 +4204,10 @@ server <- function(input, output, session) {
       mutate(
         rate_per_100k = ifelse(is.na(rate_per_100k), 0, rate_per_100k),
         fill_group = case_when(
-          muni_id == home_id ~ "Su municipio",
+          muni_id == home_id ~ "Your municipality",
           show_party & !is.na(coalition_label) ~ coalition_label,
           show_party ~ "Other",
-          TRUE ~ "Comparación"
+          TRUE ~ "Comparison"
         )
       ) %>%
       arrange(rate_per_100k)
@@ -4330,18 +4269,19 @@ server <- function(input, output, session) {
       pull(NOMGEO)
     tagList(
       p(
-        "Los niveles de precipitación varían significativamente entre los municipios mexicanos y están determinados por ",
-        "la geografía, la altitud y los sistemas climáticos regionales. Los patrones climáticos estacionales, las corrientes ",
-        "oceánicas y las tendencias climáticas a largo plazo desempeñan un papel en la cantidad de lluvia que recibe una zona."
+        "Rainfall levels vary significantly across Mexican municipalities and are shaped by ",
+        "geography, elevation, and regional climate systems. Seasonal weather patterns, ocean ",
+        "currents, and long-term climate trends all play a role in determining how much rain ",
+        "an area receives."
       ),
       p(strong(
-        "Por lo tanto, la precipitación en cualquier municipio está determinada principalmente por factores naturales ",
-        "y geográficos."
+        "Therefore, rainfall in any given municipality is primarily determined by natural ",
+        "and geographic factors."
       )),
       p(paste0(
-        "El siguiente gráfico muestra la precipitación anual promedio en ",
+        "The following graph shows average annual rainfall in ",
         home_name[1],
-        " y una muestra de municipios similares."
+        " and a sample of similar municipalities."
       ))
     )
   })
@@ -4359,8 +4299,8 @@ server <- function(input, output, session) {
         precip_mm = ifelse(is.na(precip_mm), 0, precip_mm),
         fill_group = ifelse(
           muni_id == home_id,
-          "Su municipio",
-          "Comparación"
+          "Your municipality",
+          "Comparison"
         )
       ) %>%
       arrange(precip_mm)
@@ -4375,7 +4315,7 @@ server <- function(input, output, session) {
   }
 
   build_weather_plot <- function(plot_df) {
-    fill_values <- c("Su municipio" = "#0072B2", "Comparación" = "#E69F00")
+    fill_values <- c("Your municipality" = "#0072B2", "Comparison" = "#E69F00")
     ggplot(plot_df, aes(x = municipality, y = precip_mm, fill = fill_group)) +
       geom_col(color = "black", linewidth = 0.5) +
       scale_fill_manual(values = fill_values, name = NULL) +

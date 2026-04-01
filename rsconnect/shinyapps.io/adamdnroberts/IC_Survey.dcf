@@ -5,6 +5,9 @@ account: adamdnroberts
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 16478313
-bundleId: 11685021
+bundleId: 11788465
 url: https://adamdnroberts.shinyapps.io/IC_Survey/
 version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .claude/commands/overleaf-sync.md|.claude/commands/sync-docs.md|.claude/settings.local.json|.claude/skills/overleaf-sync/SKILL.md|.claude/skills/sync-docs/SKILL.md|.lintr|CLAUDE.md|deploy_app.R|Information_Sheet_Incumbent_Comparisons.doc|pull_responses.R|README.md|code|docs|latex|output|references

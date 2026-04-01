@@ -1,77 +1,6 @@
 library(dplyr)
 library(ggplot2)
 
-magar_coalition_full <- read.csv("data/aymu-coalAgg2020s.csv")
-
-# Map state abbreviations to full names
-state_names <- c(
-  "ags" = "Aguascalientes",
-  "bc" = "Baja California",
-  "bcs" = "Baja California Sur",
-  "cam" = "Campeche",
-  "coa" = "Coahuila",
-  "col" = "Colima",
-  "chi" = "Chiapas",
-  "cps" = "Chiapas",
-  "chs" = "Chihuahua",
-  "cua" = "Chihuahua",
-  "cin" = "Ciudad de México",
-  "cdmx" = "Ciudad de México",
-  "df" = "Ciudad de México",
-  "dur" = "Durango",
-  "dgo" = "Durango",
-  "gua" = "Guanajuato",
-  "gue" = "Guerrero",
-  "hid" = "Hidalgo",
-  "hgo" = "Hidalgo",
-  "jal" = "Jalisco",
-  "mex" = "Estado de México",
-  "mic" = "Michoacán",
-  "mor" = "Morelos",
-  "nay" = "Nayarit",
-  "nl" = "Nuevo León",
-  "oax" = "Oaxaca",
-  "pue" = "Puebla",
-  "que" = "Querétaro",
-  "qui" = "Quintana Roo",
-  "san" = "San Luis Potosí",
-  "sin" = "Sinaloa",
-  "son" = "Sonora",
-  "tab" = "Tabasco",
-  "tam" = "Tamaulipas",
-  "tla" = "Tlaxcala",
-  "ver" = "Veracruz",
-  "yuc" = "Yucatán",
-  "zac" = "Zacatecas"
-)
-
-magar_coalition_full <- magar_coalition_full %>%
-  mutate(
-    state_abbr = sub("-.*", "", emm),
-    estado = state_names[state_abbr]
-  )
-
-# Use most recent election year per municipality (covers all 32 states)
-magar2024 <- magar_coalition_full %>%
-  group_by(inegi) %>%
-  slice_max(yr, n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-save(magar2024, file = "data/magar2024_coalitions.Rdata")
-
-# Check for cross-coalition cases (morena + pan/pri/prd in same coalition)
-cross_coalition <- magar2024 %>%
-  filter(grepl("morena", v01) & grepl("pan|pri|prd", v01))
-cat(
-  "Cross-coalition cases (morena with pan/pri/prd):",
-  nrow(cross_coalition),
-  "\n"
-)
-if (nrow(cross_coalition) > 0) {
-  print(cross_coalition %>% select(emm, mun, yr, part))
-}
-
-############################################################################################
 mp_incumbents <- read.csv(
   "C:/Users/adamd/Documents/IC_Survey/data/aymu1989-on.incumbents.csv"
 )
@@ -126,8 +55,6 @@ test <- filter(mp_incumbents, yr == 2022)
 
 test$race.after <- as.character(test$race.after)
 unique(test$race.after)
-
-library(ggplot2)
 
 # 1. Standardize the case so "Term" and "term" are counted together
 test$race.after <- tolower(test$race.after)
