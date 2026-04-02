@@ -1451,6 +1451,7 @@ ui <- fluidPage(
               selected = character(0)
             ),
             hr(),
+            uiOutput("attention_warning"),
             fluidRow(
               column(
                 12,
@@ -1918,6 +1919,30 @@ server <- function(input, output, session) {
     paste(sample(c(letters, 0:9), 8, replace = TRUE), collapse = "")
   )
 
+  # Capture Netquest URL parameters at session start.
+  # Netquest appends these automatically when sending panelists to the survey URL.
+  # Confirm exact parameter names with Netquest before deployment.
+  nq_params <- parseQueryString(isolate(session$clientData$url_search))
+  netquest_pid <- nq_params[["pid"]] # 83-character panelist identifier (required for redirects)
+  nq_age <- nq_params[["age"]] # age from panel profile
+  nq_sex <- nq_params[["sex"]] # sex from panel profile (confirm coding with Netquest)
+  nq_region <- nq_params[["region"]] # state/region code from panel profile
+
+  # Quota full: set SURVEY_QUOTA_FULL=true in .Renviron to redirect all new visitors
+  observe({
+    if (Sys.getenv("SURVEY_QUOTA_FULL") == "true") {
+      ticket <- if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) {
+        netquest_pid
+      } else {
+        ""
+      }
+      shinyjs::runjs(sprintf(
+        'window.location.href = "https://transit.nicequest.com/transit/participation?tp=qf_1&c=ok&ticket=%s"',
+        ticket
+      ))
+    }
+  })
+
   # Define the file path for saving responses (local fallback)
   responses_file <- "data/survey_responses.csv"
 
@@ -2266,7 +2291,7 @@ server <- function(input, output, session) {
 
   # Show appropriate page and scroll to top
   observe({
-    pages <- c(paste0("page", 0:17))
+    pages <- c(paste0("page", 0:18))
     lapply(pages, hide)
     shinyjs::show(paste0("page", current_page()))
     runjs("window.scrollTo(0, 0);")
@@ -2355,6 +2380,18 @@ server <- function(input, output, session) {
     }
   })
 
+  # Screen-out redirect to Netquest
+  observeEvent(current_page(), {
+    if (
+      current_page() == 16 && !is.null(netquest_pid) && nchar(netquest_pid) > 0
+    ) {
+      shinyjs::runjs(sprintf(
+        'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=fo_0&c=ok&ticket=%s"; }, 1500)',
+        netquest_pid
+      ))
+    }
+  })
+
   # Page 15 → Page 18 (benchmark → additional municipality dropdown)
   observeEvent(input$goto_page2_from_15, {
     current_page(18)
@@ -2379,6 +2416,26 @@ server <- function(input, output, session) {
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
   observeEvent(input$goto_page4_from_3, {
+    ranking <- input$practice_ranking
+    if (is.null(ranking) || length(ranking) < 5) {
+      practice_warning_msg(
+        "Por favor, clasifique todos los elementos antes de continuar."
+      )
+      return()
+    }
+    if (ranking[1] != "Radio" || ranking[5] != "Redes sociales") {
+      ticket <- if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) {
+        netquest_pid
+      } else {
+        ""
+      }
+      shinyjs::runjs(sprintf(
+        'window.location.href = "https://transit.nicequest.com/transit/participation?tp=fo_0&c=ok&ticket=%s"',
+        ticket
+      ))
+      return()
+    }
+    practice_warning_msg(NULL)
     current_page(15)
   })
 
@@ -2426,7 +2483,31 @@ server <- function(input, output, session) {
   })
 
   # Page 14 → Page 7 (attention check → governance grid)
+  attention_warning_msg <- reactiveVal(NULL)
+  output$attention_warning <- renderUI({
+    msg <- attention_warning_msg()
+    if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
+  })
   observeEvent(input$goto_page7_from_14, {
+    if (is.null(input$attention_check) || length(input$attention_check) == 0) {
+      attention_warning_msg(
+        "Por favor, seleccione una respuesta antes de continuar."
+      )
+      return()
+    }
+    if (input$attention_check != "somewhat_agree") {
+      ticket <- if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) {
+        netquest_pid
+      } else {
+        ""
+      }
+      shinyjs::runjs(sprintf(
+        'window.location.href = "https://transit.nicequest.com/transit/participation?tp=fo_0&c=ok&ticket=%s"',
+        ticket
+      ))
+      return()
+    }
+    attention_warning_msg(NULL)
     current_page(7)
   })
 
@@ -2642,9 +2723,11 @@ server <- function(input, output, session) {
       p(strong(paste0(
         "Si tiene en mente algún otro municipio con el que le gustaría comparar a ",
         muni_name,
-        ", puede buscarlo y seleccionarlo a continuación."
+        ", puede buscarlo y seleccionarlo a continuación. Usted puede elegir varios."
       ))),
-      p("Si ya eligió todos los municipios que deseaba en la página anterior, puede continuar.")
+      p(
+        "Si ya eligió todos los municipios que deseaba en la página anterior, puede continuar."
+      )
     )
   })
 
@@ -3226,6 +3309,14 @@ server <- function(input, output, session) {
 
     response_df <- data.frame(
       Respondent_ID = respondent_id,
+      Netquest_PID = if (!is.null(netquest_pid)) {
+        netquest_pid
+      } else {
+        NA_character_
+      },
+      NQ_Age = if (!is.null(nq_age)) nq_age else NA_character_,
+      NQ_Sex = if (!is.null(nq_sex)) nq_sex else NA_character_,
+      NQ_Region = if (!is.null(nq_region)) nq_region else NA_character_,
       Found_Municipality = found_muni_name,
       Found_Municipality_ID = found_municipality(),
       Benchmark_Candidate_Municipalities = {
@@ -3762,6 +3853,14 @@ server <- function(input, output, session) {
 
     # Go to thank you page instead of resetting
     current_page(10)
+
+    # Redirect to Netquest complete URL after a brief delay (so thank-you page is visible)
+    if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) {
+      shinyjs::runjs(sprintf(
+        'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=co_0&c=ok&ticket=%s"; }, 2000)',
+        netquest_pid
+      ))
+    }
   })
 
   # --- Wave 2 server outputs ---
