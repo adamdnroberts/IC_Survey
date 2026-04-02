@@ -41,3 +41,6 @@ latex/
 
 #misc scripts
 laer_replication/
+
+# Large cached data
+data/worldclim_cache/
