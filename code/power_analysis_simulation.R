@@ -5,7 +5,7 @@ library(ggrepel)
 
 set.seed(42)
 
-n_reps <- 1000
+n_reps <- 200
 
 # Power analysis for the estimating equation:
 #
@@ -106,21 +106,24 @@ params <- expand.grid(
   sample_n = seq(500, 4500, by = 100)
 )
 
-n_sims     <- nrow(params)
+n_sims <- nrow(params)
 total_reps <- n_sims * n_reps
-done_reps  <- 0
+done_reps <- 0
 
 power_list <- vector("list", n_sims)
 for (j in seq_len(n_sims)) {
   power_list[[j]] <- simulate_power(
-    gamma    = c(0, params$gamma_t2[j], 0, 0),
+    gamma = c(0, params$gamma_t2[j], 0, 0),
     sample_n = params$sample_n[j],
     coef_of_interest = "treatment_factor2:RW"
   )
   done_reps <- done_reps + n_reps
-  cat(sprintf("\r  %d%% complete  (%d / %d reps)",
-              round(100 * done_reps / total_reps),
-              done_reps, total_reps))
+  cat(sprintf(
+    "\r  %d%% complete  (%d / %d reps)",
+    round(100 * done_reps / total_reps),
+    done_reps,
+    total_reps
+  ))
 }
 cat("\n")
 power_results <- bind_rows(power_list)

@@ -5,9 +5,9 @@ library(ggrepel)
 
 set.seed(42)
 
-n_reps           <- 1000
-completion_rate  <- 0.75   # expected survey completion rate; adjust for your attrition estimate
-n_primary_tests  <- 4      # number of interaction hypotheses tested (Bonferroni denominator)
+n_reps <- 100
+completion_rate <- 0.91 # expected survey completion rate; adjust for your attrition estimate
+n_primary_tests <- 7 # number of interaction hypotheses tested (Bonferroni denominator)
 # NOTE: sd_error = 20 is a key sensitivity assumption. If true residual SD is higher
 # (e.g., 25–30 on a 0–100 scale), required N increases substantially.
 
@@ -43,8 +43,8 @@ simulate_power <- function(
   treatment_factor <- factor(treatment)
   n_obs <- length(treatment)
 
-  p_values   <- numeric(n_reps)
-  r2_values  <- numeric(n_reps)
+  p_values <- numeric(n_reps)
+  r2_values <- numeric(n_reps)
   sd_outcomes <- numeric(n_reps)
   sd_RW_vals <- numeric(n_reps)
 
@@ -74,7 +74,7 @@ simulate_power <- function(
     y <- pmin(100, pmax(0, round(y_raw)))
 
     sd_outcomes[i] <- sd(y)
-    sd_RW_vals[i]  <- sd(RW)   # Fixed: original incorrectly used sd(CW) here
+    sd_RW_vals[i] <- sd(RW) # Fixed: original incorrectly used sd(CW) here
 
     fit <- lm.fit(X, y)
     residuals <- fit$residuals
@@ -83,87 +83,86 @@ simulate_power <- function(
     r2_values[i] <- 1 - rss / tss
 
     df_resid <- length(y) - fit$rank
-    sigma2   <- rss / df_resid
-    XtX_inv  <- chol2inv(fit$qr$qr[1:fit$rank, 1:fit$rank, drop = FALSE])
-    se       <- sqrt(diag(XtX_inv) * sigma2)
+    sigma2 <- rss / df_resid
+    XtX_inv <- chol2inv(fit$qr$qr[1:fit$rank, 1:fit$rank, drop = FALSE])
+    se <- sqrt(diag(XtX_inv) * sigma2)
 
-    idx    <- which(colnames(X) == coef_of_interest)
+    idx <- which(colnames(X) == coef_of_interest)
     t_stat <- fit$coefficients[idx] / se[idx]
     p_values[i] <- 2 * pt(abs(t_stat), df_resid, lower.tail = FALSE)
   }
 
   tibble(
-    gamma_t2_rw     = gamma[2],
-    sd_error        = sd_error,
-    alpha_level     = alpha_level,
-    sample_n        = sample_n,
-    power           = mean(p_values < alpha_level),
-    mean_r2         = mean(r2_values),
+    gamma_t2_rw = gamma[2],
+    sd_error = sd_error,
+    alpha_level = alpha_level,
+    sample_n = sample_n,
+    power = mean(p_values < alpha_level),
+    mean_r2 = mean(r2_values),
     mean_sd_outcome = mean(sd_outcomes),
-    sd_RW           = mean(sd_RW_vals)
+    sd_RW = mean(sd_RW_vals)
   )
 }
 
 # ── Simulation grid ───────────────────────────────────────────────────────────
-# Vary effect size, sample size, and alpha level (uncorrected vs Bonferroni).
-# Upper bound on sample_n extended to 6000 so Bonferroni curves reach 80%.
+# Fixed sample size (Wave 2 retained); vary effect size and alpha level.
+# gamma_t2 grid chosen to span Cohen's d ≈ 0.05–0.45.
 
+fixed_n <- 2000
 bonferroni_alpha <- round(0.05 / n_primary_tests, 4)
 
 params <- expand.grid(
-  gamma_t2    = c(2, 3, 4),
-  sample_n    = seq(500, 6000, by = 100),
+  gamma_t2 = seq(0.5, 7, by = 0.2),
   alpha_level = c(0.05, bonferroni_alpha)
 )
 
-n_sims     <- nrow(params)
+n_sims <- nrow(params)
 total_reps <- n_sims * n_reps
-done_reps  <- 0
+done_reps <- 0
 
 power_list <- vector("list", n_sims)
 for (j in seq_len(n_sims)) {
   power_list[[j]] <- simulate_power(
-    gamma       = c(0, params$gamma_t2[j], 0, 0),
-    sample_n    = params$sample_n[j],
+    gamma = c(0, params$gamma_t2[j], 0, 0),
+    sample_n = fixed_n,
     alpha_level = params$alpha_level[j],
     coef_of_interest = "treatment_factor2:RW"
   )
   done_reps <- done_reps + n_reps
-  cat(sprintf("\r  %d%% complete  (%d / %d reps)",
-              round(100 * done_reps / total_reps),
-              done_reps, total_reps))
+  cat(sprintf(
+    "\r  %d%% complete  (%d / %d reps)",
+    round(100 * done_reps / total_reps),
+    done_reps,
+    total_reps
+  ))
 }
 cat("\n")
 power_results <- bind_rows(power_list)
 
-# Cohen's d approximation for the T2 x RW interaction (using corrected sd_RW)
+# Cohen's d (continuous — used as x-axis)
 power_results <- power_results %>%
   mutate(
-    cohens_d_raw = gamma_t2_rw * sd_RW / mean_sd_outcome,
-    cohens_d     = round(cohens_d_raw * 20) / 20,
-    alpha_label  = ifelse(
+    cohens_d = gamma_t2_rw * sd_RW / mean_sd_outcome,
+    alpha_label = ifelse(
       alpha_level == 0.05,
       "α = 0.05 (uncorrected)",
       sprintf("α = %.4f (Bonferroni, %d tests)", alpha_level, n_primary_tests)
     )
   )
 
-# ── 80% power crossings ───────────────────────────────────────────────────────
+# ── Minimum detectable effect size (MDE) at 80% power ────────────────────────
 
-crossings <- power_results %>%
-  group_by(gamma_t2_rw, alpha_level, alpha_label) %>%
-  arrange(sample_n) %>%
+mde <- power_results %>%
+  group_by(alpha_level, alpha_label) %>%
+  arrange(cohens_d) %>%
   mutate(
     next_power = lead(power),
-    next_n     = lead(sample_n)
+    next_d = lead(cohens_d)
   ) %>%
-  filter(
-    (power < 0.8 & next_power >= 0.8) |
-    (power > 0.8 & next_power <= 0.8)
-  ) %>%
+  filter(power < 0.8 & next_power >= 0.8) %>%
   mutate(
-    n_at_80       = sample_n + (0.8 - power) * (next_n - sample_n) / (next_power - power),
-    recruitment_n = ceiling(n_at_80 / completion_rate)
+    mde_d = cohens_d +
+      (0.8 - power) * (next_d - cohens_d) / (next_power - power)
   ) %>%
   slice(1) %>%
   ungroup() %>%
@@ -173,42 +172,52 @@ crossings <- power_results %>%
 
 power_line_graph <- ggplot(
   power_results,
-  aes(x = sample_n, y = power, color = as.factor(cohens_d))
+  aes(x = cohens_d, y = power, color = alpha_label, linetype = alpha_label)
 ) +
-  geom_line() +
-  geom_hline(yintercept = 0.8, linetype = "dashed", color = "red") +
+  geom_line(linewidth = 0.8) +
+  geom_hline(yintercept = 0.8, linetype = "dashed", color = "grey40") +
   geom_point(
-    data = crossings,
-    aes(x = n_at_80, y = power_80),
-    size = 3, shape = 21, fill = "white"
+    data = mde,
+    aes(x = mde_d, y = power_80),
+    size = 3,
+    shape = 21,
+    fill = "white",
+    show.legend = FALSE
   ) +
   geom_text_repel(
-    data = crossings,
-    aes(
-      x = n_at_80, y = power_80,
-      label = sprintf("N = %.0f\n(recruit %.0f)", n_at_80, recruitment_n)
-    ),
-    nudge_y = 0.06, size = 2.8, show.legend = FALSE
+    data = mde,
+    aes(x = mde_d, y = power_80, label = sprintf("MDE = %.2f", mde_d)),
+    nudge_y = 0.06,
+    size = 3,
+    show.legend = FALSE
   ) +
-  facet_wrap(~ alpha_label) +
+  scale_x_continuous(breaks = seq(0, 0.5, by = 0.05)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1), limits = c(0, 1)) +
   labs(
-    color   = "Cohen's d (T2 × RW)",
-    x       = "Completed Responses (Analysis N)",
-    y       = "Power",
-    title   = "Power analysis: T2 × RW interaction (gamma_2)",
+    color = NULL,
+    linetype = NULL,
+    x = "Effect Size (Cohen's d)",
+    y = "Power",
+    title = sprintf(
+      "Power analysis: T2 × RW interaction (N = %s Wave 2 completions)",
+      format(fixed_n, big.mark = ",")
+    ),
     caption = sprintf(
-      "Recruitment N assumes %.0f%% completion rate. Bonferroni for %d interaction tests.",
-      completion_rate * 100, n_primary_tests
+      "N = %s corresponds to %.0f%% recontact rate from %s Wave 1 respondents. Bonferroni for %d interaction tests.",
+      format(fixed_n, big.mark = ","),
+      100 * fixed_n / 2180,
+      format(2180, big.mark = ","),
+      n_primary_tests
     )
   ) +
   theme_classic() +
-  theme(strip.background = element_blank(), strip.text = element_text(size = 9))
+  theme(legend.position = "bottom")
 
 print(power_line_graph)
 
 ggsave(
   "latex/images/power_graph_v2.pdf",
-  plot   = power_line_graph,
-  width  = 10,
+  plot = power_line_graph,
+  width = 10,
   height = 4.5
 )

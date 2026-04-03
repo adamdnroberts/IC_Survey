@@ -56,11 +56,6 @@ top20_munis <- d_geo %>%
   pull(muni_id)
 
 # Filter to large cities (200k+ population) and state capitals
-large_munis <- d_geo %>%
-  st_drop_geometry() %>%
-  filter(!is.na(POB_TOTAL) & (POB_TOTAL >= 200000 | is_capital)) %>%
-  pull(muni_id)
-
 # Load governing party data from Magar 2024 coalition dataset (all states exc. Oaxaca, CDMX, Durango, Veracruz)
 load("data/magar2024_coalitions.Rdata") # loads magar2024
 all_parties <- magar2024 %>%
@@ -1754,15 +1749,14 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   # Helper function to find municipality's robbery category from bucket inputs
-  # Returns "more_than_double", "more", "same", "fewer", "less_than_half", "dont_know", or NA
+  # Returns "more_than_double", "more", "same", "fewer", "less_than_half", or NA
   make_crime_ranking_grid <- function(home_name, comp_labels, prefix) {
     col_labels <- c(
       "more_than_double" = "Más del doble",
       "more" = "Más pero menos del doble",
       "same" = "Aproximadamente igual",
       "fewer" = "Menos pero más de la mitad",
-      "less_than_half" = "Menos de la mitad",
-      "dont_know" = "No sé"
+      "less_than_half" = "Menos de la mitad"
     )
     header_cells <- tagList(
       tags$th(
@@ -1927,6 +1921,7 @@ server <- function(input, output, session) {
   nq_age <- nq_params[["age"]] # age from panel profile
   nq_sex <- nq_params[["sex"]] # sex from panel profile (confirm coding with Netquest)
   nq_region <- nq_params[["region"]] # state/region code from panel profile
+  nq_sel <- nq_params[["sel"]] # socio-economic level code from panel profile
 
   # Quota full: set SURVEY_QUOTA_FULL=true in .Renviron to redirect all new visitors
   observe({
@@ -2146,7 +2141,6 @@ server <- function(input, output, session) {
       filter(
         governing_party %in% opposite_coalition,
         muni_id != home_id,
-        muni_id %in% large_munis,
         !is.na(POB_TOTAL),
         !is.na(area_km2)
       ) %>%
@@ -2165,7 +2159,6 @@ server <- function(input, output, session) {
         st_drop_geometry() %>%
         filter(
           muni_id != home_id,
-          muni_id %in% large_munis,
           !is.na(POB_TOTAL),
           !is.na(area_km2)
         ) %>%
@@ -2194,7 +2187,6 @@ server <- function(input, output, session) {
       st_drop_geometry() %>%
       filter(
         muni_id != home_id,
-        muni_id %in% large_munis,
         !is.na(POB_TOTAL),
         !is.na(area_km2)
       ) %>%
@@ -2231,7 +2223,6 @@ server <- function(input, output, session) {
       filter(
         governing_party %in% same_coalition,
         muni_id != home_id,
-        muni_id %in% large_munis,
         !is.na(POB_TOTAL),
         !is.na(area_km2)
       ) %>%
@@ -2250,7 +2241,6 @@ server <- function(input, output, session) {
         st_drop_geometry() %>%
         filter(
           muni_id != home_id,
-          muni_id %in% large_munis,
           !is.na(POB_TOTAL),
           !is.na(area_km2)
         ) %>%
@@ -2365,15 +2355,19 @@ server <- function(input, output, session) {
     current_page(1)
   })
 
-  # Page 1 → Page 3 (Practice ranking), or Page 16 (screen-out) if home muni has no main-party government
+  # Page 1 → Page 3 (Practice ranking), or Page 16 (screen-out) if home muni is in an
+  # excluded state (CDMX=09, Durango=10, Oaxaca=20, Veracruz=30) or has no main-party government
+  excluded_state_codes <- c("09", "10", "20", "30")
+
   observeEvent(input$goto_page2_from_1, {
     home_id <- found_municipality()
+    state_code <- substr(home_id, 1, 2)
     home_party <- d_geo %>%
       st_drop_geometry() %>%
       filter(muni_id == home_id) %>%
       pull(governing_party) %>%
       `[`(1)
-    if (is.na(home_party)) {
+    if (state_code %in% excluded_state_codes || is.na(home_party)) {
       current_page(16)
     } else {
       current_page(3)
@@ -3317,6 +3311,7 @@ server <- function(input, output, session) {
       NQ_Age = if (!is.null(nq_age)) nq_age else NA_character_,
       NQ_Sex = if (!is.null(nq_sex)) nq_sex else NA_character_,
       NQ_Region = if (!is.null(nq_region)) nq_region else NA_character_,
+      NQ_SEL = if (!is.null(nq_sel)) nq_sel else NA_character_,
       Found_Municipality = found_muni_name,
       Found_Municipality_ID = found_municipality(),
       Benchmark_Candidate_Municipalities = {
