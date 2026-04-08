@@ -386,28 +386,21 @@ ui <- fluidPage(
         background-color: #5C3317;
         color: #ffffff;
       }
-      /* Page 5, 20 & 6 sliders: grayed out until touched */
-      #page5 .shiny-input-container.slider-untouched .irs-line,
-      #page5 .shiny-input-container.slider-untouched .irs-bar,
-      #page5 .shiny-input-container.slider-untouched .irs-bar-edge,
-      #page5 .shiny-input-container.slider-untouched .irs-handle,
-      #page5 .shiny-input-container.slider-untouched .irs-single,
-      #page5 .shiny-input-container.slider-untouched .irs-min,
-      #page5 .shiny-input-container.slider-untouched .irs-max,
-      #page20 .shiny-input-container.slider-untouched .irs-line,
-      #page20 .shiny-input-container.slider-untouched .irs-bar,
-      #page20 .shiny-input-container.slider-untouched .irs-bar-edge,
-      #page20 .shiny-input-container.slider-untouched .irs-handle,
-      #page20 .shiny-input-container.slider-untouched .irs-single,
-      #page20 .shiny-input-container.slider-untouched .irs-min,
-      #page20 .shiny-input-container.slider-untouched .irs-max,
-      #page6 .shiny-input-container.slider-untouched .irs-line,
-      #page6 .shiny-input-container.slider-untouched .irs-bar,
-      #page6 .shiny-input-container.slider-untouched .irs-bar-edge,
-      #page6 .shiny-input-container.slider-untouched .irs-handle,
-      #page6 .shiny-input-container.slider-untouched .irs-single,
-      #page6 .shiny-input-container.slider-untouched .irs-min,
-      #page6 .shiny-input-container.slider-untouched .irs-max {
+      /* Page 9 & 11 sliders: grayed out until touched */
+      #page9 .shiny-input-container.slider-untouched .irs-line,
+      #page9 .shiny-input-container.slider-untouched .irs-bar,
+      #page9 .shiny-input-container.slider-untouched .irs-bar-edge,
+      #page9 .shiny-input-container.slider-untouched .irs-handle,
+      #page9 .shiny-input-container.slider-untouched .irs-single,
+      #page9 .shiny-input-container.slider-untouched .irs-min,
+      #page9 .shiny-input-container.slider-untouched .irs-max,
+      #page11 .shiny-input-container.slider-untouched .irs-line,
+      #page11 .shiny-input-container.slider-untouched .irs-bar,
+      #page11 .shiny-input-container.slider-untouched .irs-bar-edge,
+      #page11 .shiny-input-container.slider-untouched .irs-handle,
+      #page11 .shiny-input-container.slider-untouched .irs-single,
+      #page11 .shiny-input-container.slider-untouched .irs-min,
+      #page11 .shiny-input-container.slider-untouched .irs-max {
         opacity: 0.35;
       }
       /* Governance grid table */
@@ -445,7 +438,7 @@ ui <- fluidPage(
       .governance-grid tr:hover {
         background-color: #f8f9fa;
       }
-      .governance-grid input[type='checkbox'] {
+      .governance-grid input[type='radio'] {
         margin: 0;
         cursor: pointer;
         width: 16px;
@@ -545,22 +538,9 @@ ui <- fluidPage(
           $('#geocode_btn').click();
         }
       });
-      $(document).on('change', '#nearest5_governance_grid input.governance-checkbox', function() {
+      $(document).on('change', '#nearest3_governance_grid input.governance-radio', function() {
         var inputName = $(this).data('input-name');
-        var val = $(this).val();
-        var rowBoxes = '#nearest5_governance_grid input.governance-checkbox[data-input-name=\"' + inputName + '\"]';
-        if ($(this).is(':checked')) {
-          if (val === 'dont_know') {
-            $(rowBoxes).not(this).prop('checked', false);
-          } else {
-            $(rowBoxes + '[value=\"dont_know\"]').prop('checked', false);
-          }
-        }
-        var checked = [];
-        $(rowBoxes + ':checked').each(function() {
-          checked.push($(this).val());
-        });
-        Shiny.setInputValue(inputName, checked.length > 0 ? checked : null);
+        Shiny.setInputValue(inputName, $(this).val(), {priority: 'event'});
       });
       $(document).on('change', 'input.party-checkbox-input', function() {
         var group = $(this).data('group');
@@ -593,59 +573,41 @@ ui <- fluidPage(
 
       /* Track user interaction with sliders that require explicit interaction */
       var sliderTouched = {};
-      var page5ListenActive = false;
-      var page20ListenActive = false;
-      var page5SliderIds = ['home_crime_handling_pre', 'morena_crime_rating',
+      var page9ListenActive = false;
+      var page9SliderIds = ['home_crime_handling_pre', 'morena_crime_rating',
                             'coalition_pan_pri_prd_crime_rating', 'mc_crime_rating'];
-      var page20SliderIds = ['turnout_likelihood_pre'];
-      var page6SliderIds = ['left_right_scale'];
-      var page6ListenActive = false;
+      var page11SliderIds = ['left_right_scale'];
+      var page11ListenActive = false;
 
-      Shiny.addCustomMessageHandler('initPage5Sliders', function(msg) {
-        page5ListenActive = false;
+      Shiny.addCustomMessageHandler('initPage9Sliders', function(msg) {
+        page9ListenActive = false;
         setTimeout(function() {
-          $('#page5 .shiny-input-container:has(.js-range-slider)').each(function() {
+          $('#page9 .shiny-input-container:has(.js-range-slider)').each(function() {
             var id = $(this).find('.js-range-slider').attr('id');
             if (id && !sliderTouched[id]) $(this).addClass('slider-untouched');
           });
-          page5ListenActive = true;
+          page9ListenActive = true;
         }, 300);
       });
 
-      Shiny.addCustomMessageHandler('initPage20Sliders', function(msg) {
-        page20ListenActive = false;
+      Shiny.addCustomMessageHandler('initPage11Sliders', function(msg) {
+        page11ListenActive = false;
         setTimeout(function() {
-          $('#page20 .shiny-input-container:has(.js-range-slider)').each(function() {
+          $('#page11 .shiny-input-container:has(.js-range-slider)').each(function() {
             var id = $(this).find('.js-range-slider').attr('id');
             if (id && !sliderTouched[id]) $(this).addClass('slider-untouched');
           });
-          page20ListenActive = true;
-        }, 300);
-      });
-
-      Shiny.addCustomMessageHandler('initPage6Sliders', function(msg) {
-        page6ListenActive = false;
-        setTimeout(function() {
-          $('#page6 .shiny-input-container:has(.js-range-slider)').each(function() {
-            var id = $(this).find('.js-range-slider').attr('id');
-            if (id && !sliderTouched[id]) $(this).addClass('slider-untouched');
-          });
-          page6ListenActive = true;
+          page11ListenActive = true;
         }, 300);
       });
 
       $(document).on('shiny:inputchanged', function(e) {
-        if (page5ListenActive && page5SliderIds.indexOf(e.name) !== -1) {
+        if (page9ListenActive && page9SliderIds.indexOf(e.name) !== -1) {
           sliderTouched[e.name] = true;
           $('#' + e.name).closest('.shiny-input-container').removeClass('slider-untouched');
           Shiny.setInputValue('slider_touched_' + e.name, true);
         }
-        if (page20ListenActive && page20SliderIds.indexOf(e.name) !== -1) {
-          sliderTouched[e.name] = true;
-          $('#' + e.name).closest('.shiny-input-container').removeClass('slider-untouched');
-          Shiny.setInputValue('slider_touched_' + e.name, true);
-        }
-        if (page6ListenActive && page6SliderIds.indexOf(e.name) !== -1) {
+        if (page11ListenActive && page11SliderIds.indexOf(e.name) !== -1) {
           sliderTouched[e.name] = true;
           $('#' + e.name).closest('.shiny-input-container').removeClass('slider-untouched');
           Shiny.setInputValue('slider_touched_' + e.name, true);
@@ -769,7 +731,7 @@ ui <- fluidPage(
                   ))
                 ),
                 actionButton(
-                  "goto_page1_from_0",
+                  "page0_next",
                   "Entiendo, Continuar \u2192",
                   class = "btn-primary btn-lg"
                 )
@@ -855,7 +817,7 @@ ui <- fluidPage(
                 12,
                 align = "right",
                 actionButton(
-                  "goto_page2_from_1",
+                  "page1_next",
                   "Siguiente \u2192",
                   class = "btn-primary btn-lg"
                 )
@@ -864,21 +826,21 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 15: Benchmark Municipality Selection
+        # Page 4: Benchmark Municipality Selection
         hidden(
           div(
-            id = "page15",
+            id = "page4",
             uiOutput("benchmark_instructions_text"),
             hr(),
             uiOutput("benchmark_list"),
             hr(),
-            uiOutput("page15_warning"),
+            uiOutput("page4_warning"),
             fluidRow(
               column(
                 12,
                 align = "right",
                 actionButton(
-                  "goto_page2_from_15",
+                  "page4_next",
                   "Siguiente \u2192",
                   class = "btn-primary btn-lg"
                 )
@@ -887,10 +849,10 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 18: Additional municipality selection (all-Mexico dropdown)
+        # Page 5: Additional municipality selection (all-Mexico dropdown)
         hidden(
           div(
-            id = "page18",
+            id = "page5",
             uiOutput("additional_munis_instructions_text"),
             selectizeInput(
               "additional_munis_dropdown",
@@ -907,7 +869,7 @@ ui <- fluidPage(
                 12,
                 align = "right",
                 actionButton(
-                  "goto_page4_from_18",
+                  "page5_next",
                   "Siguiente \u2192",
                   class = "btn-primary btn-lg"
                 )
@@ -916,10 +878,10 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 16: Screen-out (home municipality not governed by a main party)
+        # Page 2: Screen-out (home municipality not governed by a main party)
         hidden(
           div(
-            id = "page16",
+            id = "page2",
             br(),
             br(),
             br(),
@@ -940,16 +902,13 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 3: Practice Drag-and-Drop
+        # Page 3: Attention Check
         hidden(
           div(
             id = "page3",
             p(
-              "La siguiente es una lista de fuentes de noticias que puede reorganizar arrastrando y soltando cada elemento."
-            ),
-            p(
-              "Para asegurarnos de que está leyendo con atención, por favor clasifíquelas en este orden: ",
-              "Radio primero, Sitios de noticias en línea segundo, Televisión tercero, Periódicos impresos cuarto, y Redes sociales último."
+              "A continuación encontrará una lista de fuentes de noticias. Por favor, ordénelas de la siguiente manera: ",
+              "Radio en primer lugar, Sitios de noticias en línea en segundo, Televisión en tercero, Periódicos impresos en cuarto, y Redes sociales en quinto lugar."
             ),
             tags$hr(),
             slot_ranker_ui(
@@ -971,7 +930,7 @@ ui <- fluidPage(
                 12,
                 align = "right",
                 actionButton(
-                  "goto_page4_from_3",
+                  "page3_next",
                   "Siguiente \u2192",
                   class = "btn-primary btn-lg"
                 )
@@ -980,10 +939,10 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 19: Issue Importance Ranking
+        # Page 6: Issue Importance Ranking
         hidden(
           div(
-            id = "page19",
+            id = "page6",
 
             # Importance of Issues, language loosely based on Mitofsky
             # public opinion survey (see Google Drive reference)
@@ -1002,7 +961,7 @@ ui <- fluidPage(
                 12,
                 align = "right",
                 actionButton(
-                  "goto_page4_from_issues",
+                  "page6_next",
                   "Siguiente \u2192",
                   class = "btn-primary btn-lg"
                 )
@@ -1011,10 +970,10 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 4: Political Views & Municipal Governance
+        # Page 7: Political Views & Municipal Governance
         hidden(
           div(
-            id = "page4",
+            id = "page7",
 
             tags$div(
               class = "form-group",
@@ -1070,13 +1029,13 @@ ui <- fluidPage(
             uiOutput("mp_name_question_ui"),
 
             hr(),
-            uiOutput("page4_warning"),
+            uiOutput("page7_warning"),
             fluidRow(
               column(
                 12,
                 align = "right",
                 actionButton(
-                  "goto_page20_from_4",
+                  "page7_next",
                   "Siguiente \u2192",
                   class = "btn-primary btn-lg"
                 )
@@ -1085,41 +1044,15 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 20: Turnout & Vote Intention
+        # Page 8: Vote Intention
         hidden(
           div(
-            id = "page20",
-
-            sliderInput(
-              "turnout_likelihood_pre",
-              "\u00bfQu\u00e9 tan probable es que vote en las elecciones locales de 2027 en una escala de 0 a 100, donde 0 significa 'definitivamente no votar\u00e9' y 100 significa 'ciertamente votar\u00e9'?",
-              min = 0,
-              max = 100,
-              value = 50
-            ),
-            fluidRow(
-              column(
-                6,
-                p(
-                  "Definitivamente no votar\u00e9",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
-                )
-              ),
-              column(
-                6,
-                p(
-                  "Ciertamente votar\u00e9",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
-                )
-              )
-            ),
-
-            br(),
+            id = "page8",
 
             tags$div(
               class = "form-group",
               tags$label(
-                "Si tuviera que votar, \u00bfpor cu\u00e1l partido o partidos votar\u00eda en la pr\u00f3xima elecci\u00f3n municipal? (seleccione todos los que correspondan)"
+                "Si tuviera que votar, \u00bfpor cu\u00e1l partido o partidos votar\u00eda en las elecciones municipales de 2027? (seleccione todos los que correspondan)"
               ),
               tags$div(
                 class = "party-radio-group",
@@ -1181,13 +1114,13 @@ ui <- fluidPage(
             ),
 
             hr(),
-            uiOutput("page20_warning"),
+            uiOutput("page8_warning"),
             fluidRow(
               column(
                 12,
                 align = "right",
                 actionButton(
-                  "goto_page5_from_20",
+                  "page8_next",
                   "Siguiente \u2192",
                   class = "btn-primary btn-lg"
                 )
@@ -1196,97 +1129,66 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 5: Your Municipality's Performance
+        # Page 9: Your Municipality's Performance
         hidden(
           div(
-            id = "page5",
+            id = "page9",
 
             p(strong(
-              "Las siguientes preguntas le pedir\u00e1n que eval\u00fae c\u00f3mo ciertos municipios y partidos \u201cmanejan\u201d la delincuencia no violenta, como los robos. \u201cManejar la delincuencia\u201d aqu\u00ed se refiere a los esfuerzos del gobierno para prevenir el crimen, hacer cumplir la ley y garantizar la seguridad p\u00fablica."
+              "Las siguientes preguntas le pedir\u00e1n que eval\u00fae c\u00f3mo ciertos municipios y partidos \u201cmanejan\u201d la delincuencia no violenta, como los robos. \u201cManejar la delincuencia\u201d aqu\u00ed se refiere a los esfuerzos del gobierno para prevenir la delincuencia, hacer cumplir la ley y garantizar la seguridad p\u00fablica."
             )),
 
             uiOutput("home_crime_handling_pre_ui"),
 
+            p(
+              "En promedio, \u00bfqu\u00e9 tan bien cree que los gobiernos municipales de los siguientes partidos y coaliciones manejan la delincuencia?"
+            ),
+            fluidRow(
+              column(
+                6,
+                p(
+                  "0 = Maneja la delincuencia extremadamente mal",
+                  style = "color: #6c757d; font-size: 0.85em;"
+                )
+              ),
+              column(
+                6,
+                p(
+                  "100 = Maneja la delincuencia extremadamente bien",
+                  style = "color: #6c757d; font-size: 0.85em; text-align: right;"
+                )
+              )
+            ),
             sliderInput(
               "morena_crime_rating",
-              "En promedio, ¿qué tan bien cree que los gobiernos municipales liderados por Sigamos Haciendo Historia (MORENA, PT o PVEM) manejan la delincuencia?",
+              "Sigamos Haciendo Historia (MORENA/PT/PVEM)",
               min = 0,
               max = 100,
               value = 50
             ),
-            fluidRow(
-              column(
-                6,
-                p(
-                  "Maneja el crimen extremadamente mal",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
-                )
-              ),
-              column(
-                6,
-                p(
-                  "Maneja el crimen extremadamente bien",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
-                )
-              )
-            ),
-
             sliderInput(
               "coalition_pan_pri_prd_crime_rating",
-              "En promedio, ¿qué tan bien cree que los gobiernos municipales liderados por Fuerza y Corazón por México (PAN, PRI o PRD) manejan el crimen?",
+              "Fuerza y Coraz\u00f3n por M\u00e9xico (PAN/PRI/PRD)",
               min = 0,
               max = 100,
               value = 50
             ),
-            fluidRow(
-              column(
-                6,
-                p(
-                  "Maneja el crimen extremadamente mal",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
-                )
-              ),
-              column(
-                6,
-                p(
-                  "Maneja el crimen extremadamente bien",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
-                )
-              )
-            ),
-
             sliderInput(
               "mc_crime_rating",
-              "En promedio, ¿qué tan bien cree que los gobiernos municipales liderados por MC manejan el crimen?",
+              "MC (Movimiento Ciudadano)",
               min = 0,
               max = 100,
               value = 50
-            ),
-            fluidRow(
-              column(
-                6,
-                p(
-                  "Maneja el crimen extremadamente mal",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
-                )
-              ),
-              column(
-                6,
-                p(
-                  "Maneja el crimen extremadamente bien",
-                  style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
-                )
-              )
             ),
 
             hr(),
-            uiOutput("page5_warning"),
+            uiOutput("page9_warning"),
             fluidRow(
               column(
                 12,
                 align = "right",
                 actionButton(
-                  "goto_page6_from_5",
+                  "page9_next",
                   "Siguiente \u2192",
                   class = "btn-primary btn-lg"
                 )
@@ -1295,25 +1197,25 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 17: Robbery estimate
+        # Page 10: Robbery estimate
         hidden(
           div(
-            id = "page17",
+            id = "page10",
             p(
               "En 2025,",
               strong(
-                "la mitad de todos los municipios on México tuvo menos de 79 robos por cada 100,000 personas, y la otra mitad tuvo más."
+                "la mitad de todos los municipios en México tuvo menos de 79 robos por cada 100,000 personas, y la otra mitad tuvo más."
               )
             ),
             uiOutput("robbery_estimate_ui"),
             hr(),
-            uiOutput("page17_warning"),
+            uiOutput("page10_warning"),
             fluidRow(
               column(
                 12,
                 align = "right",
                 actionButton(
-                  "goto_page6_from_17",
+                  "page10_next",
                   "Siguiente \u2192",
                   class = "btn-primary btn-lg"
                 )
@@ -1322,10 +1224,10 @@ ui <- fluidPage(
           )
         ),
 
-        # Page 6: About You
+        # Page 11: About You
         hidden(
           div(
-            id = "page6",
+            id = "page11",
 
             uiOutput("nearest5_governance_ui"),
 
@@ -1333,8 +1235,7 @@ ui <- fluidPage(
 
             sliderInput(
               "left_right_scale",
-              "En política, a veces se habla de ser 'izquierda' o 'derecha' en una escala ideológica, donde más a la derecha significa más conservador.
-              ¿Dónde se ubicaría usted en esta escala?",
+              "En política, a veces se habla de ser 'izquierda' o 'derecha' en una escala ideológica, donde más a la derecha significa más conservador. ¿Dónde se ubicaría usted en esta escala?",
               min = 0,
               max = 10,
               value = 5,
@@ -1358,13 +1259,13 @@ ui <- fluidPage(
             ),
 
             hr(),
-            uiOutput("page6_warning"),
+            uiOutput("page11_warning"),
             fluidRow(
               column(
                 12,
                 align = "right",
                 actionButton(
-                  "goto_page11_from_6",
+                  "page11_submit",
                   "Enviar encuesta",
                   class = "btn-success btn-lg",
                   icon = icon("check")
@@ -1492,10 +1393,10 @@ ui <- fluidPage(
           )
         }, # end if (FALSE)
 
-        # Page 10: Thank you screen
+        # Page 12: Thank you screen
         hidden(
           div(
-            id = "page10",
+            id = "page12",
             br(),
             br(),
             br(),
@@ -1538,14 +1439,24 @@ QUOTA_SEX <- c("1" = 1067L, "2" = 1113L)
 # Age bracket helper — maps raw Netquest age value to bracket label
 age_bracket <- function(age_val) {
   age <- suppressWarnings(as.integer(age_val))
-  if (is.na(age) || length(age) == 0) return(NA_character_)
-  if (age >= 18 && age <= 24) "18-24"
-  else if (age >= 25 && age <= 34) "25-34"
-  else if (age >= 35 && age <= 44) "35-44"
-  else if (age >= 45 && age <= 54) "45-54"
-  else if (age >= 55 && age <= 64) "55-64"
-  else if (age >= 65) "65+"
-  else NA_character_
+  if (is.na(age) || length(age) == 0) {
+    return(NA_character_)
+  }
+  if (age >= 18 && age <= 24) {
+    "18-24"
+  } else if (age >= 25 && age <= 34) {
+    "25-34"
+  } else if (age >= 35 && age <= 44) {
+    "35-44"
+  } else if (age >= 45 && age <= 54) {
+    "45-54"
+  } else if (age >= 55 && age <= 64) {
+    "55-64"
+  } else if (age >= 65) {
+    "65+"
+  } else {
+    NA_character_
+  }
 }
 
 # Age targets (INEGI 2020 18+ distribution, eligible states only)
@@ -1556,7 +1467,7 @@ QUOTA_AGE <- c(
   "35-44" = 441L,
   "45-54" = 371L,
   "55-64" = 255L,
-  "65+"   = 245L
+  "65+" = 245L
 )
 
 # SEL targets (AMAI NSE, ENIGH 2022: AB=7.3%, C+=12.0%, C=15.3%, C-=16.4%,
@@ -1581,111 +1492,47 @@ QUOTA_S3_KEY <- "quota_counts/wave1_quota_counts.json"
 
 .quota_empty_counts <- function() {
   list(
-    sex    = as.list(setNames(rep(0L, length(QUOTA_SEX)),    names(QUOTA_SEX))),
-    age    = as.list(setNames(rep(0L, length(QUOTA_AGE)),    names(QUOTA_AGE))),
-    sel    = as.list(setNames(rep(0L, length(QUOTA_SEL)),    names(QUOTA_SEL))),
-    region = as.list(setNames(rep(0L, length(QUOTA_REGION)), names(QUOTA_REGION)))
+    sex = as.list(setNames(rep(0L, length(QUOTA_SEX)), names(QUOTA_SEX))),
+    age = as.list(setNames(rep(0L, length(QUOTA_AGE)), names(QUOTA_AGE))),
+    sel = as.list(setNames(rep(0L, length(QUOTA_SEL)), names(QUOTA_SEL))),
+    region = as.list(setNames(
+      rep(0L, length(QUOTA_REGION)),
+      names(QUOTA_REGION)
+    ))
   )
 }
 
 read_quota_counts <- function(bucket) {
-  tryCatch({
-    client <- paws.storage::s3()
-    res <- client$get_object(Bucket = bucket, Key = QUOTA_S3_KEY)
-    counts <- jsonlite::fromJSON(rawToChar(res$Body), simplifyVector = FALSE)
-    # Ensure each dimension is a named list with integer values
-    for (dim in c("sex", "age", "sel", "region")) {
-      counts[[dim]] <- lapply(counts[[dim]], as.integer)
-    }
-    counts
-  }, error = function(e) .quota_empty_counts())
+  tryCatch(
+    {
+      client <- paws.storage::s3()
+      res <- client$get_object(Bucket = bucket, Key = QUOTA_S3_KEY)
+      counts <- jsonlite::fromJSON(rawToChar(res$Body), simplifyVector = FALSE)
+      # Ensure each dimension is a named list with integer values
+      for (dim in c("sex", "age", "sel", "region")) {
+        counts[[dim]] <- lapply(counts[[dim]], as.integer)
+      }
+      counts
+    },
+    error = function(e) .quota_empty_counts()
+  )
 }
 
 write_quota_counts <- function(bucket, counts) {
-  tryCatch({
-    client <- paws.storage::s3()
-    client$put_object(
-      Bucket = bucket,
-      Key    = QUOTA_S3_KEY,
-      Body   = charToRaw(jsonlite::toJSON(counts, auto_unbox = TRUE))
-    )
-  }, error = function(e) warning("Quota count write failed: ", e$message))
+  tryCatch(
+    {
+      client <- paws.storage::s3()
+      client$put_object(
+        Bucket = bucket,
+        Key = QUOTA_S3_KEY,
+        Body = charToRaw(jsonlite::toJSON(counts, auto_unbox = TRUE))
+      )
+    },
+    error = function(e) warning("Quota count write failed: ", e$message)
+  )
 }
 
 server <- function(input, output, session) {
-  # Helper function to find municipality's robbery category from bucket inputs
-  # Returns "more_than_double", "more", "same", "fewer", "less_than_half", or NA
-  make_crime_ranking_grid <- function(home_name, comp_labels, prefix) {
-    col_labels <- c(
-      "more_than_double" = "Más del doble",
-      "more" = "Más pero menos del doble",
-      "same" = "Aproximadamente igual",
-      "fewer" = "Menos pero más de la mitad",
-      "less_than_half" = "Menos de la mitad"
-    )
-    header_cells <- tagList(
-      tags$th(
-        "Municipio",
-        style = "text-align: left; padding: 6px 10px; min-width: 160px;"
-      ),
-      lapply(names(col_labels), function(val) {
-        tags$th(
-          col_labels[[val]],
-          style = "text-align: center; padding: 6px 8px; font-size: 0.85em; vertical-align: bottom;"
-        )
-      })
-    )
-    body_rows <- lapply(seq_along(comp_labels), function(i) {
-      input_id <- paste0(prefix, i)
-      row_style <- if (i %% 2 == 0) "background-color: #f9f9f9;" else ""
-      tags$tr(
-        style = row_style,
-        tags$td(comp_labels[i], style = "padding: 6px 10px; font-weight: 500;"),
-        lapply(names(col_labels), function(val) {
-          tags$td(
-            style = "text-align: center; padding: 6px 8px;",
-            tags$input(
-              type = "radio",
-              name = input_id,
-              value = val,
-              onclick = sprintf(
-                "Shiny.setInputValue('%s', this.value, {priority: 'event'});",
-                input_id
-              )
-            )
-          )
-        })
-      )
-    })
-    tagList(
-      p(
-        "Comparado con ",
-        strong(home_name),
-        ", ¿cómo cree que es el número de robos en estos municipios?"
-      ),
-      div(
-        class = "mobile-only",
-        p(
-          em(
-            "\u21d0 Puede que necesite desplácese hacia los lados para ver todas las opciones \u21d2"
-          ),
-          style = "text-align: center; color: #555; margin-bottom: 4px;"
-        )
-      ),
-      tags$div(
-        style = "overflow-x: auto; margin-top: 10px; border: 1px solid #ccc; border-radius: 4px; padding: 4px;",
-        tags$table(
-          style = "border-collapse: collapse; width: 100%;",
-          tags$thead(
-            style = "border-bottom: 2px solid #ddd;",
-            tags$tr(header_cells)
-          ),
-          tags$tbody(body_rows)
-        )
-      )
-    )
-  }
-
   # Reactive values
   selected_map_munis <- reactiveVal(character())
   found_municipality <- reactiveVal(NULL)
@@ -1714,7 +1561,7 @@ server <- function(input, output, session) {
     },
     ignoreInit = TRUE
   )
-  benchmark_candidates <- reactiveVal(NULL) # 15 candidate munis shown on page 15
+  benchmark_candidates <- reactiveVal(NULL) # 15 candidate munis shown on page 4
   nearest5_rv <- reactiveVal(NULL) # 5 geographically nearest municipalities (Wave 1 governance prior)
   selected_benchmarks <- reactiveVal(character()) # IDs selected by respondent
 
@@ -1742,17 +1589,19 @@ server <- function(input, output, session) {
     remaining <- setdiff(all_ids, c(home_id, pool1, pool2))
     pool3 <- if (length(remaining) >= 5) sample(remaining, 5) else remaining
 
+    randomized_ids <- sample(c(pool1, pool2, pool3))
     candidates <- d_geo %>%
       st_drop_geometry() %>%
-      filter(muni_id %in% sample(c(pool1, pool2, pool3))) %>%
-      select(muni_id, NOMGEO, NOM_ENT)
+      filter(muni_id %in% randomized_ids) %>%
+      select(muni_id, NOMGEO, NOM_ENT) %>%
+      arrange(match(muni_id, randomized_ids))
 
     benchmark_candidates(candidates)
     selected_benchmarks(character())
 
-    # Nearest 5 by geographic distance for Wave 1 governance prior question
+    # Nearest 3 by geographic distance for Wave 1 governance prior question
     nn5 <- nearest10 %>%
-      filter(muni_id == home_id, rank <= 5) %>%
+      filter(muni_id == home_id, rank <= 3) %>%
       arrange(rank)
     nearest5_rv(nn5)
   })
@@ -1797,15 +1646,35 @@ server <- function(input, output, session) {
 
   observe({
     s3_bucket <- Sys.getenv("S3_BUCKET")
-    if (nchar(s3_bucket) == 0) return()
-    pid <- if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) netquest_pid else ""
+    if (nchar(s3_bucket) == 0) {
+      return()
+    }
+    pid <- if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) {
+      netquest_pid
+    } else {
+      ""
+    }
 
     counts <- read_quota_counts(s3_bucket)
 
-    sex_cell    <- if (!is.null(nq_sex)    && nq_sex    %in% names(QUOTA_SEX))    nq_sex    else NULL
-    age_cell    <- if (!is.null(nq_age))   age_bracket(nq_age) else NULL
-    sel_cell    <- if (!is.null(nq_sel)    && nq_sel    %in% names(QUOTA_SEL))    nq_sel    else NULL
-    region_cell <- if (!is.null(nq_region) && nq_region %in% names(QUOTA_REGION)) nq_region else NULL
+    sex_cell <- if (!is.null(nq_sex) && nq_sex %in% names(QUOTA_SEX)) {
+      nq_sex
+    } else {
+      NULL
+    }
+    age_cell <- if (!is.null(nq_age)) age_bracket(nq_age) else NULL
+    sel_cell <- if (!is.null(nq_sel) && nq_sel %in% names(QUOTA_SEL)) {
+      nq_sel
+    } else {
+      NULL
+    }
+    region_cell <- if (
+      !is.null(nq_region) && nq_region %in% names(QUOTA_REGION)
+    ) {
+      nq_region
+    } else {
+      NULL
+    }
 
     # Safe count lookup: returns 0 if key is missing or NULL
     get_n <- function(vec, key) {
@@ -1814,10 +1683,19 @@ server <- function(input, output, session) {
     }
 
     over_quota <-
-      (!is.null(sex_cell)    && !is.na(sex_cell)    && get_n(counts$sex,    sex_cell)    >= QUOTA_SEX[sex_cell]       + QUOTA_BUFFER) ||
-      (!is.null(age_cell)    && !is.na(age_cell)    && get_n(counts$age,    age_cell)    >= QUOTA_AGE[age_cell]       + QUOTA_BUFFER) ||
-      (!is.null(sel_cell)    && !is.na(sel_cell)    && get_n(counts$sel,    sel_cell)    >= QUOTA_SEL[sel_cell]       + QUOTA_BUFFER) ||
-      (!is.null(region_cell) && !is.na(region_cell) && get_n(counts$region, region_cell) >= QUOTA_REGION[region_cell] + QUOTA_BUFFER)
+      (!is.null(sex_cell) &&
+        !is.na(sex_cell) &&
+        get_n(counts$sex, sex_cell) >= QUOTA_SEX[sex_cell] + QUOTA_BUFFER) ||
+      (!is.null(age_cell) &&
+        !is.na(age_cell) &&
+        get_n(counts$age, age_cell) >= QUOTA_AGE[age_cell] + QUOTA_BUFFER) ||
+      (!is.null(sel_cell) &&
+        !is.na(sel_cell) &&
+        get_n(counts$sel, sel_cell) >= QUOTA_SEL[sel_cell] + QUOTA_BUFFER) ||
+      (!is.null(region_cell) &&
+        !is.na(region_cell) &&
+        get_n(counts$region, region_cell) >=
+          QUOTA_REGION[region_cell] + QUOTA_BUFFER)
 
     if (isTRUE(over_quota)) {
       shinyjs::runjs(sprintf(
@@ -1926,8 +1804,8 @@ server <- function(input, output, session) {
                   "background-color: #d4e9f7; border-radius: 4px;"
                 ),
                 icon("check-circle"),
-                tags$strong(paste(
-                  " Encontrado: ",
+                tags$strong(paste0(
+                  "Encontrado: ",
                   muni_name,
                   ", ",
                   muni_state
@@ -2007,7 +1885,7 @@ server <- function(input, output, session) {
 
   # Show appropriate page and scroll to top
   observe({
-    pages <- c(paste0("page", 0:20))
+    pages <- c(paste0("page", 0:12))
     lapply(pages, hide)
     shinyjs::show(paste0("page", current_page()))
     runjs("window.scrollTo(0, 0);")
@@ -2069,33 +1947,56 @@ server <- function(input, output, session) {
     has_home <- !is.null(found_municipality())
 
     if (has_home) {
-      shinyjs::delay(3000, enable("goto_page2_from_1"))
+      shinyjs::delay(2000, enable("page1_next"))
     } else {
-      disable("goto_page2_from_1")
+      disable("page1_next")
     }
   })
 
   # Page navigation
   # Page 0 → Page 1 (Information Sheet → Find Municipality)
-  observeEvent(input$goto_page1_from_0, {
+  observeEvent(input$page0_next, {
     current_page(1)
   })
 
-  # Page 1 → Page 3 (Practice ranking), or Page 16 (screen-out) if home muni is in an
+  # Page 1 → Page 3 (Attention check), or Page 2 (screen-out) if home muni is in an
   # excluded state (CDMX=09, Durango=10, Oaxaca=20, Veracruz=30) or has no main-party
   # government, or if the municipality's state doesn't match the Netquest region code.
   excluded_state_codes <- c("09", "10", "20", "30")
 
   # Netquest region code → INEGI 2-digit state code (for region consistency check)
   nq_to_inegi_state <- c(
-    "20"="01","21"="02","22"="03","23"="04","24"="05","25"="06",
-    "26"="07","27"="08","30"="11","31"="12","32"="13","33"="14",
-    "34"="15","35"="16","36"="17","37"="18","38"="19","40"="21",
-    "41"="22","42"="23","43"="24","44"="25","45"="26","46"="27",
-    "47"="28","48"="29","50"="31","51"="32"
+    "20" = "01",
+    "21" = "02",
+    "22" = "03",
+    "23" = "04",
+    "24" = "05",
+    "25" = "06",
+    "26" = "07",
+    "27" = "08",
+    "30" = "11",
+    "31" = "12",
+    "32" = "13",
+    "33" = "14",
+    "34" = "15",
+    "35" = "16",
+    "36" = "17",
+    "37" = "18",
+    "38" = "19",
+    "40" = "21",
+    "41" = "22",
+    "42" = "23",
+    "43" = "24",
+    "44" = "25",
+    "45" = "26",
+    "46" = "27",
+    "47" = "28",
+    "48" = "29",
+    "50" = "31",
+    "51" = "32"
   )
 
-  observeEvent(input$goto_page2_from_1, {
+  observeEvent(input$page1_next, {
     home_id <- found_municipality()
     state_code <- substr(home_id, 1, 2)
     home_party <- d_geo %>%
@@ -2111,13 +2012,17 @@ server <- function(input, output, session) {
 
     if (region_mismatch) {
       # Quality/attention check failure — redirect directly to Netquest dr_0
-      pid <- if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) netquest_pid else ""
+      pid <- if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) {
+        netquest_pid
+      } else {
+        ""
+      }
       shinyjs::runjs(sprintf(
         'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=dr_0&c=ok&ticket=%s"; }, 1500)',
         pid
       ))
     } else if (state_code %in% excluded_state_codes || is.na(home_party)) {
-      current_page(16)
+      current_page(2)
     } else {
       current_page(3)
     }
@@ -2126,62 +2031,59 @@ server <- function(input, output, session) {
   # Screen-out redirect to Netquest
   observeEvent(current_page(), {
     if (
-      current_page() == 16 && !is.null(netquest_pid) && nchar(netquest_pid) > 0
+      current_page() == 2 && !is.null(netquest_pid) && nchar(netquest_pid) > 0
     ) {
       shinyjs::runjs(sprintf(
         'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=fo_0&c=ok&ticket=%s"; }, 1500)',
         netquest_pid
       ))
     }
-    if (current_page() == 5) {
-      session$sendCustomMessage("initPage5Sliders", list())
+    if (current_page() == 9) {
+      session$sendCustomMessage("initPage9Sliders", list())
     }
-    if (current_page() == 20) {
-      session$sendCustomMessage("initPage20Sliders", list())
-    }
-    if (current_page() == 6) {
-      session$sendCustomMessage("initPage6Sliders", list())
+    if (current_page() == 11) {
+      session$sendCustomMessage("initPage11Sliders", list())
     }
   })
 
-  # Page 15 → Page 18 (benchmark → additional municipality dropdown)
-  page15_warning_msg <- reactiveVal(NULL)
-  output$page15_warning <- renderUI({
-    msg <- page15_warning_msg()
+  # Page 4 → Page 5 (benchmark → additional municipality dropdown)
+  page4_warning_msg <- reactiveVal(NULL)
+  output$page4_warning <- renderUI({
+    msg <- page4_warning_msg()
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
-  observeEvent(input$goto_page2_from_15, {
+  observeEvent(input$page4_next, {
     if (
       is.null(input$benchmark_selected) || length(input$benchmark_selected) == 0
     ) {
-      page15_warning_msg(
+      page4_warning_msg(
         "Por favor, seleccione al menos un municipio antes de continuar."
       )
       return()
     }
-    page15_warning_msg(NULL)
-    current_page(18)
+    page4_warning_msg(NULL)
+    current_page(5)
   })
 
-  # Page 18 → Page 19 (additional municipality dropdown → issue importance ranking)
-  observeEvent(input$goto_page4_from_18, {
+  # Page 5 → Page 6 (additional municipality dropdown → issue importance ranking)
+  observeEvent(input$page5_next, {
     additional <- input$additional_munis_dropdown
     if (!is.null(additional) && length(additional) > 0) {
       selected_benchmarks(unique(c(selected_benchmarks(), additional)))
     }
-    current_page(19)
+    current_page(6)
   })
 
   # Page 2 → Page 1 (commented out with page 2)
   # observeEvent(input$goto_page1_from_3, { current_page(1) })
 
-  # Page 3 → Page 15 (practice ranking → benchmark selection)
+  # Page 3 → Page 4 (attention check → benchmark selection)
   practice_warning_msg <- reactiveVal(NULL)
   output$practice_warning <- renderUI({
     msg <- practice_warning_msg()
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
-  observeEvent(input$goto_page4_from_3, {
+  observeEvent(input$page3_next, {
     ranking <- input$practice_ranking
     if (is.null(ranking) || length(ranking) < 5) {
       practice_warning_msg(
@@ -2202,19 +2104,19 @@ server <- function(input, output, session) {
       return()
     }
     practice_warning_msg(NULL)
-    current_page(15)
+    current_page(4)
   })
 
   # Page 2 → Page 3 (commented out with page 2)
   # observeEvent(input$goto_page3_from_2, { current_page(3) })
 
-  # Page 19: Issue Importance Ranking → Page 4
+  # Page 6: Issue Importance Ranking → Page 7
   issue_importance_warning_msg <- reactiveVal(NULL)
   output$issue_importance_warning <- renderUI({
     msg <- issue_importance_warning_msg()
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
-  observeEvent(input$goto_page4_from_issues, {
+  observeEvent(input$page6_next, {
     ranking <- input$issue_importance_ranking
     if (is.null(ranking) || length(ranking) < 5) {
       issue_importance_warning_msg(
@@ -2223,20 +2125,20 @@ server <- function(input, output, session) {
       return()
     }
     issue_importance_warning_msg(NULL)
-    current_page(4)
+    current_page(7)
   })
 
-  # Page 4: Last Election Vote & Municipal President → Page 20
-  page4_warning_msg <- reactiveVal(NULL)
-  output$page4_warning <- renderUI({
-    msg <- page4_warning_msg()
+  # Page 7: Last Election Vote & Municipal President → Page 8
+  page7_warning_msg <- reactiveVal(NULL)
+  output$page7_warning <- renderUI({
+    msg <- page7_warning_msg()
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
-  observeEvent(input$goto_page20_from_4, {
+  observeEvent(input$page7_next, {
     if (
       is.null(input$last_election_vote) || length(input$last_election_vote) == 0
     ) {
-      page4_warning_msg(
+      page7_warning_msg(
         "Por favor, indique por cuál partido votó en la última elección."
       )
       return()
@@ -2247,7 +2149,7 @@ server <- function(input, output, session) {
         (is.null(input$last_election_vote_other) ||
           trimws(input$last_election_vote_other) == "")
     ) {
-      page4_warning_msg(
+      page7_warning_msg(
         "Por favor, especifique el partido para la opción 'Otro' en la pregunta de voto pasado."
       )
       return()
@@ -2262,32 +2164,26 @@ server <- function(input, output, session) {
         (is.null(input$municipal_president_mc) ||
           length(input$municipal_president_mc) == 0)
     ) {
-      page4_warning_msg(
+      page7_warning_msg(
         "Por favor, responda la pregunta sobre el presidente municipal."
       )
       return()
     }
-    page4_warning_msg(NULL)
-    current_page(20)
+    page7_warning_msg(NULL)
+    current_page(8)
   })
 
-  # Page 20: Turnout & Vote Intention → Page 5
-  page20_warning_msg <- reactiveVal(NULL)
-  output$page20_warning <- renderUI({
-    msg <- page20_warning_msg()
+  # Page 8: Vote Intention → Page 9
+  page8_warning_msg <- reactiveVal(NULL)
+  output$page8_warning <- renderUI({
+    msg <- page8_warning_msg()
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
-  observeEvent(input$goto_page5_from_20, {
-    if (!isTRUE(input$slider_touched_turnout_likelihood_pre)) {
-      page20_warning_msg(
-        "Por favor, responda el control deslizante antes de continuar."
-      )
-      return()
-    }
+  observeEvent(input$page8_next, {
     if (
       is.null(input$vote_intention_pre) || length(input$vote_intention_pre) == 0
     ) {
-      page20_warning_msg("Por favor, indique su intención de voto.")
+      page8_warning_msg("Por favor, indique su intención de voto.")
       return()
     }
     if (
@@ -2296,101 +2192,96 @@ server <- function(input, output, session) {
         (is.null(input$vote_intention_pre_other) ||
           trimws(input$vote_intention_pre_other) == "")
     ) {
-      page20_warning_msg(
+      page8_warning_msg(
         "Por favor, especifique el partido para la opción 'Otro' en la pregunta de intención de voto."
       )
       return()
     }
-    page20_warning_msg(NULL)
-    current_page(5)
+    page8_warning_msg(NULL)
+    current_page(9)
   })
 
-  # Page 5 → Page 20 (back)
-  observeEvent(input$goto_page4_from_5, {
-    current_page(20)
-  })
-
-  # Page 5 → Page 17 (robbery estimate)
-  page5_warning_msg <- reactiveVal(NULL)
-  output$page5_warning <- renderUI({
-    msg <- page5_warning_msg()
+  # Page 9 → Page 10 (robbery estimate)
+  page9_warning_msg <- reactiveVal(NULL)
+  output$page9_warning <- renderUI({
+    msg <- page9_warning_msg()
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
-  observeEvent(input$goto_page6_from_5, {
+  observeEvent(input$page9_next, {
     untouched <- c()
     if (!isTRUE(input$slider_touched_home_crime_handling_pre)) {
-      untouched <- c(untouched, "el manejo del crimen en su municipio")
+      untouched <- c(untouched, "el manejo de la delincuencia en su municipio")
     }
     if (!isTRUE(input$slider_touched_morena_crime_rating)) {
       untouched <- c(
         untouched,
-        "el manejo del crimen por Sigamos Haciendo Historia"
+        "el manejo de la delincuencia por Sigamos Haciendo Historia"
       )
     }
     if (!isTRUE(input$slider_touched_coalition_pan_pri_prd_crime_rating)) {
       untouched <- c(
         untouched,
-        "el manejo del crimen por Fuerza y Coraz\u00f3n por M\u00e9xico"
+        "el manejo de la delincuencia por Fuerza y Coraz\u00f3n por M\u00e9xico"
       )
     }
     if (!isTRUE(input$slider_touched_mc_crime_rating)) {
-      untouched <- c(untouched, "el manejo del crimen por MC")
+      untouched <- c(untouched, "el manejo de la delincuencia por MC")
     }
     if (length(untouched) > 0) {
-      page5_warning_msg(
+      page9_warning_msg(
         "Por favor, responda todos los controles deslizantes antes de continuar."
       )
       return()
     }
-    page5_warning_msg(NULL)
-    current_page(17)
+    page9_warning_msg(NULL)
+    current_page(10)
   })
 
-  # Page 17 → Page 6
-  page17_warning_msg <- reactiveVal(NULL)
-  output$page17_warning <- renderUI({
-    msg <- page17_warning_msg()
+  # Page 10 → Page 11
+  page10_warning_msg <- reactiveVal(NULL)
+  output$page10_warning <- renderUI({
+    msg <- page10_warning_msg()
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
-  observeEvent(input$goto_page6_from_17, {
+  observeEvent(input$page10_next, {
     est <- input$robbery_estimate
     if (is.null(est) || is.na(est)) {
-      page17_warning_msg("Por favor, ingrese su estimación antes de continuar.")
+      page10_warning_msg("Por favor, ingrese su estimación antes de continuar.")
       return()
     }
-    page17_warning_msg(NULL)
-    current_page(6)
+    page10_warning_msg(NULL)
+    current_page(11)
   })
 
-  # Page 6 → Wave 1 submit
-  page6_warning_msg <- reactiveVal(NULL)
-  output$page6_warning <- renderUI({
-    msg <- page6_warning_msg()
+  # Page 11 → Wave 1 submit
+  page11_warning_msg <- reactiveVal(NULL)
+  output$page11_warning <- renderUI({
+    msg <- page11_warning_msg()
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
-  observeEvent(input$goto_page11_from_6, {
+  observeEvent(input$page11_submit, {
     grid_inputs <- c(
       "home_municipality_governing_party",
-      paste0("nearest5_governing_party_", 1:5)
+      paste0("nearest3_governing_party_", 1:3)
     )
     unanswered <- sum(sapply(grid_inputs, function(nm) {
       val <- input[[nm]]
       is.null(val) || length(val) == 0
     }))
     if (unanswered > 0) {
-      page6_warning_msg(paste0(
+      page11_warning_msg(paste0(
         "Por favor, seleccione al menos una opci\u00f3n (incluyendo 'No s\u00e9') ",
         "para cada municipio en la tabla antes de continuar."
       ))
       return()
     }
     if (!isTRUE(input$slider_touched_left_right_scale)) {
-      page6_warning_msg(
+      page11_warning_msg(
         "Por favor, responda el control deslizante antes de continuar."
       )
       return()
     }
-    page6_warning_msg(NULL)
+    page11_warning_msg(NULL)
     found_muni_name <- if (!is.null(found_municipality())) {
       d_geo %>%
         st_drop_geometry() %>%
@@ -2429,17 +2320,6 @@ server <- function(input, output, session) {
       } else {
         paste(selected_benchmarks(), collapse = ";")
       },
-      Age = ifelse(is.null(input$age), NA_integer_, input$age),
-      Gender = ifelse(
-        is.null(input$gender) || input$gender == "",
-        NA_character_,
-        input$gender
-      ),
-      Indigenous = ifelse(
-        is.null(input$indigenous) || input$indigenous == "",
-        NA_character_,
-        input$indigenous
-      ),
       Municipal_President_Name = ifelse(
         is.null(input$municipal_president_mc) ||
           length(input$municipal_president_mc) == 0,
@@ -2473,38 +2353,24 @@ server <- function(input, output, session) {
         NA_character_,
         input$last_election_vote_other
       ),
-      Nearest5_Muni_1_ID = if (
+      Nearest3_Muni_1_ID = if (
         !is.null(nearest5_rv()) && nrow(nearest5_rv()) >= 1
       ) {
         nearest5_rv()$neighbor_id[1]
       } else {
         NA_character_
       },
-      Nearest5_Muni_2_ID = if (
+      Nearest3_Muni_2_ID = if (
         !is.null(nearest5_rv()) && nrow(nearest5_rv()) >= 2
       ) {
         nearest5_rv()$neighbor_id[2]
       } else {
         NA_character_
       },
-      Nearest5_Muni_3_ID = if (
+      Nearest3_Muni_3_ID = if (
         !is.null(nearest5_rv()) && nrow(nearest5_rv()) >= 3
       ) {
         nearest5_rv()$neighbor_id[3]
-      } else {
-        NA_character_
-      },
-      Nearest5_Muni_4_ID = if (
-        !is.null(nearest5_rv()) && nrow(nearest5_rv()) >= 4
-      ) {
-        nearest5_rv()$neighbor_id[4]
-      } else {
-        NA_character_
-      },
-      Nearest5_Muni_5_ID = if (
-        !is.null(nearest5_rv()) && nrow(nearest5_rv()) >= 5
-      ) {
-        nearest5_rv()$neighbor_id[5]
       } else {
         NA_character_
       },
@@ -2516,40 +2382,24 @@ server <- function(input, output, session) {
           paste(val, collapse = ";")
         }
       },
-      Nearest5_Governing_Party_Belief_1 = {
-        val <- input$nearest5_governing_party_1
+      Nearest3_Governing_Party_Belief_1 = {
+        val <- input$nearest3_governing_party_1
         if (is.null(val) || length(val) == 0) {
           NA_character_
         } else {
           paste(val, collapse = ";")
         }
       },
-      Nearest5_Governing_Party_Belief_2 = {
-        val <- input$nearest5_governing_party_2
+      Nearest3_Governing_Party_Belief_2 = {
+        val <- input$nearest3_governing_party_2
         if (is.null(val) || length(val) == 0) {
           NA_character_
         } else {
           paste(val, collapse = ";")
         }
       },
-      Nearest5_Governing_Party_Belief_3 = {
-        val <- input$nearest5_governing_party_3
-        if (is.null(val) || length(val) == 0) {
-          NA_character_
-        } else {
-          paste(val, collapse = ";")
-        }
-      },
-      Nearest5_Governing_Party_Belief_4 = {
-        val <- input$nearest5_governing_party_4
-        if (is.null(val) || length(val) == 0) {
-          NA_character_
-        } else {
-          paste(val, collapse = ";")
-        }
-      },
-      Nearest5_Governing_Party_Belief_5 = {
-        val <- input$nearest5_governing_party_5
+      Nearest3_Governing_Party_Belief_3 = {
+        val <- input$nearest3_governing_party_3
         if (is.null(val) || length(val) == 0) {
           NA_character_
         } else {
@@ -2589,7 +2439,6 @@ server <- function(input, output, session) {
       MORENA_Crime_Rating_Pre = input$morena_crime_rating,
       Coalition_PAN_PRI_PRD_Crime_Rating_Pre = input$coalition_pan_pri_prd_crime_rating,
       MC_Crime_Rating_Pre = input$mc_crime_rating,
-      Turnout_Likelihood_Pre = input$turnout_likelihood_pre,
       Vote_Intention_Pre = if (
         is.null(input$vote_intention_pre) ||
           length(input$vote_intention_pre) == 0
@@ -2640,27 +2489,11 @@ server <- function(input, output, session) {
         },
         1
       ),
-      Time_Page_19_Sec = round(
-        if (is.null(page_durations()[["19"]])) {
-          NA_real_
-        } else {
-          page_durations()[["19"]]
-        },
-        1
-      ),
       Time_Page_4_Sec = round(
         if (is.null(page_durations()[["4"]])) {
           NA_real_
         } else {
           page_durations()[["4"]]
-        },
-        1
-      ),
-      Time_Page_20_Sec = round(
-        if (is.null(page_durations()[["20"]])) {
-          NA_real_
-        } else {
-          page_durations()[["20"]]
         },
         1
       ),
@@ -2677,6 +2510,46 @@ server <- function(input, output, session) {
           NA_real_
         } else {
           page_durations()[["6"]]
+        },
+        1
+      ),
+      Time_Page_7_Sec = round(
+        if (is.null(page_durations()[["7"]])) {
+          NA_real_
+        } else {
+          page_durations()[["7"]]
+        },
+        1
+      ),
+      Time_Page_8_Sec = round(
+        if (is.null(page_durations()[["8"]])) {
+          NA_real_
+        } else {
+          page_durations()[["8"]]
+        },
+        1
+      ),
+      Time_Page_9_Sec = round(
+        if (is.null(page_durations()[["9"]])) {
+          NA_real_
+        } else {
+          page_durations()[["9"]]
+        },
+        1
+      ),
+      Time_Page_10_Sec = round(
+        if (is.null(page_durations()[["10"]])) {
+          NA_real_
+        } else {
+          page_durations()[["10"]]
+        },
+        1
+      ),
+      Time_Page_11_Sec = round(
+        if (is.null(page_durations()[["11"]])) {
+          NA_real_
+        } else {
+          page_durations()[["11"]]
         },
         1
       ),
@@ -2740,10 +2613,14 @@ server <- function(input, output, session) {
             Netquest_PID = netquest_pid
           )
           s3_client <- paws.storage::s3()
+          con <- rawConnection(raw(0), "wb")
+          saveRDS(lookup, con)
+          rds_bytes <- rawConnectionValue(con)
+          close(con)
           s3_client$put_object(
             Bucket = s3_bucket,
             Key = paste0("wave1_lookup/", respondent_id, ".rds"),
-            Body = serialize(lookup, NULL)
+            Body = rds_bytes
           )
         },
         error = function(e) {
@@ -2754,27 +2631,52 @@ server <- function(input, output, session) {
 
     # ── Increment marginal quota counts after successful submission ────────────
     if (nchar(s3_bucket) > 0) {
-      tryCatch({
-        counts <- read_quota_counts(s3_bucket)
+      tryCatch(
+        {
+          counts <- read_quota_counts(s3_bucket)
 
-        sex_cell    <- if (!is.null(nq_sex)    && nq_sex    %in% names(QUOTA_SEX))    nq_sex    else NULL
-        age_cell    <- if (!is.null(nq_age))   age_bracket(nq_age) else NULL
-        sel_cell    <- if (!is.null(nq_sel)    && nq_sel    %in% names(QUOTA_SEL))    nq_sel    else NULL
-        region_cell <- if (!is.null(nq_region) && nq_region %in% names(QUOTA_REGION)) nq_region else NULL
+          sex_cell <- if (!is.null(nq_sex) && nq_sex %in% names(QUOTA_SEX)) {
+            nq_sex
+          } else {
+            NULL
+          }
+          age_cell <- if (!is.null(nq_age)) age_bracket(nq_age) else NULL
+          sel_cell <- if (!is.null(nq_sel) && nq_sel %in% names(QUOTA_SEL)) {
+            nq_sel
+          } else {
+            NULL
+          }
+          region_cell <- if (
+            !is.null(nq_region) && nq_region %in% names(QUOTA_REGION)
+          ) {
+            nq_region
+          } else {
+            NULL
+          }
 
-        bump <- function(vec, key) {
-          v <- vec[[key]]
-          vec[[key]] <- if (is.null(v) || is.na(v)) 1L else as.integer(v) + 1L
-          vec
-        }
+          bump <- function(vec, key) {
+            v <- vec[[key]]
+            vec[[key]] <- if (is.null(v) || is.na(v)) 1L else as.integer(v) + 1L
+            vec
+          }
 
-        if (!is.null(sex_cell)    && !is.na(sex_cell))    counts$sex    <- bump(counts$sex,    sex_cell)
-        if (!is.null(age_cell)    && !is.na(age_cell))    counts$age    <- bump(counts$age,    age_cell)
-        if (!is.null(sel_cell)    && !is.na(sel_cell))    counts$sel    <- bump(counts$sel,    sel_cell)
-        if (!is.null(region_cell) && !is.na(region_cell)) counts$region <- bump(counts$region, region_cell)
+          if (!is.null(sex_cell) && !is.na(sex_cell)) {
+            counts$sex <- bump(counts$sex, sex_cell)
+          }
+          if (!is.null(age_cell) && !is.na(age_cell)) {
+            counts$age <- bump(counts$age, age_cell)
+          }
+          if (!is.null(sel_cell) && !is.na(sel_cell)) {
+            counts$sel <- bump(counts$sel, sel_cell)
+          }
+          if (!is.null(region_cell) && !is.na(region_cell)) {
+            counts$region <- bump(counts$region, region_cell)
+          }
 
-        write_quota_counts(s3_bucket, counts)
-      }, error = function(e) warning("Quota count update failed: ", e$message))
+          write_quota_counts(s3_bucket, counts)
+        },
+        error = function(e) warning("Quota count update failed: ", e$message)
+      )
     }
 
     if (!save_success) {
@@ -2785,7 +2687,7 @@ server <- function(input, output, session) {
       )
     }
 
-    current_page(10)
+    current_page(12)
 
     if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) {
       shinyjs::runjs(sprintf(
@@ -2793,11 +2695,6 @@ server <- function(input, output, session) {
         netquest_pid
       ))
     }
-  })
-
-  # Page 5 → Page 4
-  observeEvent(input$goto_page5_from_6, {
-    current_page(5)
   })
 
   # Clear selection button - resets the found municipality
@@ -2873,7 +2770,7 @@ server <- function(input, output, session) {
         mutate(full_name = paste0(NOMGEO, ", ", NOM_ENT)) %>%
         pull(full_name)
     } else {
-      "your municipality"
+      "su municipio"
     }
   })
 
@@ -2895,25 +2792,15 @@ server <- function(input, output, session) {
     }
 
     party_labels <- c(
-      "PAN",
-      "PRI",
-      "PRD",
-      "PVEM",
-      "PT",
+      "MORENA/PT/PVEM",
+      "PAN/PRI/PRD",
       "MC",
-      "MORENA",
-      "Otro",
-      "No\ns\u00e9"
+      "No s\u00e9"
     )
     party_values <- c(
-      "pan",
-      "pri",
-      "prd",
-      "pvem",
-      "pt",
+      "morena_pt_pvem",
+      "pan_pri_prd",
       "mc",
-      "morena",
-      "other",
       "dont_know"
     )
 
@@ -2928,8 +2815,9 @@ server <- function(input, output, session) {
         list(tags$td(strong(paste0(muni_name, " (su municipio)")))),
         lapply(seq_along(party_values), function(j) {
           tags$td(tags$input(
-            type = "checkbox",
-            class = "governance-checkbox",
+            type = "radio",
+            class = "governance-radio",
+            name = input_name,
             `data-input-name` = input_name,
             value = party_values[j]
           ))
@@ -2940,13 +2828,14 @@ server <- function(input, output, session) {
 
     body_rows <- lapply(seq_len(nrow(nn5)), function(i) {
       muni_label <- paste0(nn5$neighbor_name[i], ", ", nn5$neighbor_state[i])
-      input_name <- paste0("nearest5_governing_party_", i)
+      input_name <- paste0("nearest3_governing_party_", i)
       cells <- c(
         list(tags$td(muni_label)),
         lapply(seq_along(party_values), function(j) {
           tags$td(tags$input(
-            type = "checkbox",
-            class = "governance-checkbox",
+            type = "radio",
+            class = "governance-radio",
+            name = input_name,
             `data-input-name` = input_name,
             value = party_values[j]
           ))
@@ -2958,7 +2847,7 @@ server <- function(input, output, session) {
 
     tagList(
       p(
-        "\u00bfQu\u00e9 partido o partidos cree que gobiernan actualmente su municipio de origen y los municipios m\u00e1s cercanos? (seleccione todos los que correspondan)"
+        "\u00bfQu\u00e9 coalici\u00f3n o partido cree que gobierna actualmente su municipio de origen y los municipios m\u00e1s cercanos?"
       ),
       div(
         class = "mobile-only",
@@ -2970,7 +2859,7 @@ server <- function(input, output, session) {
         )
       ),
       div(
-        id = "nearest5_governance_grid",
+        id = "nearest3_governance_grid",
         class = "governance-grid",
         style = "border: 1px solid #ccc; border-radius: 4px; padding: 4px;",
         tags$table(
@@ -2989,7 +2878,7 @@ server <- function(input, output, session) {
         paste0(
           "¿Qué tan bien cree que el gobierno de ",
           muni_name,
-          " maneja el crimen?"
+          " maneja la delincuencia?"
         ),
         min = 0,
         max = 100,
@@ -2999,14 +2888,14 @@ server <- function(input, output, session) {
         column(
           6,
           p(
-            "Maneja el crimen extremadamente mal",
+            "Maneja la delincuencia extremadamente mal",
             style = "color: #6c757d; font-size: 0.85em; margin-top: -15px;"
           )
         ),
         column(
           6,
           p(
-            "Maneja el crimen extremadamente bien",
+            "Maneja la delincuencia extremadamente bien",
             style = "color: #6c757d; font-size: 0.85em; margin-top: -15px; text-align: right;"
           )
         )
@@ -3024,7 +2913,7 @@ server <- function(input, output, session) {
         mutate(full_name = paste0(NOMGEO, ", ", NOM_ENT)) %>%
         pull(full_name)
     } else {
-      "your municipality"
+      "su municipio"
     }
     numericInput(
       "robbery_estimate",
@@ -3048,8 +2937,8 @@ server <- function(input, output, session) {
     muni_name <- paste0(muni_data$NOMGEO, ", ", muni_data$NOM_ENT)
     tagList(
       p(strong(
-        "Los gobiernos a menudo son evaluados comparándolos con otros. ",
-        "Por ejemplo, se puede evaluar si un gobierno está haciendo un buen trabajo comparándolo con lo que logran otros municipios. ",
+        "Los gobiernos municipales a menudo son evaluados comparándolos con otros. ",
+        "Por ejemplo, se puede evaluar si un gobierno municipal está haciendo un buen trabajo comparándolo con lo que logran otros municipios. ",
         paste0(
           "Si pudiera elegir con qué municipios comparar a ",
           muni_name,
@@ -3064,21 +2953,7 @@ server <- function(input, output, session) {
 
   # Additional municipality instructions text (page 18)
   output$additional_munis_instructions_text <- renderUI({
-    req(!is.null(found_municipality()))
-    muni_data <- d_geo %>%
-      st_drop_geometry() %>%
-      filter(muni_id == found_municipality())
-    muni_name <- paste0(muni_data$NOMGEO, ", ", muni_data$NOM_ENT)
-    tagList(
-      p(strong(paste0(
-        "Si tiene en mente algún otro municipio con el que le gustaría comparar a ",
-        muni_name,
-        ", puede buscarlo y seleccionarlo a continuación. Usted puede elegir varios."
-      ))),
-      p(
-        "Si ya eligió todos los municipios que deseaba en la página anterior, puede continuar."
-      )
-    )
+    p("Agregue otros municipios de comparaci\u00f3n (opcional):")
   })
 
   # Benchmark municipality checklist (page 15)
