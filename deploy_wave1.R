@@ -9,6 +9,7 @@ rsconnect::deployApp(
     "data/nearest10.rds",
     "data/mp_mc_data.rds",
     "data/precip_data.rds",
+    "data/region_quotas_wave1.rds",
     "www/Information_Sheet_Informational_Comparisons_Spanish.pdf",
     "www/Morena_logo.png",
     "www/PAN_logo.png",

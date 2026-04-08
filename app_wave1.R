@@ -2082,8 +2082,18 @@ server <- function(input, output, session) {
   })
 
   # Page 1 → Page 3 (Practice ranking), or Page 16 (screen-out) if home muni is in an
-  # excluded state (CDMX=09, Durango=10, Oaxaca=20, Veracruz=30) or has no main-party government
+  # excluded state (CDMX=09, Durango=10, Oaxaca=20, Veracruz=30) or has no main-party
+  # government, or if the municipality's state doesn't match the Netquest region code.
   excluded_state_codes <- c("09", "10", "20", "30")
+
+  # Netquest region code → INEGI 2-digit state code (for region consistency check)
+  nq_to_inegi_state <- c(
+    "20"="01","21"="02","22"="03","23"="04","24"="05","25"="06",
+    "26"="07","27"="08","30"="11","31"="12","32"="13","33"="14",
+    "34"="15","35"="16","36"="17","37"="18","38"="19","40"="21",
+    "41"="22","42"="23","43"="24","44"="25","45"="26","46"="27",
+    "47"="28","48"="29","50"="31","51"="32"
+  )
 
   observeEvent(input$goto_page2_from_1, {
     home_id <- found_municipality()
@@ -2093,7 +2103,20 @@ server <- function(input, output, session) {
       filter(muni_id == home_id) %>%
       pull(governing_party) %>%
       `[`(1)
-    if (state_code %in% excluded_state_codes || is.na(home_party)) {
+
+    # Check Netquest region matches selected municipality's state (skip if no NQ param)
+    region_mismatch <- !is.null(nq_region) &&
+      nq_region %in% names(nq_to_inegi_state) &&
+      nq_to_inegi_state[nq_region] != state_code
+
+    if (region_mismatch) {
+      # Quality/attention check failure — redirect directly to Netquest dr_0
+      pid <- if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) netquest_pid else ""
+      shinyjs::runjs(sprintf(
+        'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=dr_0&c=ok&ticket=%s"; }, 1500)',
+        pid
+      ))
+    } else if (state_code %in% excluded_state_codes || is.na(home_party)) {
       current_page(16)
     } else {
       current_page(3)
