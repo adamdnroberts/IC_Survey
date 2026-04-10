@@ -1427,8 +1427,7 @@ ui <- fluidPage(
 #           AB=7.6%, C+=13.9%, C=16.7%, C-=17.3%, D+=20.5%, D=17.5%, E=6.5%
 #   Region: INEGI, Censo de Población y Vivienda 2020, state totals
 #           Proportional within eligible states (excl. CDMX, Durango, Oaxaca,
-#           Veracruz). Yucatán (NQ code 50) assumed eligible — confirm with
-#           Netquest if this code should be active.
+#           Veracruz).
 # Total N = 2,180. Marginal (per-variable) quotas only.
 
 QUOTA_N <- 2180L
@@ -1470,8 +1469,7 @@ QUOTA_AGE <- c(
   "65+" = 245L
 )
 
-# SEL targets (AMAI NSE, ENIGH 2022: AB=7.3%, C+=12.0%, C=15.3%, C-=16.4%,
-#              D+=14.9%, D=25.4%, E=8.7%; codes: 1=AB, 2=C+, 3=C, 4=C-, 5=D+, 6=D, 7=E)
+# SEL targets (from Netquest; codes: 1=AB, 2=C+, 3=C, 4=C-, 5=D+, 6=D, 7=E)
 QUOTA_SEL <- c(
   "1" = 158L,
   "2" = 262L,
@@ -1562,7 +1560,7 @@ server <- function(input, output, session) {
     ignoreInit = TRUE
   )
   benchmark_candidates <- reactiveVal(NULL) # 15 candidate munis shown on page 4
-  nearest5_rv <- reactiveVal(NULL) # 5 geographically nearest municipalities (Wave 1 governance prior)
+  nearest3_rv <- reactiveVal(NULL) # 3 geographically nearest municipalities (Wave 1 governance prior)
   selected_benchmarks <- reactiveVal(character()) # IDs selected by respondent
 
   # Populate benchmark candidates when home municipality is confirmed
@@ -1600,10 +1598,10 @@ server <- function(input, output, session) {
     selected_benchmarks(character())
 
     # Nearest 3 by geographic distance for Wave 1 governance prior question
-    nn5 <- nearest10 %>%
+    nn3 <- nearest10 %>%
       filter(muni_id == home_id, rank <= 3) %>%
       arrange(rank)
-    nearest5_rv(nn5)
+    nearest3_rv(nn3)
   })
 
   # Generate unique respondent ID at session start
@@ -1716,7 +1714,7 @@ server <- function(input, output, session) {
     server = TRUE
   )
 
-  # Populate all-Mexico dropdown for page 18
+  # Populate all-Mexico dropdown for page 5
   updateSelectizeInput(
     session,
     "additional_munis_dropdown",
@@ -2354,23 +2352,23 @@ server <- function(input, output, session) {
         input$last_election_vote_other
       ),
       Nearest3_Muni_1_ID = if (
-        !is.null(nearest5_rv()) && nrow(nearest5_rv()) >= 1
+        !is.null(nearest3_rv()) && nrow(nearest3_rv()) >= 1
       ) {
-        nearest5_rv()$neighbor_id[1]
+        nearest3_rv()$neighbor_id[1]
       } else {
         NA_character_
       },
       Nearest3_Muni_2_ID = if (
-        !is.null(nearest5_rv()) && nrow(nearest5_rv()) >= 2
+        !is.null(nearest3_rv()) && nrow(nearest3_rv()) >= 2
       ) {
-        nearest5_rv()$neighbor_id[2]
+        nearest3_rv()$neighbor_id[2]
       } else {
         NA_character_
       },
       Nearest3_Muni_3_ID = if (
-        !is.null(nearest5_rv()) && nrow(nearest5_rv()) >= 3
+        !is.null(nearest3_rv()) && nrow(nearest3_rv()) >= 3
       ) {
-        nearest5_rv()$neighbor_id[3]
+        nearest3_rv()$neighbor_id[3]
       } else {
         NA_character_
       },
@@ -2777,8 +2775,8 @@ server <- function(input, output, session) {
   # Pre-treatment: home municipality crime handling slider
   # Nearest-5 governance prior grid (Wave 1, page 5)
   output$nearest5_governance_ui <- renderUI({
-    nn5 <- nearest5_rv()
-    if (is.null(nn5) || nrow(nn5) == 0) {
+    nn3 <- nearest3_rv()
+    if (is.null(nn3) || nrow(nn3) == 0) {
       return(p(em("Por favor, primero busque su municipio de origen.")))
     }
 
@@ -2826,8 +2824,8 @@ server <- function(input, output, session) {
       do.call(tags$tr, cells)
     })
 
-    body_rows <- lapply(seq_len(nrow(nn5)), function(i) {
-      muni_label <- paste0(nn5$neighbor_name[i], ", ", nn5$neighbor_state[i])
+    body_rows <- lapply(seq_len(nrow(nn3)), function(i) {
+      muni_label <- paste0(nn3$neighbor_name[i], ", ", nn3$neighbor_state[i])
       input_name <- paste0("nearest3_governing_party_", i)
       cells <- c(
         list(tags$td(muni_label)),
