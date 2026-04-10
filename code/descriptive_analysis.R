@@ -2,10 +2,22 @@ library(dplyr)
 library(tidyr)
 library(sf)
 library(data.table)
+library(brms)
 
-source("~/IC_Survey/code/generate_synthetic_responses_wave1.R", echo = FALSE)
+source("code/generate_synthetic_responses_wave1.R", echo = FALSE)
 
 file.remove("data/fit_benchmark.rds")
+
+# ── Helper ────────────────────────────────────────────────────────────────────
+
+haversine_km <- function(lon1, lat1, lon2, lat2) {
+  R <- 6371
+  dlat <- (lat2 - lat1) * pi / 180
+  dlon <- (lon2 - lon1) * pi / 180
+  a <- sin(dlat / 2)^2 +
+    cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sin(dlon / 2)^2
+  2 * R * atan2(sqrt(a), sqrt(1 - a))
+}
 
 # ── Load reference data ───────────────────────────────────────────────────────
 
@@ -17,16 +29,13 @@ survey_responses_wave1 <- read.csv(
 survey_responses_wave1 <- survey_responses_wave1 %>%
   mutate(
     respondent_coalition = case_when(
-      grepl("morena|pvem|pt", Vote_Intention_Pre, ignore.case = T) ~
+      grepl("morena|pvem|pt", Vote_Intention_Pre, ignore.case = TRUE) ~
         "MORENA/PVEM/PT",
-      grepl("pan|pri|prd", Vote_Intention_Pre, ignore.case = T) ~ "PAN/PRI/PRD",
-      grepl("mc", Vote_Intention_Pre, ignore.case = T) ~ "MC",
+      grepl("pan|pri|prd", Vote_Intention_Pre, ignore.case = TRUE) ~ "PAN/PRI/PRD",
+      grepl("mc", Vote_Intention_Pre, ignore.case = TRUE) ~ "MC",
       TRUE ~ NA_character_
     )
   )
-
-d_geo <- st_read("data/00mun_simplified.geojson", quiet = TRUE)
-d_geo$muni_id <- d_geo$CVEGEO
 
 excluded_states <- c(
   "Ciudad de México",
@@ -34,7 +43,10 @@ excluded_states <- c(
   "Oaxaca",
   "Veracruz de Ignacio de la Llave"
 )
-d_geo <- d_geo %>% filter(!NOM_ENT %in% excluded_states)
+
+d_geo <- st_read("data/00mun_simplified.geojson", quiet = TRUE) %>%
+  mutate(muni_id = CVEGEO) %>%
+  filter(!NOM_ENT %in% excluded_states)
 
 # Centroids for distance computation
 coords <- st_coordinates(st_centroid(d_geo))
@@ -97,7 +109,7 @@ long_df <- survey_responses_wave1 %>%
     respondent_coalition
   ) %>%
   mutate(home_id = sprintf("%05d", as.integer(home_id))) %>%
-  separate_rows(Benchmark_Candidate_Municipalities, sep = ";") %>%
+  separate_longer_delim(Benchmark_Candidate_Municipalities, delim = ";") %>%
   rename(candidate_id = Benchmark_Candidate_Municipalities) %>%
   mutate(candidate_id = trimws(candidate_id)) %>%
   # Outcome: was this candidate selected?
@@ -166,15 +178,7 @@ long_df <- long_df %>%
 
 long_df <- long_df %>%
   mutate(
-    #Great-circle distance (km) via Haversine
-    dist_km = {
-      R <- 6371
-      dlat <- (cand_lat - home_lat) * pi / 180
-      dlon <- (cand_lon - home_lon) * pi / 180
-      a <- sin(dlat / 2)^2 +
-        cos(home_lat * pi / 180) * cos(cand_lat * pi / 180) * sin(dlon / 2)^2
-      2 * R * atan2(sqrt(a), sqrt(1 - a))
-    },
+    dist_km = haversine_km(home_lon, home_lat, cand_lon, cand_lat),
     log_dist_km = log(dist_km + 1),
     log_pop_ratio = log((cand_pop + 1) / (home_pop + 1)),
     same_state = as.integer(cand_state == home_state),
@@ -221,8 +225,6 @@ print(table(long_df$pool))
 # α_r ~ N(0, σ²_α)  — respondent random intercept
 # Priors: t(2, 0, 2.5) on QR-decomposed centered covariates (Goodall 1993)
 
-library(brms)
-
 priors <- c(
   prior(student_t(2, 0, 2.5), class = b),
   prior(student_t(2, 0, 2.5), class = Intercept),
@@ -246,6 +248,7 @@ fit_benchmark <- brm(
   family = bernoulli(link = "logit"),
   prior = priors,
   chains = 4,
+  cores = 4,
   iter = 2000,
   warmup = 1000,
   seed = 42,

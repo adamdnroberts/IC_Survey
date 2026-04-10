@@ -1477,9 +1477,9 @@ QUOTA_SEL <- c(
   "2" = 262L,
   "3" = 334L,
   "4" = 357L,
-  "5" = 325L,
-  "6" = 554L,
-  "7" = 190L
+  "5" = 469L,
+  "6" = 560L,
+  "7" = 40L
 )
 
 # Region targets: loaded from pre-computed RDS (run code/census_quotas.R to generate)
