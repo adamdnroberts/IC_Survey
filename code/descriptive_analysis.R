@@ -3,10 +3,10 @@ library(tidyr)
 library(sf)
 library(data.table)
 library(brms)
+library(ggplot2)
 
-source("code/generate_synthetic_responses_wave1.R", echo = FALSE)
-
-file.remove("data/fit_benchmark.rds")
+# If you need to re-run the model
+#file.remove("data/fit_benchmark.rds")
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -21,17 +21,15 @@ haversine_km <- function(lon1, lat1, lon2, lat2) {
 
 # ── Load reference data ───────────────────────────────────────────────────────
 
-survey_responses_wave1 <- read.csv(
-  "data/survey_responses_wave1.csv",
-  stringsAsFactors = FALSE
-)
+survey_responses_wave1 <- readRDS("data/wave1_responses.rds")
 
 survey_responses_wave1 <- survey_responses_wave1 %>%
   mutate(
     respondent_coalition = case_when(
       grepl("morena|pvem|pt", Vote_Intention_Pre, ignore.case = TRUE) ~
         "MORENA/PVEM/PT",
-      grepl("pan|pri|prd", Vote_Intention_Pre, ignore.case = TRUE) ~ "PAN/PRI/PRD",
+      grepl("pan|pri|prd", Vote_Intention_Pre, ignore.case = TRUE) ~
+        "PAN/PRI/PRD",
       grepl("mc", Vote_Intention_Pre, ignore.case = TRUE) ~ "MC",
       TRUE ~ NA_character_
     )
@@ -235,13 +233,13 @@ fit_benchmark <- brm(
   bf(
     Selected ~
       log_dist_km +
-      log_pop_ratio +
-      same_state +
-      same_coalition +
-      vote_coalition_match +
-      cand_coalition +
-      pool +
-      (1 | Respondent_ID),
+        log_pop_ratio +
+        same_state +
+        same_coalition +
+        vote_coalition_match +
+        cand_coalition +
+        pool +
+        (1 | Respondent_ID),
     decomp = "QR"
   ),
   data = long_df,
