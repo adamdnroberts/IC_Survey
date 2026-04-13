@@ -14,8 +14,14 @@ if (length(objects$Contents) == 0) {
 
 all_responses <- dplyr::bind_rows(lapply(objects$Contents, function(obj) {
   raw <- s3_client$get_object(Bucket = Sys.getenv("S3_BUCKET"), Key = obj$Key)
-  read.csv(text = rawToChar(raw$Body), stringsAsFactors = FALSE, colClasses = "character")
+  read.csv(
+    text = rawToChar(raw$Body),
+    stringsAsFactors = FALSE,
+    colClasses = "character"
+  )
 }))
 
-saveRDS(all_responses, "data/wave1_responses.rds")
-cat("Saved", nrow(all_responses), "responses to data/wave1_responses.rds\n")
+saveRDS(
+  all_responses,
+  "C:/Users/adamd/Documents/IC_Survey/data/wave1_responses.rds"
+)

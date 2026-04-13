@@ -7,7 +7,6 @@ rsconnect::deployApp(
     "data/robo_2025.rds",
     "data/magar2024_coalitions.Rdata",
     "data/nearest10.rds",
-    "data/mp_mc_data.rds",
     "data/precip_data.rds",
     "data/region_quotas_wave1.rds",
     "www/Information_Sheet_Informational_Comparisons_Spanish.pdf",
