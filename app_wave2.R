@@ -436,6 +436,17 @@ ui <- fluidPage(
         font-weight: 600;
       }
 
+      /* Page 13 sliders: grayed out until touched */
+      #page13 .shiny-input-container.slider-untouched .irs-line,
+      #page13 .shiny-input-container.slider-untouched .irs-bar,
+      #page13 .shiny-input-container.slider-untouched .irs-bar-edge,
+      #page13 .shiny-input-container.slider-untouched .irs-handle,
+      #page13 .shiny-input-container.slider-untouched .irs-single,
+      #page13 .shiny-input-container.slider-untouched .irs-min,
+      #page13 .shiny-input-container.slider-untouched .irs-max {
+        opacity: 0.35;
+      }
+
       /* Slot ranker widget */
       .slot-ranker {
         display: flex;
@@ -554,6 +565,31 @@ ui <- fluidPage(
         if (slider) slider.update({grid_num: 10});
       });
 
+      /* Track user interaction with page 13 sliders */
+      var sliderTouched = {};
+      var page13ListenActive = false;
+      var page13SliderIds = ['home_crime_handling_post', 'morena_crime_rating_post',
+                             'coalition_pan_pri_prd_crime_rating_post', 'mc_crime_rating_post'];
+
+      Shiny.addCustomMessageHandler('initPage13Sliders', function(msg) {
+        page13ListenActive = false;
+        setTimeout(function() {
+          $('#page13 .shiny-input-container:has(.js-range-slider)').each(function() {
+            var id = $(this).find('.js-range-slider').attr('id');
+            if (id && !sliderTouched[id]) $(this).addClass('slider-untouched');
+          });
+          page13ListenActive = true;
+        }, 300);
+      });
+
+      $(document).on('shiny:inputchanged', function(e) {
+        if (page13ListenActive && page13SliderIds.indexOf(e.name) !== -1) {
+          sliderTouched[e.name] = true;
+          $('#' + e.name).closest('.shiny-input-container').removeClass('slider-untouched');
+          Shiny.setInputValue('slider_touched_' + e.name, true);
+        }
+      });
+
       function startTreatmentTimer(seconds) {
         var btn = $('#goto_page11_from_9');
         var msg = $('#treatment_wait_msg');
@@ -635,9 +671,9 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page0",
-            p(strong(
-              "Por favor, lea esta hoja informativa antes de continuar."
-            )),
+            p(
+              "Puede leer esta hoja informativa si lo desea antes de continuar."
+            ),
             tags$iframe(
               src = "Information_Sheet_Informational_Comparisons_Spanish.pdf",
               width = "100%",
@@ -887,6 +923,7 @@ ui <- fluidPage(
             hr(),
             uiOutput("municipality_ranking_post_ui"),
             hr(),
+            uiOutput("page11_warning"),
             fluidRow(
               column(
                 12,
@@ -953,7 +990,9 @@ ui <- fluidPage(
             tags$div(
               class = "form-group",
               tags$label(
-                tags$strong("Si tuviera que votar, \u00bfpor cu\u00e1l partido o partidos votar\u00eda en las elecciones municipales de 2027?")
+                tags$strong(
+                  "Si tuviera que votar, \u00bfpor cu\u00e1l partido o partidos votar\u00eda en las elecciones municipales de 2027?"
+                )
               ),
               tags$div(
                 class = "party-radio-group",
@@ -1014,6 +1053,7 @@ ui <- fluidPage(
               )
             ),
             hr(),
+            uiOutput("page13_warning"),
             fluidRow(
               column(
                 12,
@@ -1562,7 +1602,7 @@ server <- function(input, output, session) {
     }
   })
 
-  # Screen-out redirect to Netquest
+  # Screen-out redirect to Netquest; also initialise page 13 slider tracking
   observeEvent(current_page(), {
     if (
       current_page() == 16 && !is.null(netquest_pid) && nchar(netquest_pid) > 0
@@ -1571,6 +1611,9 @@ server <- function(input, output, session) {
         'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=fo_0&c=ok&ticket=%s"; }, 1500)',
         netquest_pid
       ))
+    }
+    if (current_page() == 13) {
+      session$sendCustomMessage("initPage13Sliders", list())
     }
   })
 
@@ -1584,6 +1627,22 @@ server <- function(input, output, session) {
     if (is.null(input$attention_check) || length(input$attention_check) == 0) {
       attention_warning_msg(
         "Por favor, seleccione una respuesta antes de continuar."
+      )
+      return()
+    }
+    comp_munis <- active_comp_munis()
+    n_comp <- if (!is.null(comp_munis)) nrow(comp_munis) else 0
+    gov_ids <- c("home_governing_party_belief", paste0("comp_governing_party_", seq_len(n_comp)))
+    if (any(sapply(gov_ids, function(id) is.null(input[[id]])))) {
+      attention_warning_msg(
+        "Por favor, responda todas las preguntas antes de continuar."
+      )
+      return()
+    }
+    rank_ids <- paste0("muni_rank_comp_", seq_len(n_comp))
+    if (any(sapply(rank_ids, function(id) is.null(input[[id]])))) {
+      attention_warning_msg(
+        "Por favor, responda todas las preguntas antes de continuar."
       )
       return()
     }
@@ -1607,8 +1666,35 @@ server <- function(input, output, session) {
   })
 
   # Page 11 → Page 13 (robbery estimate + ranking → sliders + vote)
+  page11_warning_msg <- reactiveVal(NULL)
+  output$page11_warning <- renderUI({
+    msg <- page11_warning_msg()
+    if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
+  })
   observeEvent(input$goto_page13_from_11, {
+    est <- input$robbery_estimate_post
+    if (is.null(est) || is.na(est)) {
+      page11_warning_msg("Por favor, ingrese su estimaci\u00f3n antes de continuar.")
+      return()
+    }
+    comp_munis <- active_comp_munis()
+    n_comp <- if (!is.null(comp_munis)) nrow(comp_munis) else 0
+    rank_ids <- paste0("muni_rank_post_comp_", seq_len(n_comp))
+    if (any(sapply(rank_ids, function(id) is.null(input[[id]])))) {
+      page11_warning_msg(
+        "Por favor, responda todas las preguntas de clasificaci\u00f3n antes de continuar."
+      )
+      return()
+    }
+    page11_warning_msg(NULL)
     current_page(13)
+  })
+
+  # Page 13 warning (submit validation)
+  page13_warning_msg <- reactiveVal(NULL)
+  output$page13_warning <- renderUI({
+    msg <- page13_warning_msg()
+    if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
 
   # vote_intention_2027 "other" toggle
@@ -2214,6 +2300,48 @@ server <- function(input, output, session) {
 
   # Wave 2 submit
   observeEvent(input$submit, {
+    # Validate sliders
+    untouched_sliders <- c()
+    if (!isTRUE(input$slider_touched_home_crime_handling_post)) {
+      untouched_sliders <- c(untouched_sliders, "el manejo de la delincuencia en su municipio")
+    }
+    if (!isTRUE(input$slider_touched_morena_crime_rating_post)) {
+      untouched_sliders <- c(
+        untouched_sliders,
+        "el manejo de la delincuencia por Sigamos Haciendo Historia"
+      )
+    }
+    if (!isTRUE(input$slider_touched_coalition_pan_pri_prd_crime_rating_post)) {
+      untouched_sliders <- c(
+        untouched_sliders,
+        "el manejo de la delincuencia por Fuerza y Coraz\u00f3n por M\u00e9xico"
+      )
+    }
+    if (!isTRUE(input$slider_touched_mc_crime_rating_post)) {
+      untouched_sliders <- c(untouched_sliders, "el manejo de la delincuencia por MC")
+    }
+    if (length(untouched_sliders) > 0) {
+      page13_warning_msg(
+        "Por favor, ajuste todos los controles deslizantes antes de continuar."
+      )
+      return()
+    }
+    if (is.null(input$vote_intention_2027) || length(input$vote_intention_2027) == 0) {
+      page13_warning_msg("Por favor, indique su intenci\u00f3n de voto.")
+      return()
+    }
+    if (
+      "other" %in% input$vote_intention_2027 &&
+        (is.null(input$vote_intention_2027_other) ||
+          trimws(input$vote_intention_2027_other) == "")
+    ) {
+      page13_warning_msg(
+        "Por favor, especifique el partido para la opci\u00f3n 'Otro' en la pregunta de intenci\u00f3n de voto."
+      )
+      return()
+    }
+    page13_warning_msg(NULL)
+
     found_muni_name <- if (!is.null(found_municipality())) {
       d_geo %>%
         st_drop_geometry() %>%
@@ -2732,7 +2860,7 @@ server <- function(input, output, session) {
       "En ",
       home_name,
       " hubieron ",
-      format(round(home_rate, 1), nsmall = 1),
+      round(home_rate),
       " robos por cada 100,000 habitantes en 2025."
     )
   })
@@ -3024,9 +3152,9 @@ server <- function(input, output, session) {
       paste0(
         "En ",
         home_name[1],
-        " (2025): ",
+        " hubo ",
         round(home_precip[1]),
-        " mm de precipitaci\u00f3n anual."
+        " mm de precipitaci\u00f3n en 2025."
       )
     } else {
       NULL

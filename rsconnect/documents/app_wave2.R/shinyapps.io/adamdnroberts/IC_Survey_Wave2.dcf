@@ -1,0 +1,10 @@
+name: IC_Survey_Wave2
+title:
+username: adamdnroberts
+account: adamdnroberts
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17154922
+bundleId: 11862036
+url: https://adamdnroberts.shinyapps.io/IC_Survey_Wave2/
+version: 1
