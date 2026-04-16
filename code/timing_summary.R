@@ -4,6 +4,9 @@ survey_responses_wave1 <- readRDS(
   "C:/Users/adamd/Documents/IC_Survey/data/wave1_responses.rds"
 )
 
+survey_responses_wave1 <- survey_responses_wave1 %>%
+  filter(as.Date(Timestamp) >= "2026-04-14")
+
 # Build timing summary table (all times in minutes)
 pages <- c("Total", paste0("Page_", 0:11))
 col_names <- c("Time_Total_Seconds", paste0("Time_Page_", 0:11, "_Sec"))

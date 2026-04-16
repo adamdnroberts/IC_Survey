@@ -1466,6 +1466,9 @@ server <- function(input, output, session) {
       } else {
         ""
       }
+      save_screenout(respondent_id, "survey_quota_full", NULL,
+                     netquest_pid, nq_age, nq_sex, nq_region, nq_sel,
+                     Sys.getenv("S3_BUCKET"))
       shinyjs::runjs(sprintf(
         'window.location.href = "https://transit.nicequest.com/transit/participation?tp=qf_1&c=ok&ticket=%s"',
         ticket
@@ -1533,6 +1536,9 @@ server <- function(input, output, session) {
           QUOTA_REGION[region_cell] + QUOTA_BUFFER)
 
     if (isTRUE(over_quota)) {
+      save_screenout(respondent_id, "over_quota", NULL,
+                     netquest_pid, nq_age, nq_sex, nq_region, nq_sel,
+                     Sys.getenv("S3_BUCKET"))
       shinyjs::runjs(sprintf(
         'window.location.href = "https://transit.nicequest.com/transit/participation?tp=qf_1&c=ok&ticket=%s"',
         pid
