@@ -1,4 +1,5 @@
 library(paws.storage)
+library(dplyr)
 
 readRenviron("C:/Users/adamd/Documents/IC_Survey/.Renviron")
 
@@ -20,6 +21,8 @@ all_responses <- dplyr::bind_rows(lapply(objects$Contents, function(obj) {
     colClasses = "character"
   )
 }))
+
+all_responses <- filter(all_responses, !is.na(Netquest_PID))
 
 saveRDS(
   all_responses,

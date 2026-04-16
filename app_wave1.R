@@ -525,7 +525,7 @@ ui <- fluidPage(
       $(document).on('change', 'input.party-checkbox-input', function() {
         var group = $(this).data('group');
         var val = $(this).val();
-        var exclusive = ['did_not_vote', 'dont_remember', 'other'];
+        var exclusive = ['did_not_vote', 'dont_remember'];
         var partyCoalition = {
           'morena': 'A', 'pvem': 'A', 'pt': 'A',
           'pan': 'B', 'pri': 'B', 'prd': 'B',
@@ -536,17 +536,21 @@ ui <- fluidPage(
             // Exclusive option: uncheck everything else in the group
             $('input.party-checkbox-input[data-group=\"' + group + '\"]').not(this).prop('checked', false);
           } else {
-            // Party selected: uncheck exclusive options
+            // Party or 'other' selected: uncheck exclusive options
             exclusive.forEach(function(ex) {
               $('input.party-checkbox-input[data-group=\"' + group + '\"][value=\"' + ex + '\"]').prop('checked', false);
             });
             // Uncheck any currently checked parties from a different coalition
+            // ('other' is always allowed alongside any coalition, so skip it)
             var newCoalition = partyCoalition[val];
-            $('input.party-checkbox-input[data-group=\"' + group + '\"]:checked').not(this).each(function() {
-              if (partyCoalition[$(this).val()] !== newCoalition) {
-                $(this).prop('checked', false);
-              }
-            });
+            if (newCoalition !== undefined) {
+              $('input.party-checkbox-input[data-group=\"' + group + '\"]:checked').not(this).each(function() {
+                var checkedVal = $(this).val();
+                if (checkedVal !== 'other' && partyCoalition[checkedVal] !== newCoalition) {
+                  $(this).prop('checked', false);
+                }
+              });
+            }
           }
         }
         var checked = [];
@@ -845,9 +849,11 @@ ui <- fluidPage(
         hidden(
           div(
             id = "page3",
-            p(
-              "Por favor, ordene esta lista de fuentes de noticias en la siguiente manera: ",
-              "Radio en primer lugar, Periódicos impresos en segundo lugar, y Redes sociales en tercer lugar."
+            p(tags$strong("Por favor, ordene esta lista de fuentes de noticias en la siguiente manera:")),
+            tags$ol(
+              tags$li("Radio"),
+              tags$li("Per\u00eddicos impresos"),
+              tags$li("Redes sociales")
             ),
             tags$hr(),
             slot_ranker_ui(
@@ -1314,33 +1320,45 @@ write_quota_counts <- function(bucket, counts) {
 # ── Screenout recorder ──────────────────────────────────────────────────────
 # Saves a minimal CSV row to S3 (wave1_screenouts/) or locally for each
 # participant who does not reach the survey proper.
-save_screenout <- function(respondent_id, reason, muni_id, netquest_pid,
-                           nq_age, nq_sex, nq_region, nq_sel, s3_bucket) {
+save_screenout <- function(
+  respondent_id,
+  reason,
+  muni_id,
+  netquest_pid,
+  nq_age,
+  nq_sex,
+  nq_region,
+  nq_sel,
+  s3_bucket
+) {
   df <- data.frame(
-    Respondent_ID    = respondent_id,
-    Timestamp        = as.character(Sys.time()),
+    Respondent_ID = respondent_id,
+    Timestamp = as.character(Sys.time()),
     Screenout_Reason = reason,
     Found_Municipality_ID = if (is.null(muni_id)) NA_character_ else muni_id,
-    Netquest_PID     = if (is.null(netquest_pid)) NA_character_ else netquest_pid,
-    NQ_Age           = if (is.null(nq_age))  NA_character_ else nq_age,
-    NQ_Sex           = if (is.null(nq_sex))  NA_character_ else nq_sex,
-    NQ_Region        = if (is.null(nq_region)) NA_character_ else nq_region,
-    NQ_SEL           = if (is.null(nq_sel))  NA_character_ else nq_sel,
+    Netquest_PID = if (is.null(netquest_pid)) NA_character_ else netquest_pid,
+    NQ_Age = if (is.null(nq_age)) NA_character_ else nq_age,
+    NQ_Sex = if (is.null(nq_sex)) NA_character_ else nq_sex,
+    NQ_Region = if (is.null(nq_region)) NA_character_ else nq_region,
+    NQ_SEL = if (is.null(nq_sel)) NA_character_ else nq_sel,
     stringsAsFactors = FALSE
   )
-  tc  <- textConnection("csv_out", "w", local = TRUE)
+  tc <- textConnection("csv_out", "w", local = TRUE)
   write.csv(df, tc, row.names = FALSE)
   close(tc)
   csv_content <- paste(csv_out, collapse = "\n")
   if (nchar(s3_bucket) > 0) {
-    tryCatch({
-      s3_client <- paws.storage::s3()
-      s3_client$put_object(
-        Bucket = s3_bucket,
-        Key    = paste0("wave1_screenouts/", respondent_id, ".csv"),
-        Body   = charToRaw(csv_content)
-      )
-    }, error = function(e) warning("Screenout S3 upload failed: ", e$message))
+    tryCatch(
+      {
+        s3_client <- paws.storage::s3()
+        s3_client$put_object(
+          Bucket = s3_bucket,
+          Key = paste0("wave1_screenouts/", respondent_id, ".csv"),
+          Body = charToRaw(csv_content)
+        )
+      },
+      error = function(e) warning("Screenout S3 upload failed: ", e$message)
+    )
   } else {
     tryCatch(
       write(csv_content, file = "data/screenout_responses.csv", append = TRUE),
@@ -1808,8 +1826,17 @@ server <- function(input, output, session) {
       } else {
         ""
       }
-      save_screenout(respondent_id, "region_mismatch", home_id, netquest_pid,
-                     nq_age, nq_sex, nq_region, nq_sel, Sys.getenv("S3_BUCKET"))
+      save_screenout(
+        respondent_id,
+        "region_mismatch",
+        home_id,
+        netquest_pid,
+        nq_age,
+        nq_sex,
+        nq_region,
+        nq_sel,
+        Sys.getenv("S3_BUCKET")
+      )
       shinyjs::runjs(sprintf(
         'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=dr_0&c=ok&ticket=%s"; }, 1500)',
         pid
@@ -1817,8 +1844,17 @@ server <- function(input, output, session) {
     } else if (state_code %in% excluded_state_codes || is.na(home_party)) {
       save_screenout(
         respondent_id,
-        if (state_code %in% excluded_state_codes) "excluded_state" else "non_main_party",
-        home_id, netquest_pid, nq_age, nq_sex, nq_region, nq_sel,
+        if (state_code %in% excluded_state_codes) {
+          "excluded_state"
+        } else {
+          "non_main_party"
+        },
+        home_id,
+        netquest_pid,
+        nq_age,
+        nq_sex,
+        nq_region,
+        nq_sel,
         Sys.getenv("S3_BUCKET")
       )
       current_page(2)
@@ -1833,7 +1869,7 @@ server <- function(input, output, session) {
       current_page() == 2 && !is.null(netquest_pid) && nchar(netquest_pid) > 0
     ) {
       shinyjs::runjs(sprintf(
-        'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=fo_0&c=ok&ticket=%s"; }, 1500)',
+        'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=dr_0&c=ok&ticket=ticket"; }, 1500)',
         netquest_pid
       ))
     }
@@ -1888,9 +1924,17 @@ server <- function(input, output, session) {
       } else {
         ""
       }
-      save_screenout(respondent_id, "attention_check_fail", found_municipality(),
-                     netquest_pid, nq_age, nq_sex, nq_region, nq_sel,
-                     Sys.getenv("S3_BUCKET"))
+      save_screenout(
+        respondent_id,
+        "attention_check_fail",
+        found_municipality(),
+        netquest_pid,
+        nq_age,
+        nq_sex,
+        nq_region,
+        nq_sel,
+        Sys.getenv("S3_BUCKET")
+      )
       shinyjs::runjs(sprintf(
         'window.location.href = "https://transit.nicequest.com/transit/participation?tp=fo_0&c=ok&ticket=%s"',
         ticket

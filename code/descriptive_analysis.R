@@ -23,16 +23,26 @@ haversine_km <- function(lon1, lat1, lon2, lat2) {
 
 survey_responses_wave1 <- readRDS("data/wave1_responses.rds")
 
+party_to_coalition <- c(
+  morena = "MORENA/PVEM/PT",
+  pvem = "MORENA/PVEM/PT",
+  pt = "MORENA/PVEM/PT",
+  pan = "PAN/PRI/PRD",
+  pri = "PAN/PRI/PRD",
+  prd = "PAN/PRI/PRD",
+  mc = "MC"
+)
+
 survey_responses_wave1 <- survey_responses_wave1 %>%
   mutate(
-    respondent_coalition = case_when(
-      grepl("morena|pvem|pt", Vote_Intention_Pre, ignore.case = TRUE) ~
-        "MORENA/PVEM/PT",
-      grepl("pan|pri|prd", Vote_Intention_Pre, ignore.case = TRUE) ~
-        "PAN/PRI/PRD",
-      grepl("mc", Vote_Intention_Pre, ignore.case = TRUE) ~ "MC",
-      TRUE ~ NA_character_
-    )
+    respondent_coalition = sapply(Vote_Intention_Pre, function(x) {
+      if (is.na(x) || x == "") {
+        return(NA_character_)
+      }
+      parties <- trimws(strsplit(x, ";")[[1]])
+      coalitions <- unique(na.omit(party_to_coalition[parties]))
+      if (length(coalitions) == 1) coalitions else NA_character_
+    })
   )
 
 excluded_states <- c(
@@ -177,7 +187,7 @@ long_df <- long_df %>%
 long_df <- long_df %>%
   mutate(
     dist_km = haversine_km(home_lon, home_lat, cand_lon, cand_lat),
-    log_dist_km = log(dist_km + 1),
+    log_dist_km = log(dist_km),
     log_pop_ratio = log((cand_pop + 1) / (home_pop + 1)),
     same_state = as.integer(cand_state == home_state),
     same_coalition = as.integer(
@@ -262,8 +272,8 @@ summary(fit_benchmark)
 # because logit(0.5) = 0, so the new log-odds is simply β.
 
 coef_labels <- c(
-  "log_dist_km" = "Log distance (km)",
-  "log_pop_ratio" = "Log population ratio",
+  "log_dist_km" = "Distance (km), per doubling",
+  "log_pop_ratio" = "Pop. ratio (cand/home), per doubling",
   "same_state" = "Same state",
   "same_coalition" = "Same coalition",
   "vote_coalition_match" = "Vote coalition match",
@@ -286,14 +296,17 @@ draws <- as_draws_df(fit_benchmark) %>%
     poollargest = b_poollargest
   ) %>%
   pivot_longer(everything(), names_to = "term", values_to = "draw") %>%
-  mutate(pp_change = (plogis(draw) - 0.5) * 100)
+  mutate(
+    draw = if_else(term %in% c("log_dist_km", "log_pop_ratio"), draw * log(2), draw),
+    pp_change = (plogis(draw) - 0.5) * 100
+  )
 
 plot_df <- draws %>%
   group_by(term) %>%
   summarise(
     mean = mean(pp_change),
-    lo90 = quantile(pp_change, 0.05),
-    hi90 = quantile(pp_change, 0.95),
+    lo95 = quantile(pp_change, 0.025),
+    hi95 = quantile(pp_change, 0.975),
     lo50 = quantile(pp_change, 0.25),
     hi50 = quantile(pp_change, 0.75),
     .groups = "drop"
@@ -304,14 +317,14 @@ plot_df <- draws %>%
 
 benchmark_coef_plot <- ggplot(plot_df, aes(x = mean, y = label)) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_linerange(aes(xmin = lo90, xmax = hi90), linewidth = 0.6) +
+  geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 0.6) +
   geom_linerange(aes(xmin = lo50, xmax = hi50), linewidth = 1.6) +
   geom_point(size = 2.5, shape = 21, fill = "white", stroke = 1) +
   labs(
-    x = "Posterior mean percentage-point change\n(from 50% baseline, per unit increase)",
+    x = "Posterior mean percentage-point change\n(from 50% baseline; doublings for distance/pop ratio)",
     y = NULL,
     title = "Predictors of benchmark municipality selection",
-    caption = "Thick lines: 50% CI. Thin lines: 90% CI."
+    caption = "Thick lines: 50% CI. Thin lines: 95% CI."
   ) +
   theme_classic() +
   theme(axis.text.y = element_text(size = 10))
