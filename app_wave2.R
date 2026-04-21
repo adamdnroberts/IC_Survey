@@ -540,6 +540,11 @@ ui <- fluidPage(
         var group = $(this).data('group');
         var val = $(this).val();
         var exclusive = ['did_not_vote', 'dont_remember'];
+        var partyCoalition = {
+          'morena': 'A', 'pvem': 'A', 'pt': 'A',
+          'pan': 'B', 'pri': 'B', 'prd': 'B',
+          'mc': 'C'
+        };
         if ($(this).is(':checked')) {
           if (exclusive.indexOf(val) !== -1) {
             // Exclusive option selected: uncheck everything else in the group
@@ -549,6 +554,16 @@ ui <- fluidPage(
             exclusive.forEach(function(ex) {
               $('input.party-checkbox-input[data-group=\"' + group + '\"][value=\"' + ex + '\"]').prop('checked', false);
             });
+            // Uncheck parties from a different coalition ('other' is always allowed)
+            var newCoalition = partyCoalition[val];
+            if (newCoalition !== undefined) {
+              $('input.party-checkbox-input[data-group=\"' + group + '\"]:checked').not(this).each(function() {
+                var checkedVal = $(this).val();
+                if (checkedVal !== 'other' && partyCoalition[checkedVal] !== newCoalition) {
+                  $(this).prop('checked', false);
+                }
+              });
+            }
           }
         }
         var checked = [];
@@ -1043,6 +1058,10 @@ ui <- fluidPage(
                   "Otro",
                   group = "vote_intention_2027"
                 )
+              ),
+              tags$p(
+                style = "color: #6c757d; font-size: 0.85em; margin-top: 8px;",
+                "Puede seleccionar varios partidos de la misma coalici\u00f3n. Si selecciona un partido de una coalici\u00f3n diferente, se eliminar\u00e1n las selecciones anteriores."
               )
             ),
             hidden(
@@ -1196,32 +1215,8 @@ server <- function(input, output, session) {
   nq_region <- nq_params[["region"]] # state/region code from panel profile
   nq_sel <- nq_params[["sel"]] # socio-economic level code from panel profile
 
-  # Quota full: set SURVEY_QUOTA_FULL=true in .Renviron to redirect all new visitors
-  observe({
-    if (Sys.getenv("SURVEY_QUOTA_FULL") == "true") {
-      ticket <- if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) {
-        netquest_pid
-      } else {
-        ""
-      }
-      shinyjs::runjs(sprintf(
-        'window.location.href = "https://transit.nicequest.com/transit/participation?tp=qf_1&c=ok&ticket=%s"',
-        ticket
-      ))
-    }
-  })
 
   # Define the file path for saving responses (local fallback)
-  responses_file <- "data/survey_responses.csv"
-
-  # Populate municipality search choices for page 8 map
-  updateSelectizeInput(
-    session,
-    "muni_search",
-    choices = c(" " = "", setNames(d_geo$muni_id, d_geo$mun_state)),
-    server = TRUE
-  )
-
   # Geocode address and find municipality
   observeEvent(input$geocode_btn, {
     req(input$address)
@@ -1583,35 +1578,23 @@ server <- function(input, output, session) {
     current_page(1)
   })
 
-  # Page 1 → Page 14 (Wave 2 attention check), or Page 16 (screen-out) if home muni is in an
-  # excluded state (CDMX=09, Durango=10, Oaxaca=20, Veracruz=30) or has no main-party government
-  excluded_state_codes <- c("09", "10", "20", "30")
-
+  # Page 1 → Page 7, or Page 16 (screen-out) if home municipality has no coalition data
   observeEvent(input$goto_page2_from_1, {
     home_id <- found_municipality()
-    state_code <- substr(home_id, 1, 2)
     home_party <- d_geo %>%
       st_drop_geometry() %>%
       filter(muni_id == home_id) %>%
       pull(governing_party) %>%
       `[`(1)
-    if (state_code %in% excluded_state_codes || is.na(home_party)) {
+    if (is.na(home_party)) {
       current_page(16)
     } else {
       current_page(7)
     }
   })
 
-  # Screen-out redirect to Netquest; also initialise page 13 slider tracking
+  # Initialise page 13 slider tracking
   observeEvent(current_page(), {
-    if (
-      current_page() == 16 && !is.null(netquest_pid) && nchar(netquest_pid) > 0
-    ) {
-      shinyjs::runjs(sprintf(
-        'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=fo_0&c=ok&ticket=%s"; }, 1500)',
-        netquest_pid
-      ))
-    }
     if (current_page() == 13) {
       session$sendCustomMessage("initPage13Sliders", list())
     }
@@ -1763,7 +1746,7 @@ server <- function(input, output, session) {
         mutate(full_name = paste0(NOMGEO, ", ", NOM_ENT)) %>%
         pull(full_name)
     } else {
-      "your municipality"
+      "su municipio"
     }
   })
 
@@ -2859,9 +2842,9 @@ server <- function(input, output, session) {
     paste0(
       "En ",
       home_name,
-      " hubieron ",
+      " hubo ",
       round(home_rate),
-      " robos por cada 100,000 habitantes en 2025."
+      " robos por cada 100,000 personas en 2025."
     )
   })
 
@@ -2887,7 +2870,7 @@ server <- function(input, output, session) {
         plotOutput("treatment_histogram_nonpartisan", height = "350px"),
         p(
           em(
-            "Source: Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
+            "Fuente: Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
           ),
           style = "font-size: 0.85em; color: #555; margin-top: 4px;"
         )
@@ -2907,7 +2890,7 @@ server <- function(input, output, session) {
         plotOutput("treatment_histogram_same_coalition", height = "350px"),
         p(
           em(
-            "Source: Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
+            "Fuente: Secretariado Ejecutivo del Sistema Nacional de Seguridad P\u00fablica (SESNSP)."
           ),
           style = "font-size: 0.85em; color: #555; margin-top: 4px;"
         )
@@ -2916,7 +2899,7 @@ server <- function(input, output, session) {
         uiOutput("treatment_weather_ui"),
         plotOutput("treatment_histogram_weather", height = "350px"),
         p(
-          em("Source: WorldClim v2.1 (Fick & Hijmans, 2017)."),
+          em("Fuente: WorldClim v2.1 (Fick & Hijmans, 2017)."),
           style = "font-size: 0.85em; color: #555; margin-top: 4px;"
         )
       )
@@ -2955,7 +2938,11 @@ server <- function(input, output, session) {
     change_text <- home_robbery_change_text()
     tagList(
       p(plain_info_text),
-      p(strong(change_text))
+      p(strong(change_text)),
+      p(
+        em("Fuente: Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP)."),
+        style = "font-size: 0.85em; color: #555; margin-top: 4px;"
+      )
     )
   })
 
@@ -3202,7 +3189,7 @@ server <- function(input, output, session) {
   }
 
   build_weather_plot <- function(plot_df) {
-    fill_values <- c("Su municipio" = "#0072B2", "Comparación" = "#E69F00")
+    fill_values <- c("Su municipio" = "#666666", "Comparación" = "#E69F00")
     ggplot(plot_df, aes(x = municipality, y = precip_mm, fill = fill_group)) +
       geom_col(color = "black", linewidth = 0.5) +
       scale_fill_manual(values = fill_values, name = NULL) +
