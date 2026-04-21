@@ -3,6 +3,7 @@ rsconnect::deployApp(
   appFiles = c(
     "app_wave2.R",
     ".Renviron",
+    "assignment_vector.csv",
     "data/00mun_simplified.geojson",
     "data/robo_2025.rds",
     "data/magar2024_coalitions.Rdata",

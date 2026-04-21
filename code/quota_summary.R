@@ -1,4 +1,5 @@
 library(jsonlite)
+library(paws.storage)
 
 # ── Targets ──────────────────────────────────────────────────────────────────
 QUOTA_SEX <- c("1" = 1067L, "2" = 1113L)
@@ -25,7 +26,9 @@ SEL_LABELS <- c(
 )
 
 # ── Counts ────────────────────────────────────────────────────────────────────
-counts <- jsonlite::fromJSON("wave1_quota_counts.json", simplifyVector = TRUE)
+s3  <- paws.storage::s3()
+obj <- s3$get_object(Bucket = Sys.getenv("S3_BUCKET"), Key = "quota_counts/wave1_quota_counts.json")
+counts <- jsonlite::fromJSON(rawToChar(obj$Body), simplifyVector = TRUE)
 
 # ── Helper: print a quota dimension ──────────────────────────────────────────
 print_quota <- function(title, counts_vec, targets, extra_labels = NULL) {
@@ -81,4 +84,44 @@ n_met <- sum(all_counts >= all_targets)
 cat(sprintf(
   "\nCells met: %d / %d (%.0f%%)\n",
   n_met, length(all_targets), 100 * n_met / length(all_targets)
+))
+
+# ── Cross-check against actual responses ─────────────────────────────────────
+
+responses <- readRDS("data/wave1_responses.rds")
+
+resp_counts <- function(col) {
+  tbl <- table(col, useNA = "no")
+  setNames(as.integer(tbl), names(tbl))
+}
+
+age_bracket <- function(age) {
+  age <- as.integer(age)
+  cut(age,
+    breaks = c(18, 25, 35, 45, 55, 65, Inf),
+    right  = FALSE,
+    labels = c("18-24", "25-34", "35-44", "45-54", "55-64", "65+")
+  )
+}
+
+resp_sex    <- resp_counts(responses$NQ_Sex)
+resp_age    <- resp_counts(age_bracket(responses$NQ_Age))
+resp_sel    <- resp_counts(responses$NQ_SEL)
+resp_region <- resp_counts(responses$NQ_Region)
+
+cat(sprintf(
+  "\n\n%s\nWave 1 Response-Based Quota Check  (N = %d responses)\n%s\n",
+  strrep("=", 60), nrow(responses), strrep("=", 60)
+))
+
+print_quota("Sex (1=Male, 2=Female)", resp_sex, QUOTA_SEX)
+print_quota("Age brackets", resp_age, QUOTA_AGE)
+print_quota("SEL", resp_sel, QUOTA_SEL, SEL_LABELS)
+print_quota("Region (state INEGI code)", resp_region, QUOTA_REGION)
+
+# ── Discrepancy: JSON counter vs responses ────────────────────────────────────
+
+cat(sprintf(
+  "\nDiscrepancy (responses − JSON counter): %+d\n",
+  nrow(responses) - total_n
 ))

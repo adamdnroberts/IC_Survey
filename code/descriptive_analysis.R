@@ -52,15 +52,24 @@ excluded_states <- c(
   "Veracruz de Ignacio de la Llave"
 )
 
-d_geo <- st_read("data/00mun_simplified.geojson", quiet = TRUE) %>%
-  mutate(muni_id = CVEGEO) %>%
+d_geo_all <- st_read("data/00mun_simplified.geojson", quiet = TRUE) %>%
+  mutate(muni_id = CVEGEO)
+
+d_geo <- d_geo_all %>%
   filter(!NOM_ENT %in% excluded_states)
 
-# Centroids for distance computation
+# Centroids for home municipalities (excluded states filtered out)
 coords <- st_coordinates(st_centroid(d_geo))
 centroids <- d_geo %>%
   st_drop_geometry() %>%
   mutate(centroid_lon = coords[, 1], centroid_lat = coords[, 2]) %>%
+  select(muni_id, NOM_ENT, centroid_lon, centroid_lat)
+
+# Centroids for candidate municipalities (all states, including excluded)
+coords_all <- st_coordinates(st_centroid(d_geo_all))
+centroids_all <- d_geo_all %>%
+  st_drop_geometry() %>%
+  mutate(centroid_lon = coords_all[, 1], centroid_lat = coords_all[, 2]) %>%
   select(muni_id, NOM_ENT, centroid_lon, centroid_lat)
 
 # Population from AGEEML
@@ -96,9 +105,13 @@ nearest10 <- readRDS("data/nearest10.rds")
 nearest10_set <- nearest10 %>%
   select(home_id = muni_id, neighbor_id)
 
-# ── Construct municipality-level covariate table ──────────────────────────────
+# ── Construct municipality-level covariate tables ─────────────────────────────
 
 muni_meta <- centroids %>%
+  left_join(all_parties, by = "muni_id") %>%
+  mutate(pop = pop_lookup[muni_id])
+
+muni_meta_all <- centroids_all %>%
   left_join(all_parties, by = "muni_id") %>%
   mutate(pop = pop_lookup[muni_id])
 
@@ -124,7 +137,7 @@ long_df <- survey_responses_wave1 %>%
   mutate(
     selected_vec = strsplit(Benchmark_Selected_Municipalities, ";"),
     Selected = mapply(
-      function(cid, sel) cid %in% trimws(sel[[1]]),
+      function(cid, sel) cid %in% trimws(sel),
       candidate_id,
       selected_vec
     )
@@ -169,7 +182,7 @@ long_df <- long_df %>%
 
 # ── Join candidate municipality metadata ─────────────────────────────────────
 
-cand_meta <- muni_meta %>%
+cand_meta <- muni_meta_all %>%
   select(
     candidate_id = muni_id,
     cand_lon = centroid_lon,
@@ -200,6 +213,10 @@ long_df <- long_df %>%
         !is.na(respondent_coalition) &
         cand_coalition == respondent_coalition
     ),
+    cand_coalition = factor(
+      coalesce(cand_coalition, "Other"),
+      levels = c("MC", "MORENA/PVEM/PT", "PAN/PRI/PRD", "Other")
+    ),
     pool = factor(pool, levels = c("random", "nearest", "largest"))
   ) %>%
   select(
@@ -217,13 +234,16 @@ long_df <- long_df %>%
     home_pop,
     cand_pop,
     home_coalition,
-    cand_coalition
+    cand_coalition,
+    cand_state
   )
+
+n_respondents <- n_distinct(long_df$Respondent_ID)
 
 cat(sprintf(
   "Long format: %d rows (%d respondents × ~15 candidates)\n",
   nrow(long_df),
-  n_distinct(long_df$Respondent_ID)
+  n_respondents
 ))
 cat(sprintf("Selection rate: %.1f%%\n", 100 * mean(long_df$Selected)))
 print(table(long_df$pool))
@@ -249,7 +269,8 @@ fit_benchmark <- brm(
         vote_coalition_match +
         cand_coalition +
         pool +
-        (1 | Respondent_ID),
+        (1 | Respondent_ID) +
+        (1 | cand_state),
     decomp = "QR"
   ),
   data = long_df,
@@ -265,11 +286,24 @@ fit_benchmark <- brm(
 
 summary(fit_benchmark)
 
+# ── Contrast: MORENA vs PAN/PRI/PRD ───────────────────────────────────────────
+# Posterior distribution of the difference in log-odds between the two
+# coalition fixed effects (both relative to MC as the omitted category).
+
+coalition_contrast <- as_draws_df(fit_benchmark) %>%
+  mutate(
+    diff = b_cand_coalitionMORENADPVEMDPT - b_cand_coalitionPANDPRIDPRD
+  )
+
+cat(sprintf(
+  "MORENA − PAN/PRI/PRD log-odds difference:\n  mean = %.3f, 95%% CI [%.3f, %.3f]\n  P(MORENA > PAN/PRI/PRD) = %.3f\n",
+  mean(coalition_contrast$diff),
+  quantile(coalition_contrast$diff, 0.025),
+  quantile(coalition_contrast$diff, 0.975),
+  mean(coalition_contrast$diff > 0)
+))
+
 # ── Posterior marginal effects plot ───────────────────────────────────────────
-# For each coefficient β, the percentage-point change in Pr(selected) when
-# increasing the covariate by 1 unit from a 50% baseline:
-#   ΔPr = (plogis(β) - 0.5) × 100
-# because logit(0.5) = 0, so the new log-odds is simply β.
 
 coef_labels <- c(
   "log_dist_km" = "Distance (km), per doubling",
@@ -277,10 +311,11 @@ coef_labels <- c(
   "same_state" = "Same state",
   "same_coalition" = "Same coalition",
   "vote_coalition_match" = "Vote coalition match",
-  "poolnearest" = "Pool: nearest",
-  "poollargest" = "Pool: largest",
-  "cand_coalitionMORENADPVEMDPT" = "MORENA",
-  "cand_coalitionPANDPRIDPRD" = "PAN/PRI/PRD"
+  #"poolnearest" = "Pool: nearest",
+  #"poollargest" = "Pool: largest",
+  #"cand_coalitionOther" = "Cand. coalition: Other"
+  "cand_coalitionMORENADPVEMDPT" = "Cand. coalition: MORENA/PVEM/PT",
+  "cand_coalitionPANDPRIDPRD" = "Cand. coalition: PAN/PRI/PRD"
 )
 
 draws <- as_draws_df(fit_benchmark) %>%
@@ -292,12 +327,17 @@ draws <- as_draws_df(fit_benchmark) %>%
     vote_coalition_match = b_vote_coalition_match,
     cand_coalitionMORENADPVEMDPT = b_cand_coalitionMORENADPVEMDPT,
     cand_coalitionPANDPRIDPRD = b_cand_coalitionPANDPRIDPRD,
-    poolnearest = b_poolnearest,
-    poollargest = b_poollargest
+    #cand_coalitionOther = b_cand_coalitionOther,
+    #poolnearest = b_poolnearest,
+    #poollargest = b_poollargest
   ) %>%
   pivot_longer(everything(), names_to = "term", values_to = "draw") %>%
   mutate(
-    draw = if_else(term %in% c("log_dist_km", "log_pop_ratio"), draw * log(2), draw),
+    draw = if_else(
+      term %in% c("log_dist_km", "log_pop_ratio"),
+      draw * log(2),
+      draw
+    ),
     pp_change = (plogis(draw) - 0.5) * 100
   )
 
@@ -324,7 +364,10 @@ benchmark_coef_plot <- ggplot(plot_df, aes(x = mean, y = label)) +
     x = "Posterior mean percentage-point change\n(from 50% baseline; doublings for distance/pop ratio)",
     y = NULL,
     title = "Predictors of benchmark municipality selection",
-    caption = "Thick lines: 50% CI. Thin lines: 95% CI."
+    caption = sprintf(
+      "N = %d respondents. Thick lines: 50%% CI. Thin lines: 95%% CI.",
+      n_respondents
+    )
   ) +
   theme_classic() +
   theme(axis.text.y = element_text(size = 10))
@@ -332,8 +375,13 @@ benchmark_coef_plot <- ggplot(plot_df, aes(x = mean, y = label)) +
 print(benchmark_coef_plot)
 
 ggsave(
-  "latex/images/benchmark_coef_plot.pdf",
+  "latex/images/comparison_coef_plot.pdf",
   plot = benchmark_coef_plot,
   width = 7,
   height = 4
 )
+
+#test <- long_df %>% group_by(Respondent_ID) %>% summarize(selected_num = sum(Selected == TRUE))
+# ggplot(test) +
+#   geom_histogram(aes(x = selected_num), bins = 30) +
+#   theme_bw()

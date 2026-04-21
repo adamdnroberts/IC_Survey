@@ -9,7 +9,7 @@ survey_responses_wave1 <- survey_responses_wave1 %>%
 
 # Build timing summary table (all times in minutes)
 pages <- c("Total", paste0("Page_", 0:11))
-col_names <- c("Time_Total_Seconds", paste0("Time_Page_", 0:11, "_Sec"))
+col_names <- c("Time_Total_Seconds", paste0("Time_Page_", c(0:4, 6, 9), "_Sec"))
 
 timing_summary <- lapply(seq_along(pages), function(i) {
   col <- col_names[i]
