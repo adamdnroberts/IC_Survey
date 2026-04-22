@@ -269,8 +269,7 @@ fit_benchmark <- brm(
         vote_coalition_match +
         cand_coalition +
         pool +
-        (1 | Respondent_ID) +
-        (1 | cand_state),
+        (1 | Respondent_ID),
     decomp = "QR"
   ),
   data = long_df,
@@ -290,10 +289,10 @@ summary(fit_benchmark)
 # Posterior distribution of the difference in log-odds between the two
 # coalition fixed effects (both relative to MC as the omitted category).
 
-coalition_contrast <- as_draws_df(fit_benchmark) %>%
-  mutate(
-    diff = b_cand_coalitionMORENADPVEMDPT - b_cand_coalitionPANDPRIDPRD
-  )
+fe_draws <- as.data.frame(fixef(fit_benchmark, summary = FALSE))
+
+coalition_contrast <- fe_draws %>%
+  mutate(diff = `cand_coalitionMORENADPVEMDPT` - `cand_coalitionPANDPRIDPRD`)
 
 cat(sprintf(
   "MORENA − PAN/PRI/PRD log-odds difference:\n  mean = %.3f, 95%% CI [%.3f, %.3f]\n  P(MORENA > PAN/PRI/PRD) = %.3f\n",
@@ -311,25 +310,19 @@ coef_labels <- c(
   "same_state" = "Same state",
   "same_coalition" = "Same coalition",
   "vote_coalition_match" = "Vote coalition match",
-  #"poolnearest" = "Pool: nearest",
-  #"poollargest" = "Pool: largest",
-  #"cand_coalitionOther" = "Cand. coalition: Other"
   "cand_coalitionMORENADPVEMDPT" = "Cand. coalition: MORENA/PVEM/PT",
   "cand_coalitionPANDPRIDPRD" = "Cand. coalition: PAN/PRI/PRD"
 )
 
-draws <- as_draws_df(fit_benchmark) %>%
+draws <- fe_draws %>%
   select(
-    log_dist_km = b_log_dist_km,
-    log_pop_ratio = b_log_pop_ratio,
-    same_state = b_same_state,
-    same_coalition = b_same_coalition,
-    vote_coalition_match = b_vote_coalition_match,
-    cand_coalitionMORENADPVEMDPT = b_cand_coalitionMORENADPVEMDPT,
-    cand_coalitionPANDPRIDPRD = b_cand_coalitionPANDPRIDPRD,
-    #cand_coalitionOther = b_cand_coalitionOther,
-    #poolnearest = b_poolnearest,
-    #poollargest = b_poollargest
+    log_dist_km,
+    log_pop_ratio,
+    same_state,
+    same_coalition,
+    vote_coalition_match,
+    cand_coalitionMORENADPVEMDPT,
+    cand_coalitionPANDPRIDPRD
   ) %>%
   pivot_longer(everything(), names_to = "term", values_to = "draw") %>%
   mutate(
@@ -363,7 +356,7 @@ benchmark_coef_plot <- ggplot(plot_df, aes(x = mean, y = label)) +
   labs(
     x = "Posterior mean percentage-point change\n(from 50% baseline; doublings for distance/pop ratio)",
     y = NULL,
-    title = "Predictors of benchmark municipality selection",
+    title = "Predictors of comparison municipality selection",
     caption = sprintf(
       "N = %d respondents. Thick lines: 50%% CI. Thin lines: 95%% CI.",
       n_respondents

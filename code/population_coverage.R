@@ -20,7 +20,7 @@ cat(sprintf(
 
 # ── Share of population by municipality size threshold ───────────────────────
 
-thresholds <- c(1000, 2500, 5000, 10000, 25000, 50000, 100000)
+thresholds <- c(1000, 2500, 5000, 10000, 22000, 61494, 100000)
 
 cat(sprintf(
   "%-20s  %8s  %8s  %10s  %10s\n",
@@ -69,6 +69,15 @@ threshold_row <- d_sorted %>%
   slice_tail(n = 1)
 cat(sprintf(
   "\n90%% of the population lives in municipalities larger than %s residents\n",
+  format(threshold_row$pop, big.mark = ",")
+))
+
+d_sorted <- d %>% arrange(pop) %>% mutate(cum_pop = cumsum(pop))
+threshold_row <- d_sorted %>%
+  filter(cum_pop <= 0.25 * total_pop) %>%
+  slice_tail(n = 1)
+cat(sprintf(
+  "\n75%% of the population lives in municipalities larger than %s residents\n",
   format(threshold_row$pop, big.mark = ",")
 ))
 

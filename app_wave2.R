@@ -736,7 +736,7 @@ ui <- fluidPage(
           div(
             id = "page0",
             p(
-              "Puede leer esta hoja informativa si lo desea antes de continuar."
+              "Por favor, lea esta hoja informativa antes de continuar."
             ),
             tags$iframe(
               src = "Information_Sheet_Informational_Comparisons_Spanish.pdf",
@@ -825,9 +825,23 @@ ui <- fluidPage(
                   "Por favor, confirme que la siguiente información es correcta antes de continuar:"
                 )),
                 uiOutput("home_municipality_summary"),
+                actionButton(
+                  "clear_selection_btn",
+                  "Limpiar selección",
+                  icon = icon("refresh"),
+                  class = "btn-secondary"
+                )
+              )
+            ),
+
+            # Dropdown fallback (shown after any geocode attempt)
+            hidden(
+              div(
+                id = "dropdown_fallback_section",
+                hr(),
                 selectInput(
                   "dropdown_municipality",
-                  "¿No es correcto? Busque su dirección nuevamente o seleccione su municipio de la lista:",
+                  "¿No encontró su municipio? También puede seleccionarlo de la lista:",
                   choices = c(
                     "-- Seleccione un municipio --" = "",
                     muni_choices
@@ -835,12 +849,6 @@ ui <- fluidPage(
                   selected = "",
                   selectize = TRUE,
                   width = "100%"
-                ),
-                actionButton(
-                  "clear_selection_btn",
-                  "Limpiar selección",
-                  icon = icon("refresh"),
-                  class = "btn-secondary"
                 )
               )
             ),
@@ -1208,6 +1216,7 @@ server <- function(input, output, session) {
   selected_map_munis <- reactiveVal(character())
   found_municipality <- reactiveVal(NULL)
   found_address_coords <- reactiveVal(NULL)
+  geocode_attempted <- reactiveVal(FALSE)
   current_page <- reactiveVal(0)
   page_enter_time <- reactiveVal(Sys.time())
   page_durations <- reactiveVal(list())
@@ -1268,6 +1277,7 @@ server <- function(input, output, session) {
   observeEvent(input$geocode_btn, {
     req(input$address)
 
+    geocode_attempted(TRUE)
     disable("geocode_btn")
     updateActionButton(session, "geocode_btn", label = "Buscando...")
     shinyjs::show("loading_msg")
@@ -1449,6 +1459,7 @@ server <- function(input, output, session) {
         governing_party %in% opposite_coalition,
         muni_id != home_id,
         !is.na(POB_TOTAL),
+        POB_TOTAL >= 22000,
         !is.na(area_km2)
       ) %>%
       select(
@@ -1467,6 +1478,7 @@ server <- function(input, output, session) {
         filter(
           muni_id != home_id,
           !is.na(POB_TOTAL),
+          POB_TOTAL >= 22000,
           !is.na(area_km2)
         ) %>%
         select(
@@ -1495,6 +1507,7 @@ server <- function(input, output, session) {
       filter(
         muni_id != home_id,
         !is.na(POB_TOTAL),
+        POB_TOTAL >= 22000,
         !is.na(area_km2)
       ) %>%
       select(
@@ -1531,6 +1544,7 @@ server <- function(input, output, session) {
         governing_party %in% same_coalition,
         muni_id != home_id,
         !is.na(POB_TOTAL),
+        POB_TOTAL >= 22000,
         !is.na(area_km2)
       ) %>%
       select(
@@ -1549,6 +1563,7 @@ server <- function(input, output, session) {
         filter(
           muni_id != home_id,
           !is.na(POB_TOTAL),
+          POB_TOTAL >= 22000,
           !is.na(area_km2)
         ) %>%
         select(
@@ -1614,17 +1629,22 @@ server <- function(input, output, session) {
     runjs("window.scrollTo(0, 0);")
   })
 
-  # Show/hide home confirmation section based on whether municipality is found
+  # Show/hide confirmation and dropdown sections based on geocode state
   observe({
     if (!is.null(found_municipality())) {
       shinyjs::show("home_confirmation_section")
+      shinyjs::show("dropdown_fallback_section")
       updateSelectInput(
         session,
         "dropdown_municipality",
         selected = found_municipality()
       )
+    } else if (geocode_attempted()) {
+      shinyjs::hide("home_confirmation_section")
+      shinyjs::show("dropdown_fallback_section")
     } else {
       shinyjs::hide("home_confirmation_section")
+      shinyjs::hide("dropdown_fallback_section")
     }
   })
 
@@ -1633,7 +1653,7 @@ server <- function(input, output, session) {
     has_home <- !is.null(found_municipality())
 
     if (has_home) {
-      shinyjs::delay(3000, enable("goto_page2_from_1"))
+      shinyjs::delay(1000, enable("goto_page2_from_1"))
     } else {
       disable("goto_page2_from_1")
     }
@@ -1783,7 +1803,9 @@ server <- function(input, output, session) {
   observeEvent(input$clear_selection_btn, {
     found_municipality(NULL)
     found_address_coords(NULL)
+    geocode_attempted(FALSE)
     updateTextInput(session, "address", value = "")
+    updateSelectInput(session, "dropdown_municipality", selected = "")
     output$geocode_result <- renderUI({})
   })
 

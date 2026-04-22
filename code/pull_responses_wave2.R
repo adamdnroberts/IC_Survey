@@ -65,6 +65,13 @@ print(
   )
 )
 
+print(
+  paste0(
+    "# failing attention check: ",
+    sum(all_responses2$Attention_Check != "somewhat_agree")
+  )
+)
+
 saveRDS(
   all_responses2,
   "C:/Users/adamd/Documents/IC_Survey/data/wave2_responses.rds"
