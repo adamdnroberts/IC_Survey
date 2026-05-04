@@ -27,6 +27,10 @@ if (!file.exists("data/wave2_responses.rds")) {
 
 d <- readRDS("data/wave2_responses.rds")
 
+d <- filter(d, Attention_Check == "somewhat_agree")
+d <- filter(d, is.na(Robbery_Estimate_Post) | as.numeric(Robbery_Estimate_Post) <= 100000)
+
+
 robo_rate <- readRDS("data/robo_2025.rds") |>
   mutate(
     CVEGEO = formatC(Cve..Municipio, width = 5, flag = "0", format = "d")
@@ -229,13 +233,13 @@ d <- d |>
 
 fit_eq1 <- function(outcome, data) {
   sub <- data[!is.na(data[[outcome]]), ]
-  fmla <- as.formula(paste0(outcome, " ~ T1 + T2 + T3 + T4"))
+  fmla <- as.formula(paste0(outcome, " ~ control2 + T1 + T2 + T3 + T4"))
   lm_robust(fmla, data = sub, se_type = "HC2")
 }
 
 rank_outcomes <- c("tau_post", "acc_post", "delta_tau", "delta_acc")
-rob_outcomes  <- c("gap_post")
-acc_outcomes  <- c(rank_outcomes, rob_outcomes)
+rob_outcomes <- c("gap_post")
+acc_outcomes <- c(rank_outcomes, rob_outcomes)
 models_acc <- setNames(lapply(acc_outcomes, fit_eq1, data = d), acc_outcomes)
 
 # ── 9. Two-sided p-values for comparison arms ────────────────────────────────
@@ -288,14 +292,14 @@ sensitivity_df <- do.call(rbind, sensitivity_results)
 arm_summary <- d |>
   group_by(Treatment_Group) |>
   summarize(
-    n         = n(),
-    tau_pre   = round(mean(tau_pre,   na.rm = TRUE), 3),
-    tau_post  = round(mean(tau_post,  na.rm = TRUE), 3),
+    n = n(),
+    tau_pre = round(mean(tau_pre, na.rm = TRUE), 3),
+    tau_post = round(mean(tau_post, na.rm = TRUE), 3),
     delta_tau = round(mean(delta_tau, na.rm = TRUE), 3),
-    acc_pre   = round(mean(acc_pre,   na.rm = TRUE), 3),
-    acc_post  = round(mean(acc_post,  na.rm = TRUE), 3),
+    acc_pre = round(mean(acc_pre, na.rm = TRUE), 3),
+    acc_post = round(mean(acc_post, na.rm = TRUE), 3),
     delta_acc = round(mean(delta_acc, na.rm = TRUE), 3),
-    gap_post  = round(mean(gap_post,  na.rm = TRUE), 1),
+    gap_post = round(mean(gap_post, na.rm = TRUE), 1),
     .groups = "drop"
   )
 
@@ -332,11 +336,11 @@ print(sensitivity_df, digits = 3, row.names = FALSE)
 library(ggplot2)
 
 outcome_labels <- c(
-  tau_post  = "Kendall tau-b (post)",
-  acc_post  = "Accuracy count (post)",
+  tau_post = "Kendall tau-b (post)",
+  acc_post = "Accuracy count (post)",
   delta_tau = "Change in Kendall tau-b (post - pre)",
   delta_acc = "Change in accuracy count (post - pre)",
-  gap_post  = "Robbery estimate accuracy: -|true - post|"
+  gap_post = "Robbery estimate accuracy: -|true - post|"
 )
 
 arm_colors <- c(
@@ -398,6 +402,53 @@ print(manip_coef_plot)
 ggsave(
   "latex/images/manip_check_coef_plot.pdf",
   plot = manip_coef_plot,
+  width = 8,
+  height = 5
+)
+
+# ── Threshold sensitivity plot ────────────────────────────────────────────────
+
+threshold_labels <- c("0.2" = "±20%", "0.25" = "±25%", "0.33" = "±33%")
+
+sensitivity_plot_df <- bind_rows(
+  results_df %>%
+    filter(outcome %in% rank_outcomes) %>%
+    mutate(thresh = "0.25"),
+  sensitivity_df %>%
+    mutate(thresh = as.character(thresh))
+) %>%
+  mutate(
+    lo95 = estimate - 1.96 * se,
+    hi95 = estimate + 1.96 * se,
+    thresh = factor(thresh, levels = c("0.2", "0.25", "0.33"),
+                    labels = threshold_labels),
+    outcome = factor(outcome, levels = rank_outcomes,
+                     labels = outcome_labels[rank_outcomes]),
+    arm = factor(arm, levels = c("T2", "T3", "T4"))
+  )
+
+sensitivity_plot <- ggplot(
+  sensitivity_plot_df,
+  aes(x = estimate, xmin = lo95, xmax = hi95, y = thresh, color = arm)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_pointrange(position = position_dodge(width = 0.5)) +
+  scale_color_manual(values = arm_colors[c("T2", "T3", "T4")]) +
+  facet_wrap(~outcome, scales = "free_x", ncol = 2) +
+  labs(
+    x = "Estimate relative to control (95% CI)",
+    y = "Threshold",
+    color = "Treatment arm",
+    title = "Sensitivity to accuracy threshold definition"
+  ) +
+  theme_classic() +
+  theme(strip.text = element_text(size = 9))
+
+print(sensitivity_plot)
+
+ggsave(
+  "latex/images/manip_check_sensitivity_plot.pdf",
+  plot = sensitivity_plot,
   width = 8,
   height = 5
 )

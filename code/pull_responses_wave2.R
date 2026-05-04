@@ -33,7 +33,7 @@ new_objects <- Filter(
   all_objects
 )
 
-cat(length(new_objects), "of", length(all_objects), "objects after cutoff\n")
+cat(length(new_objects), "responses\n")
 
 if (length(new_objects) == 0) {
   stop("No responses found after cutoff date.")

@@ -1264,15 +1264,14 @@ QUOTA_AGE <- c(
   "65+" = 245L
 )
 
-# SEL targets (from Netquest; codes: 1=AB, 2=C+, 3=C, 4=C-, 5=D+, 6=D, 7=E)
+# SEL targets (from Netquest; codes: 1=AB, 2=C+, 3=C, 4=C-, 5=D+/D/E merged)
+# D+ (5), D (6), and E (7) are merged: codes 6 and 7 are remapped to 5 at session start
 QUOTA_SEL <- c(
-  "1" = 158L,
-  "2" = 262L,
-  "3" = 334L,
-  "4" = 357L,
-  "5" = 469L,
-  "6" = 560L,
-  "7" = 40L
+  "1" = 189L,
+  "2" = 346L,
+  "3" = 415L,
+  "4" = 430L,
+  "5" = 800L
 )
 
 # Region targets: loaded from pre-computed RDS (run code/census_quotas.R to generate)
@@ -1304,6 +1303,15 @@ read_quota_counts <- function(bucket) {
       # Ensure each dimension is a named list with integer values
       for (dim in c("sex", "age", "sel", "region")) {
         counts[[dim]] <- lapply(counts[[dim]], as.integer)
+      }
+      # Migrate any pre-merge SEL D (6) and E (7) counts into the combined D+/D/E cell (5)
+      if (!is.null(counts$sel[["6"]])) {
+        counts$sel[["5"]] <- (if (is.null(counts$sel[["5"]])) 0L else counts$sel[["5"]]) + counts$sel[["6"]]
+        counts$sel[["6"]] <- NULL
+      }
+      if (!is.null(counts$sel[["7"]])) {
+        counts$sel[["5"]] <- (if (is.null(counts$sel[["5"]])) 0L else counts$sel[["5"]]) + counts$sel[["7"]]
+        counts$sel[["7"]] <- NULL
       }
       counts
     },
@@ -1466,6 +1474,7 @@ server <- function(input, output, session) {
   nq_sex <- nq_params[["sex"]] # sex from panel profile (confirm coding with Netquest)
   nq_region <- nq_params[["region"]] # state/region code from panel profile
   nq_sel <- nq_params[["sel"]] # socio-economic level code from panel profile
+  if (!is.null(nq_sel) && nq_sel %in% c("6", "7")) nq_sel <- "5" # D+/D/E merged
 
   # Quota full: set SURVEY_QUOTA_FULL=true in .Renviron to redirect all new visitors
   observe({
@@ -1890,7 +1899,7 @@ server <- function(input, output, session) {
       current_page() == 2 && !is.null(netquest_pid) && nchar(netquest_pid) > 0
     ) {
       shinyjs::runjs(sprintf(
-        'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=dr_0&c=ok&ticket=ticket"; }, 1500)',
+        'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=dr_0&c=ok&ticket=%s"; }, 1500)',
         netquest_pid
       ))
     }
@@ -2011,8 +2020,10 @@ server <- function(input, output, session) {
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
   observeEvent(input$page9_submit, {
+    disable("page9_submit")
     est <- input$robbery_estimate
     if (is.null(est) || is.na(est)) {
+      enable("page9_submit")
       page9_warning_msg("Por favor, ingrese su estimación antes de continuar.")
       return()
     }
@@ -2036,6 +2047,7 @@ server <- function(input, output, session) {
       untouched <- c(untouched, "el manejo de la delincuencia por MC")
     }
     if (length(untouched) > 0) {
+      enable("page9_submit")
       page9_warning_msg(
         "Por favor, responda todos los controles deslizantes antes de continuar."
       )

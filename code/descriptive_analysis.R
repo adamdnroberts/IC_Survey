@@ -217,7 +217,12 @@ long_df <- long_df %>%
       coalesce(cand_coalition, "Other"),
       levels = c("MC", "MORENA/PVEM/PT", "PAN/PRI/PRD", "Other")
     ),
-    pool = factor(pool, levels = c("random", "nearest", "largest"))
+    home_coalition = factor(
+      coalesce(home_coalition, "Other"),
+      levels = c("MC", "MORENA/PVEM/PT", "PAN/PRI/PRD", "Other")
+    ),
+    pool = factor(pool, levels = c("random", "nearest", "largest")),
+    log_home_pop = log(home_pop + 1)
   ) %>%
   select(
     Respondent_ID,
@@ -230,10 +235,11 @@ long_df <- long_df %>%
     same_state,
     same_coalition,
     vote_coalition_match,
+    log_home_pop,
+    home_coalition,
     dist_km,
     home_pop,
     cand_pop,
-    home_coalition,
     cand_coalition,
     cand_state
   )
@@ -264,10 +270,13 @@ fit_benchmark <- brm(
     Selected ~
       log_dist_km +
         log_pop_ratio +
+        log_dist_km * log_pop_ratio +
         same_state +
         same_coalition +
         vote_coalition_match +
         cand_coalition +
+        home_coalition +
+        log_home_pop +
         pool +
         (1 | Respondent_ID),
     decomp = "QR"
@@ -305,8 +314,9 @@ cat(sprintf(
 # ── Posterior marginal effects plot ───────────────────────────────────────────
 
 coef_labels <- c(
-  "log_dist_km" = "Distance (km), per doubling",
-  "log_pop_ratio" = "Pop. ratio (cand/home), per doubling",
+  "log_dist_km" = "Log distance (km)",
+  "log_pop_ratio" = "Log pop. ratio (cand/home)",
+  "log_dist_km:log_pop_ratio" = "Log distance × log pop. ratio",
   "same_state" = "Same state",
   "same_coalition" = "Same coalition",
   "vote_coalition_match" = "Vote coalition match",
@@ -318,6 +328,7 @@ draws <- fe_draws %>%
   select(
     log_dist_km,
     log_pop_ratio,
+    `log_dist_km:log_pop_ratio`,
     same_state,
     same_coalition,
     vote_coalition_match,
@@ -325,14 +336,7 @@ draws <- fe_draws %>%
     cand_coalitionPANDPRIDPRD
   ) %>%
   pivot_longer(everything(), names_to = "term", values_to = "draw") %>%
-  mutate(
-    draw = if_else(
-      term %in% c("log_dist_km", "log_pop_ratio"),
-      draw * log(2),
-      draw
-    ),
-    pp_change = (plogis(draw) - 0.5) * 100
-  )
+  mutate(pp_change = (plogis(draw) - 0.5) * 100)
 
 plot_df <- draws %>%
   group_by(term) %>%
@@ -354,7 +358,7 @@ benchmark_coef_plot <- ggplot(plot_df, aes(x = mean, y = label)) +
   geom_linerange(aes(xmin = lo50, xmax = hi50), linewidth = 1.6) +
   geom_point(size = 2.5, shape = 21, fill = "white", stroke = 1) +
   labs(
-    x = "Posterior mean percentage-point change\n(from 50% baseline; doublings for distance/pop ratio)",
+    x = "Posterior mean percentage-point change (from 50% baseline)",
     y = NULL,
     title = "Predictors of comparison municipality selection",
     caption = sprintf(
@@ -371,7 +375,7 @@ ggsave(
   "latex/images/comparison_coef_plot.pdf",
   plot = benchmark_coef_plot,
   width = 7,
-  height = 4
+  height = 4.5
 )
 
 #test <- long_df %>% group_by(Respondent_ID) %>% summarize(selected_num = sum(Selected == TRUE))

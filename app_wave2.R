@@ -8,6 +8,7 @@ library(ggplot2)
 library(httr)
 library(jsonlite)
 library(paws.storage)
+library(stringr)
 
 # Read municipalities from GeoJSON file
 if (!file.exists("data/00mun_simplified.geojson")) {
@@ -32,20 +33,6 @@ if (!file.exists("data/precip_data.rds")) {
   stop("Missing data/precip_data.rds. Run: source('code/weather_data.R')")
 }
 precip_data <- readRDS("data/precip_data.rds")
-
-# Load pre-computed nearest-10 municipality lookup
-if (!file.exists("data/nearest10.rds")) {
-  stop(
-    "Missing data/nearest10.rds. Run: source('scripts/precompute_nearest10.R')"
-  )
-}
-nearest10 <- readRDS("data/nearest10.rds")
-
-# Load pre-computed incumbent multiple-choice data
-if (!file.exists("data/mp_mc_data.rds")) {
-  stop("Missing data/mp_mc_data.rds. Run: source('code/party_data.R')")
-}
-mp_mc_data <- readRDS("data/mp_mc_data.rds")
 
 # Top 20 municipalities by population (for benchmark selection)
 top20_munis <- d_geo %>%
@@ -113,21 +100,34 @@ get_coalition_label <- function(parties) {
 assignment_table <- read.csv("assignment_vector.csv", stringsAsFactors = FALSE)
 
 get_assignment_counter <- function(bucket) {
-  tryCatch({
-    s3 <- paws.storage::s3()
-    raw <- s3$get_object(Bucket = bucket, Key = "block_randomization_counter.json")
-    jsonlite::fromJSON(rawToChar(raw$Body))
-  }, error = function(e) {
-    list("MORENA/PT/PVEM" = 0L, "PAN/PRI/PRD" = 0L, "MC" = 0L)
-  })
+  tryCatch(
+    {
+      s3 <- paws.storage::s3()
+      raw <- s3$get_object(
+        Bucket = bucket,
+        Key = "block_randomization_counter.json"
+      )
+      jsonlite::fromJSON(rawToChar(raw$Body))
+    },
+    error = function(e) {
+      list("MORENA/PT/PVEM" = 0L, "PAN/PRI/PRD" = 0L, "MC" = 0L)
+    }
+  )
 }
 
 save_assignment_counter <- function(bucket, counter) {
-  tryCatch({
-    s3 <- paws.storage::s3()
-    body <- charToRaw(jsonlite::toJSON(counter, auto_unbox = TRUE))
-    s3$put_object(Bucket = bucket, Key = "block_randomization_counter.json", Body = body)
-  }, error = function(e) invisible(NULL))
+  tryCatch(
+    {
+      s3 <- paws.storage::s3()
+      body <- charToRaw(jsonlite::toJSON(counter, auto_unbox = TRUE))
+      s3$put_object(
+        Bucket = bucket,
+        Key = "block_randomization_counter.json",
+        Body = body
+      )
+    },
+    error = function(e) invisible(NULL)
+  )
 }
 
 # Claims the next treatment slot for a respondent given their home municipality's coalition.
@@ -137,8 +137,8 @@ claim_next_assignment <- function(coalition_label) {
   coal_key <- switch(
     coalition_label,
     "MORENA/PVEM/PT" = "MORENA/PT/PVEM",
-    "PAN/PRI/PRD"    = "PAN/PRI/PRD",
-    "MC"             = "MC",
+    "PAN/PRI/PRD" = "PAN/PRI/PRD",
+    "MC" = "MC",
     NULL
   )
   bucket <- Sys.getenv("S3_BUCKET")
@@ -1271,7 +1271,6 @@ server <- function(input, output, session) {
   nq_region <- nq_params[["region"]] # state/region code from panel profile
   nq_sel <- nq_params[["sel"]] # socio-economic level code from panel profile
 
-
   # Define the file path for saving responses (local fallback)
   # Geocode address and find municipality
   observeEvent(input$geocode_btn, {
@@ -1585,7 +1584,9 @@ server <- function(input, output, session) {
   # Assign treatment group via block randomization once home municipality coalition is known.
   # Skips re-assignment if already set (prevents burning extra slots when user changes municipality).
   observeEvent(found_municipality(), {
-    if (!is.null(treatment_group())) return()
+    if (!is.null(treatment_group())) {
+      return()
+    }
     home_id <- found_municipality()
     req(!is.null(home_id))
     coalition <- d_geo %>%
@@ -1683,7 +1684,9 @@ server <- function(input, output, session) {
   # Screen-out redirect to Netquest + page 13 slider tracking
   # NOTE: confirm tp=fo_0 is the correct filter-out code for wave 2 with Netquest
   observeEvent(current_page(), {
-    if (current_page() == 16 && !is.null(netquest_pid) && nchar(netquest_pid) > 0) {
+    if (
+      current_page() == 16 && !is.null(netquest_pid) && nchar(netquest_pid) > 0
+    ) {
       shinyjs::runjs(sprintf(
         'setTimeout(function(){ window.location.href = "https://transit.nicequest.com/transit/participation?tp=fo_0&c=ok&ticket=%s"; }, 1500)',
         netquest_pid
@@ -1696,34 +1699,39 @@ server <- function(input, output, session) {
 
   # Page 7 → Page 9 (attention check + governance grid + pre-treatment ranking → treatment, with timer)
   attention_warning_msg <- reactiveVal(NULL)
+  attention_warned <- reactiveVal(FALSE)
   output$attention_warning <- renderUI({
     msg <- attention_warning_msg()
     if (!is.null(msg)) p(style = "color: #c0392b; font-weight: bold;", msg)
   })
   observeEvent(input$goto_page9_from_7, {
-    if (is.null(input$attention_check) || length(input$attention_check) == 0) {
-      attention_warning_msg(
-        "Por favor, seleccione una respuesta antes de continuar."
-      )
-      return()
-    }
     comp_munis <- active_comp_munis()
     n_comp <- if (!is.null(comp_munis)) nrow(comp_munis) else 0
-    gov_ids <- c("home_governing_party_belief", paste0("comp_governing_party_", seq_len(n_comp)))
-    if (any(sapply(gov_ids, function(id) is.null(input[[id]])))) {
+    gov_ids <- c(
+      "home_governing_party_belief",
+      paste0("comp_governing_party_", seq_len(n_comp))
+    )
+    rank_ids <- paste0("muni_rank_comp_", seq_len(n_comp))
+    all_answered <- (
+      !is.null(input$attention_check) && length(input$attention_check) > 0 &&
+      !any(sapply(gov_ids, function(id) is.null(input[[id]]))) &&
+      !any(sapply(rank_ids, function(id) is.null(input[[id]])))
+    )
+    if (!all_answered) {
       attention_warning_msg(
         "Por favor, responda todas las preguntas antes de continuar."
       )
       return()
     }
-    rank_ids <- paste0("muni_rank_comp_", seq_len(n_comp))
-    if (any(sapply(rank_ids, function(id) is.null(input[[id]])))) {
+    if (input$attention_check != "somewhat_agree" && !attention_warned()) {
+      attention_warned(TRUE)
       attention_warning_msg(
-        "Por favor, responda todas las preguntas antes de continuar."
+        "Asegúrese de haber leído todas las preguntas con atención antes de continuar."
       )
       return()
     }
     attention_warning_msg(NULL)
+    attention_warned(FALSE)
     current_page(9)
     duration <- switch(
       if (is.null(treatment_group())) "control" else treatment_group(),
@@ -1752,7 +1760,9 @@ server <- function(input, output, session) {
   observeEvent(input$goto_page13_from_11, {
     est <- input$robbery_estimate_post
     if (is.null(est) || is.na(est)) {
-      page11_warning_msg("Por favor, ingrese su estimaci\u00f3n antes de continuar.")
+      page11_warning_msg(
+        "Por favor, ingrese su estimaci\u00f3n antes de continuar."
+      )
       return()
     }
     comp_munis <- active_comp_munis()
@@ -2380,10 +2390,14 @@ server <- function(input, output, session) {
 
   # Wave 2 submit
   observeEvent(input$submit, {
+    disable("submit")
     # Validate sliders
     untouched_sliders <- c()
     if (!isTRUE(input$slider_touched_home_crime_handling_post)) {
-      untouched_sliders <- c(untouched_sliders, "el manejo de la delincuencia en su municipio")
+      untouched_sliders <- c(
+        untouched_sliders,
+        "el manejo de la delincuencia en su municipio"
+      )
     }
     if (!isTRUE(input$slider_touched_morena_crime_rating_post)) {
       untouched_sliders <- c(
@@ -2398,26 +2412,36 @@ server <- function(input, output, session) {
       )
     }
     if (!isTRUE(input$slider_touched_mc_crime_rating_post)) {
-      untouched_sliders <- c(untouched_sliders, "el manejo de la delincuencia por MC")
+      untouched_sliders <- c(
+        untouched_sliders,
+        "el manejo de la delincuencia por MC"
+      )
     }
     if (length(untouched_sliders) > 0) {
       page13_warning_msg(
         "Por favor, ajuste todos los controles deslizantes antes de continuar."
       )
-      return()
-    }
-    if (is.null(input$vote_intention_2027) || length(input$vote_intention_2027) == 0) {
-      page13_warning_msg("Por favor, indique su intenci\u00f3n de voto.")
+      enable("submit")
       return()
     }
     if (
-      "other" %in% input$vote_intention_2027 &&
+      is.null(input$vote_intention_2027) ||
+        length(input$vote_intention_2027) == 0
+    ) {
+      page13_warning_msg("Por favor, indique su intenci\u00f3n de voto.")
+      enable("submit")
+      return()
+    }
+    if (
+      "other" %in%
+        input$vote_intention_2027 &&
         (is.null(input$vote_intention_2027_other) ||
           trimws(input$vote_intention_2027_other) == "")
     ) {
       page13_warning_msg(
         "Por favor, especifique el partido para la opci\u00f3n 'Otro' en la pregunta de intenci\u00f3n de voto."
       )
+      enable("submit")
       return()
     }
     page13_warning_msg(NULL)
@@ -3038,7 +3062,9 @@ server <- function(input, output, session) {
       p(plain_info_text),
       p(strong(change_text)),
       p(
-        em("Fuente: Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP)."),
+        em(
+          "Fuente: Secretariado Ejecutivo del Sistema Nacional de Seguridad Pública (SESNSP)."
+        ),
         style = "font-size: 0.85em; color: #555; margin-top: 4px;"
       )
     )

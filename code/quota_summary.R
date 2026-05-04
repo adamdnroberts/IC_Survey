@@ -14,13 +14,11 @@ QUOTA_AGE <- c(
 )
 
 QUOTA_SEL <- c(
-  "1" = 158L,
-  "2" = 262L,
-  "3" = 334L,
-  "4" = 357L,
-  "5" = 469L,
-  "6" = 560L,
-  "7" = 40L
+  "1" = 189L,
+  "2" = 346L,
+  "3" = 415L,
+  "4" = 430L,
+  "5" = 800L # D+/D/E merged (469+600)
 )
 
 QUOTA_REGION <- readRDS("data/region_quotas_wave1.rds")
@@ -30,9 +28,7 @@ SEL_LABELS <- c(
   "2" = "C+",
   "3" = "C",
   "4" = "C-",
-  "5" = "D+",
-  "6" = "D",
-  "7" = "E"
+  "5" = "D+/D/E"
 )
 
 # ── Counts ────────────────────────────────────────────────────────────────────
@@ -42,6 +38,18 @@ obj <- s3$get_object(
   Key = "quota_counts/wave1_quota_counts.json"
 )
 counts <- jsonlite::fromJSON(rawToChar(obj$Body), simplifyVector = TRUE)
+
+# Fold codes 6 and 7 into code 5 (D+/D/E combined)
+if (!is.null(counts$sel[["6"]])) {
+  counts$sel[["5"]] <- as.integer(counts$sel[["5"]]) +
+    as.integer(counts$sel[["6"]])
+  counts$sel[["6"]] <- NULL
+}
+if (!is.null(counts$sel[["7"]])) {
+  counts$sel[["5"]] <- as.integer(counts$sel[["5"]]) +
+    as.integer(counts$sel[["7"]])
+  counts$sel[["7"]] <- NULL
+}
 
 # ── Helper: print a quota dimension ──────────────────────────────────────────
 print_quota <- function(title, counts_vec, targets, extra_labels = NULL) {

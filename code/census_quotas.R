@@ -1,3 +1,4 @@
+library(readxl)
 INEGI_censo_sexo_estado <- read_excel("data/raw/INEGI_censo_sexo_estado.xlsx")
 
 test <- filter(
@@ -51,7 +52,7 @@ region_quotas <- test %>%
   ) %>%
   select(inegi = ...1, state = ...2, total, prop, target, nq_code)
 
-print(region_quotas)
+print(region_quotas, n = 50)
 cat(sprintf("Total target: %d\n", sum(region_quotas$target)))
 
 saveRDS(
