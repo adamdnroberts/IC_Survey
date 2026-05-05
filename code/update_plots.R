@@ -13,7 +13,7 @@ match_keys <- c(
 )
 
 wave1_unique <- wave1 %>%
-  filter(as.POSIXct(Timestamp) <= as.POSIXct("2026-04-21 23:59:59")) %>%
+  filter(as.POSIXct(Timestamp) <= as.POSIXct("2026-04-27 23:59:59")) %>%
   group_by(across(all_of(match_keys))) %>%
   filter(n() == 1) %>%
   ungroup()
@@ -104,36 +104,102 @@ test$robbery_estimate_update <- as.numeric(test$Robbery_Estimate_Post) -
 test$rank_update <- test$rank_post - test$rank_prior
 
 # Robbery estimate update vs. prior accuracy
-ggplot(
-  subset(test, log(abs(CG)) < 20),
-  aes(
-    x = sign(CG) * log(abs(CG) + 1),
-    y = sign(robbery_estimate_update) * log(abs(robbery_estimate_update) + 1),
-    color = info_treatment
+rob_sub <- subset(test, log(abs(CG)) < 20) %>%
+  mutate(
+    xv = sign(CG) * -log(abs(CG) + 1),
+    yv = sign(robbery_estimate_update) * log(abs(robbery_estimate_update) + 1)
+  ) %>%
+  filter(!is.na(xv), !is.na(yv))
+
+info_label_df <- rob_sub %>%
+  group_by(info_treatment) %>%
+  summarise(
+    x_pos = quantile(xv, 0.2, na.rm = TRUE),
+    slope = coef(lm(yv ~ 0 + xv))[1],
+    .groups = "drop"
+  ) %>%
+  mutate(
+    y_pos = slope * x_pos,
+    label = ifelse(info_treatment == "1", "Information", "Control")
   )
+
+rob_est_update <- ggplot(
+  rob_sub,
+  aes(x = xv, y = yv, color = info_treatment)
 ) +
   geom_point(alpha = 0.4) +
-  geom_smooth(method = "lm", formula = y ~ 0 + x, se = FALSE) +
-  labs(
-    x = "Prior accuracy (signed log), negative = optimism",
-    y = "Update (Posterior - Prior) (signed log)",
-    caption = paste0("n = ", nrow(test) - 1, " (1 outlier removed)")
+  geom_smooth(method = "lm", formula = y ~ 0 + x, se = TRUE) +
+  geom_text(
+    data = info_label_df,
+    aes(x = x_pos, y = y_pos, label = label, color = info_treatment),
+    vjust = -1.2,
+    fontface = "bold",
+    show.legend = FALSE
   ) +
-  theme_bw()
+  labs(
+    x = "Prior belief error (signed log): negative = overestimate, positive = underestimate",
+    y = "Robbery estimate update (signed log)",
+    caption = paste0("n = ", nrow(rob_sub), " (1 outlier removed)")
+  ) +
+  theme_bw() +
+  theme(legend.position = "none")
+
+print(rob_est_update)
+
+ggsave(
+  "latex/images/robbery_estimate_update.pdf",
+  plot = rob_est_update,
+  width = 8,
+  height = 5
+)
 
 # Rank update vs. prior rank accuracy
 lim2 <- max(abs(c(test$RG, test$rank_update)), na.rm = TRUE)
 
-ggplot(
-  test,
-  aes(x = RG, y = rank_update, color = comparison_treatment)
+rank_sub <- subset(test, Treatment_Group != "T1") %>%
+  filter(!is.na(RG), !is.na(rank_update))
+
+comp_label_df <- rank_sub %>%
+  group_by(comparison_treatment) %>%
+  summarise(
+    x_pos = quantile(-RG, 0.2, na.rm = TRUE),
+    slope = coef(lm(rank_update ~ 0 + I(-RG)))[1],
+    .groups = "drop"
+  ) %>%
+  mutate(
+    y_pos = slope * x_pos,
+    label = ifelse(comparison_treatment == "1", "Comparison", "No comparison")
+  )
+
+rank_update <- ggplot(
+  rank_sub,
+  aes(x = -RG, y = rank_update, color = comparison_treatment)
 ) +
-  geom_jitter(width = 0.2, height = 0, alpha = 0.5) +
-  geom_smooth(method = "lm", formula = y ~ 0 + x, se = FALSE) +
-  labs(
-    x = "Prior rank accuracy (negative = optimism)",
-    y = "Update (Posterior - Prior)",
-    caption = paste0("n = ", nrow(test))
+  geom_jitter(width = 0.2, height = 0.2, alpha = 0.5) +
+  geom_smooth(method = "lm", formula = y ~ 0 + x, se = TRUE) +
+  geom_text(
+    data = comp_label_df,
+    aes(x = x_pos, y = y_pos, label = label, color = comparison_treatment),
+    vjust = -1.2,
+    hjust = 1.5,
+    fontface = "bold",
+    show.legend = FALSE
   ) +
-  coord_fixed(xlim = c(-lim2, lim2), ylim = c(-lim2, lim2)) +
-  theme_bw()
+  labs(
+    x = "Prior rank belief error: negative = overestimate, positive = underestimate",
+    y = "Rank belief update",
+    caption = paste0("n = ", nrow(rank_sub))
+  ) +
+  scale_x_continuous(limits = c(-lim2, lim2)) +
+  scale_y_continuous(limits = c(-lim2, lim2)) +
+  theme_bw() +
+  theme(legend.position = "none")
+
+print(rank_update)
+
+ggsave(
+  "latex/images/rank_update.pdf",
+  plot = rank_update,
+  width = 6,
+  height = 6
+)

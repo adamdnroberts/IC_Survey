@@ -49,7 +49,7 @@ m_clustered <- feols(
 #   labs(x = NULL, y = "Mean rating (95% CI)") +
 #   theme_bw()
 
-emm <- emmeans(m_clustered, ~coalition)
+emm <- emmeans(m_clustered, ~coalition, level = 0.99)
 plot_means <- as.data.frame(emm)
 
 mean_crime_priors <- ggplot(
@@ -60,7 +60,7 @@ mean_crime_priors <- ggplot(
   coord_flip() +
   labs(
     x = NULL,
-    y = "Mean crime-handling rating, 0–100 (95% CI)",
+    y = "Mean crime-handling rating, 0–100 (99% CI)",
     caption = paste0("n = ", length(unique(plot_df$respondent_id)))
     #title = "Predicted mean rating by governing coalition"
   ) +

@@ -158,8 +158,8 @@ long_df <- long_df %>%
     is_nearest = coalesce(is_nearest, FALSE),
     is_largest = candidate_id %in% top20_munis & !is_nearest,
     pool = case_when(
-      is_nearest ~ "nearest",
       is_largest ~ "largest",
+      is_nearest ~ "nearest",
       TRUE ~ "random"
     )
   ) %>%

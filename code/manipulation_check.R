@@ -28,7 +28,10 @@ if (!file.exists("data/wave2_responses.rds")) {
 d <- readRDS("data/wave2_responses.rds")
 
 d <- filter(d, Attention_Check == "somewhat_agree")
-d <- filter(d, is.na(Robbery_Estimate_Post) | as.numeric(Robbery_Estimate_Post) <= 100000)
+d <- filter(
+  d,
+  is.na(Robbery_Estimate_Post) | as.numeric(Robbery_Estimate_Post) <= 100000
+)
 
 
 robo_rate <- readRDS("data/robo_2025.rds") |>
@@ -389,7 +392,10 @@ manip_coef_plot <- ggplot(
     x = "Estimate relative to control (HC2 SEs, 95% CI)",
     y = NULL,
     title = "Manipulation check estimates",
-    caption = "Baseline = control (home-only, weather placebo). Threshold = ±25%."
+    caption = paste0(
+      "Baseline = control (home-only, weather placebo). Threshold = ±25%. n = ",
+      nrow(d)
+    )
   ) +
   theme_classic() +
   theme(
@@ -410,6 +416,8 @@ ggsave(
 
 threshold_labels <- c("0.2" = "±20%", "0.25" = "±25%", "0.33" = "±33%")
 
+rank_outcomes <- c("acc_post", "delta_acc")
+
 sensitivity_plot_df <- bind_rows(
   results_df %>%
     filter(outcome %in% rank_outcomes) %>%
@@ -420,15 +428,21 @@ sensitivity_plot_df <- bind_rows(
   mutate(
     lo95 = estimate - 1.96 * se,
     hi95 = estimate + 1.96 * se,
-    thresh = factor(thresh, levels = c("0.2", "0.25", "0.33"),
-                    labels = threshold_labels),
-    outcome = factor(outcome, levels = rank_outcomes,
-                     labels = outcome_labels[rank_outcomes]),
+    thresh = factor(
+      thresh,
+      levels = c("0.2", "0.25", "0.33"),
+      labels = threshold_labels
+    ),
+    outcome = factor(
+      outcome,
+      levels = rank_outcomes,
+      labels = outcome_labels[rank_outcomes]
+    ),
     arm = factor(arm, levels = c("T2", "T3", "T4"))
   )
 
 sensitivity_plot <- ggplot(
-  sensitivity_plot_df,
+  subset(sensitivity_plot_df, !is.na(outcome)),
   aes(x = estimate, xmin = lo95, xmax = hi95, y = thresh, color = arm)
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
@@ -439,7 +453,8 @@ sensitivity_plot <- ggplot(
     x = "Estimate relative to control (95% CI)",
     y = "Threshold",
     color = "Treatment arm",
-    title = "Sensitivity to accuracy threshold definition"
+    title = "Sensitivity to accuracy threshold definition",
+    caption = paste0("n = ", nrow(d))
   ) +
   theme_classic() +
   theme(strip.text = element_text(size = 9))

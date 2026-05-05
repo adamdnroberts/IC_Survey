@@ -34,7 +34,7 @@ match_keys <- c(
 )
 
 wave1_unique <- wave1 %>%
-  filter(as.POSIXct(Timestamp) <= as.POSIXct("2026-04-21 23:59:59")) %>%
+  filter(as.POSIXct(Timestamp) <= as.POSIXct("2026-04-27 23:59:59")) %>%
   group_by(across(all_of(match_keys))) %>%
   filter(n() == 1) %>%
   ungroup()
@@ -108,10 +108,21 @@ test$actual_rank <- 1 +
 #   pmax(pmin(x, qs[2]), qs[1])
 # }
 
+test$Robbery_Estimate_wins <- pmin(
+  as.numeric(test$Robbery_Estimate),
+  max(test$home_rate, na.rm = TRUE) * 10
+)
+
 test$CG <- as.numeric(test$Robbery_Estimate) - test$home_rate
+test$CG_wins <- test$Robbery_Estimate_wins - test$home_rate
 test$RG <- test$rank_prior - test$actual_rank
 
-test$log_CG <- sign(test$CG) * log(abs(test$CG) + 1)
+ggplot(test, aes(x = actual_rank, fill = Treatment_Group)) +
+  geom_histogram(binwidth = 1, position = "dodge") +
+  facet_wrap(~Treatment_Group) +
+  theme_bw()
+
+test$log_CG <- sign(test$CG) * log(abs(test$CG))
 
 test$CG_decile <- dplyr::ntile(test$CG, 10)
 
@@ -162,20 +173,32 @@ test$PAN_PRI_PRD_Change <- as.numeric(
 test$MC_Change <- as.numeric(test$MC_Crime_Rating_Post) -
   as.numeric(test$MC_Crime_Rating_Pre)
 
-test <- filter(test, Attention_Check == "somewhat_agree")
+test <- filter(test, Attention_Check == "somewhat_agree" & abs(CG) < 100000)
 
 m1_lm <- lm(
   Home_Crime_Handling_Change ~
-    CG * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
+    CG_wins * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
   data = test
 )
+
+m_log_lm <- lm(
+  Home_Crime_Handling_Change ~
+    log_CG *
+    as.factor(Treatment_Group) +
+    RG * as.factor(Treatment_Group),
+  data = test
+)
+
+plot(m_log_lm)
+
+stargazer::stargazer(m1_lm, type = "text")
 
 cooks_thresh <- 0.5
 test_no_influential <- test[cooks.distance(m1_lm) <= cooks_thresh, ]
 
 m1 <- lm_robust(
   Home_Crime_Handling_Change ~
-    CG * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
+    CG_wins * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
   data = test,
   se_type = "HC2"
 )
@@ -187,19 +210,33 @@ m1_no_inf <- lm_robust(
   se_type = "HC2"
 )
 
+m1_exclude_extreme <- lm_robust(
+  Home_Crime_Handling_Change ~
+    CG * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
+  data = subset(
+    test,
+    as.numeric(Robbery_Estimate) <= max(test$home_rate) * 10
+  ),
+  se_type = "HC2"
+)
+
+summary(m1_exclude_extreme)
+
+test$negative_CG <- ifelse(sign(test$CG) == -1, 1, 0)
+
 m1_log <- lm_robust(
   Home_Crime_Handling_Change ~
     log_CG *
       as.factor(Treatment_Group) +
       RG * as.factor(Treatment_Group),
-  data = subset(test, log_CG < 30),
+  data = test[-c(20, 325, 370), ], # log_CG < 30),
   se_type = "HC2"
 )
 
 m1_decile <- lm_robust(
   Home_Crime_Handling_Change ~
     CG_decile * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
-  data = test,
+  data = subset(test, abs(CG) < 50000),
   se_type = "HC2"
 )
 
@@ -212,40 +249,86 @@ m2 <- lm_robust(
 
 m3 <- lm_robust(
   Home_Crime_Handling_Change ~
-    CG * CI * as.factor(Treatment_Group) + RG * CI * as.factor(Treatment_Group),
+    log_CG *
+      CI *
+      as.factor(Treatment_Group) +
+      RG * CI * as.factor(Treatment_Group),
   data = test,
   se_type = "HC2"
 )
 
+summary(m3)
+
 #modelsummary(list(m1, m1_log), stars = TRUE)
 
-coef_plot_data <- tidy(m1_log, conf.int = TRUE) %>%
-  filter(grepl(
-    "log_CG:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
-    term,
-    perl = TRUE
-  )) %>%
-  filter(!grepl("log_CG:RG:as\\.factor", term)) %>%
-  mutate(
-    group = case_when(
-      grepl("^log_CG:as\\.factor", term) ~ "CG × Treatment",
-      TRUE ~ "RG × Treatment"
-    ),
-    treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .)
-  )
+outcome_sd <- sd(test$Home_Crime_Handling_Change, na.rm = TRUE)
+logCG_sd <- sd(subset(test, abs(CG) < 50000)$log_CG, na.rm = TRUE)
+CG_wins_sd <- sd(test$CG_wins, na.rm = TRUE)
+
+test_exclude_extreme <- subset(
+  test,
+  as.numeric(Robbery_Estimate) <= max(test$home_rate) * 10
+)
+
+CG_exclude_sd <- sd(test_exclude_extreme$CG)
+RG_sd <- sd(test$RG, na.rm = TRUE)
+
+extract_coef_plot <- function(model, cg_pattern, model_label, cg_sd, rg_sd) {
+  tidy(model, conf.int = TRUE) %>%
+    filter(grepl(
+      paste0(
+        cg_pattern,
+        ":as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor"
+      ),
+      term,
+      perl = TRUE
+    )) %>%
+    filter(!grepl(paste0(cg_pattern, ":RG:as\\.factor"), term)) %>%
+    mutate(
+      model = model_label,
+      group = case_when(
+        grepl(paste0("^", cg_pattern, ":as\\.factor"), term) ~ "CG × Treatment",
+        TRUE ~ "RG × Treatment"
+      ),
+      treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .)
+    ) %>%
+    mutate(
+      sd = if_else(group == "CG × Treatment", cg_sd, rg_sd),
+      across(c(estimate, conf.low, conf.high), ~ . * sd)
+    ) %>%
+    select(-sd)
+}
+
+coef_plot_both <- bind_rows(
+  extract_coef_plot(m1, "CG_wins", "m1 (wins CG)", CG_wins_sd, RG_sd),
+  extract_coef_plot(
+    m1_exclude_extreme,
+    "CG",
+    "m1 (exclude extreme)",
+    CG_exclude_sd,
+    RG_sd
+  ),
+  extract_coef_plot(m1_log, "log_CG", "m1 (log CG)", logCG_sd, RG_sd)
+)
 
 ggplot(
-  coef_plot_data,
-  aes(y = treatment, x = estimate, xmin = conf.low, xmax = conf.high)
+  coef_plot_both,
+  aes(
+    y = treatment,
+    x = estimate,
+    xmin = conf.low,
+    xmax = conf.high,
+    color = model
+  )
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_pointrange() +
+  geom_pointrange(position = position_dodge(width = 0.5)) +
   facet_wrap(~group, scales = "free_x") +
   labs(
     y = "Treatment group",
-    x = "Coefficient estimate",
-    title = "Model 1 interaction coefficients",
-    caption = paste0("N = ", m1_log$nobs)
+    x = "Standardized coefficient (1 SD increase in predictor)",
+    color = "Model",
+    title = "m1 vs m1_log interaction coefficients"
   ) +
   theme_minimal()
 
@@ -253,7 +336,9 @@ ggplot(
 
 m_vote <- lm_robust(
   Vote_Switch ~
-    log_CG * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
+    log_CG *
+      as.factor(Treatment_Group) +
+      RG * as.factor(Treatment_Group),
   data = subset(test, !is.na(Vote_Switch)),
   se_type = "HC2"
 )
@@ -290,37 +375,84 @@ ggplot(
   ) +
   theme_minimal()
 
+ggplot(
+  coef_plot_data_vote,
+  aes(y = treatment, x = estimate, xmin = conf.low, xmax = conf.high)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_pointrange() +
+  facet_wrap(~group, scales = "free_x") +
+  labs(
+    y = "Treatment group",
+    x = "Coefficient estimate",
+    title = "Coalition switch: interaction coefficients",
+    caption = paste0("N = ", m_vote$nobs)
+  ) +
+  theme_minimal()
+
 # ── Coalition crime handling change models ────────────────────────────────────
+
+load("data/magar2024_coalitions.Rdata")
+all_parties <- magar2024 %>%
+  mutate(
+    muni_id = sprintf("%05d", inegi),
+    coalition_label = case_when(
+      grepl("morena|pvem|pt", l01) ~ "MORENA/PVEM/PT",
+      grepl("pan|pri|prd", l01) ~ "PAN/PRI/PRD",
+      grepl("mc", l01) ~ "MC",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  select(muni_id, coalition_label)
+
+test2 <- test %>%
+  left_join(all_parties, join_by("Found_Municipality_ID" == "muni_id"))
+
+test2$home_mun_crime_rating_change <- NA
+test2$home_mun_crime_rating_change[
+  test2$coalition_label == "MORENA/PVEM/PT"
+] <- test2$MORENA_Change
+
+test2 <- test2 %>%
+  mutate(
+    home_mun_crime_rating_change = case_when(
+      coalition_label == "MORENA/PVEM/PT" ~ MORENA_Change,
+      coalition_label == "PAN/PRI/PRD" ~ PAN_PRI_PRD_Change,
+      coalition_label == "MC" ~ MC_Change
+    )
+  )
+
+test2 <- test2 %>%
+  mutate(
+    opp_mun_crime_rating_change = case_when(
+      coalition_label == "MORENA/PVEM/PT" ~ PAN_PRI_PRD_Change,
+      coalition_label == "PAN/PRI/PRD" ~ MORENA_Change,
+      coalition_label == "MC" ~ (MORENA_Change + PAN_PRI_PRD_Change) / 2
+    )
+  )
 
 coalition_interaction_formula <- function(outcome) {
   as.formula(paste0(
     outcome,
-    " ~ log_CG * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group)"
+    " ~ log_CG * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group) + as.factor(coalition_label)"
   ))
 }
 
-m_morena <- lm_robust(
-  coalition_interaction_formula("MORENA_Change"),
-  data = test,
+m_home <- lm_robust(
+  coalition_interaction_formula("home_mun_crime_rating_change"),
+  data = test2,
   se_type = "HC2"
 )
 
-m_pan <- lm_robust(
-  coalition_interaction_formula("PAN_PRI_PRD_Change"),
-  data = test,
-  se_type = "HC2"
-)
-
-m_mc <- lm_robust(
-  coalition_interaction_formula("MC_Change"),
-  data = test,
+m_opp <- lm_robust(
+  coalition_interaction_formula("opp_mun_crime_rating_change"),
+  data = test2,
   se_type = "HC2"
 )
 
 coalition_models <- list(
-  "MORENA/PVEM/PT" = m_morena,
-  "PAN/PRI/PRD" = m_pan,
-  "MC" = m_mc
+  "home" = m_home,
+  "opp" = m_opp
 )
 
 coef_plot_data_coalitions <- bind_rows(lapply(
@@ -361,106 +493,112 @@ ggplot(
     y = "Treatment group",
     x = "Coefficient estimate",
     color = "Coalition",
-    title = "Coalition crime handling change: interaction coefficients"
+    title = "Coalition crime handling change: interaction coefficients",
+    caption = paste0("N = ", m_home$nobs)
   ) +
   theme_minimal()
 
 # ── Adaptive shrinkage: joint mashr across outcomes ───────────────────────────
-
-library(mashr)
-
-extract_terms <- function(model, pattern) {
-  terms <- grep(pattern, names(coef(model)), value = TRUE)
-  V <- vcov(model)
-  list(
-    betas = coef(model)[terms],
-    ses = sqrt(diag(V)[terms]),
-    terms = terms
-  )
-}
-
-cg_pattern <- "log_CG:as\\.factor|as\\.factor.*:log_CG"
-rg_pattern <- "^RG:as\\.factor|as\\.factor.*:RG$"
-
-cg_crime <- extract_terms(m1_log, cg_pattern)
-cg_vote <- extract_terms(m_vote, cg_pattern)
-cg_morena <- extract_terms(m_morena, cg_pattern)
-cg_pan <- extract_terms(m_pan, cg_pattern)
-cg_mc <- extract_terms(m_mc, cg_pattern)
-
-rg_crime <- extract_terms(m1_log, rg_pattern)
-rg_vote <- extract_terms(m_vote, rg_pattern)
-rg_morena <- extract_terms(m_morena, rg_pattern)
-rg_pan <- extract_terms(m_pan, rg_pattern)
-rg_mc <- extract_terms(m_mc, rg_pattern)
-
-# Rows = treatment arms, cols = outcomes
-arm_labels <- sub(".*Treatment_Group\\)", "", cg_crime$terms)
-
-B_cg <- cbind(
-  crime_handling = cg_crime$betas,
-  vote_switch = cg_vote$betas,
-  morena = cg_morena$betas,
-  pan_pri_prd = cg_pan$betas,
-  mc = cg_mc$betas
-)
-S_cg <- cbind(
-  crime_handling = cg_crime$ses,
-  vote_switch = cg_vote$ses,
-  morena = cg_morena$ses,
-  pan_pri_prd = cg_pan$ses,
-  mc = cg_mc$ses
-)
-rownames(B_cg) <- rownames(S_cg) <- arm_labels
-
-B_rg <- cbind(
-  crime_handling = rg_crime$betas,
-  vote_switch = rg_vote$betas,
-  morena = rg_morena$betas,
-  pan_pri_prd = rg_pan$betas,
-  mc = rg_mc$betas
-)
-S_rg <- cbind(
-  crime_handling = rg_crime$ses,
-  vote_switch = rg_vote$ses,
-  morena = rg_morena$ses,
-  pan_pri_prd = rg_pan$ses,
-  mc = rg_mc$ses
-)
-rownames(B_rg) <- rownames(S_rg) <- sub(
-  ".*Treatment_Group\\)|:RG$",
-  "",
-  rg_crime$terms
-)
-
-mash_cg <- mash(
-  mash_set_data(B_cg, S_cg),
-  cov_canonical(mash_set_data(B_cg, S_cg))
-)
-mash_rg <- mash(
-  mash_set_data(B_rg, S_rg),
-  cov_canonical(mash_set_data(B_rg, S_rg))
-)
-
-cat(
-  "── mashr posterior means: CG × Treatment ────────────────────────────────\n"
-)
-print(round(get_pm(mash_cg), 3))
-cat(
-  "\n── mashr lfsr: CG × Treatment ───────────────────────────────────────────\n"
-)
-print(round(get_lfsr(mash_cg), 3))
-
-cat(
-  "\n── mashr posterior means: RG × Treatment ────────────────────────────────\n"
-)
-print(round(get_pm(mash_rg), 3))
-cat(
-  "\n── mashr lfsr: RG × Treatment ───────────────────────────────────────────\n"
-)
-print(round(get_lfsr(mash_rg), 3))
+#
+# library(mashr)
+#
+# extract_terms <- function(model, pattern) {
+#   terms <- grep(pattern, names(coef(model)), value = TRUE)
+#   V <- vcov(model)
+#   list(
+#     betas = coef(model)[terms],
+#     ses = sqrt(diag(V)[terms]),
+#     terms = terms
+#   )
+# }
+#
+# cg_pattern <- "log_CG:as\\.factor|as\\.factor.*:log_CG"
+# rg_pattern <- "^RG:as\\.factor|as\\.factor.*:RG$"
+#
+# cg_crime <- extract_terms(m1_log, cg_pattern)
+# cg_vote <- extract_terms(m_vote, cg_pattern)
+# cg_morena <- extract_terms(m_morena, cg_pattern)
+# cg_pan <- extract_terms(m_pan, cg_pattern)
+# cg_mc <- extract_terms(m_mc, cg_pattern)
+#
+# rg_crime <- extract_terms(m1_log, rg_pattern)
+# rg_vote <- extract_terms(m_vote, rg_pattern)
+# rg_morena <- extract_terms(m_morena, rg_pattern)
+# rg_pan <- extract_terms(m_pan, rg_pattern)
+# rg_mc <- extract_terms(m_mc, rg_pattern)
+#
+# # Rows = treatment arms, cols = outcomes
+# arm_labels <- sub(".*Treatment_Group\\)", "", cg_crime$terms)
+#
+# B_cg <- cbind(
+#   crime_handling = cg_crime$betas,
+#   vote_switch = cg_vote$betas,
+#   morena = cg_morena$betas,
+#   pan_pri_prd = cg_pan$betas,
+#   mc = cg_mc$betas
+# )
+# S_cg <- cbind(
+#   crime_handling = cg_crime$ses,
+#   vote_switch = cg_vote$ses,
+#   morena = cg_morena$ses,
+#   pan_pri_prd = cg_pan$ses,
+#   mc = cg_mc$ses
+# )
+# rownames(B_cg) <- rownames(S_cg) <- arm_labels
+#
+# B_rg <- cbind(
+#   crime_handling = rg_crime$betas,
+#   vote_switch = rg_vote$betas,
+#   morena = rg_morena$betas,
+#   pan_pri_prd = rg_pan$betas,
+#   mc = rg_mc$betas
+# )
+# S_rg <- cbind(
+#   crime_handling = rg_crime$ses,
+#   vote_switch = rg_vote$ses,
+#   morena = rg_morena$ses,
+#   pan_pri_prd = rg_pan$ses,
+#   mc = rg_mc$ses
+# )
+# rownames(B_rg) <- rownames(S_rg) <- sub(
+#   ".*Treatment_Group\\)|:RG$",
+#   "",
+#   rg_crime$terms
+# )
+#
+# mash_cg <- mash(
+#   mash_set_data(B_cg, S_cg),
+#   cov_canonical(mash_set_data(B_cg, S_cg))
+# )
+# mash_rg <- mash(
+#   mash_set_data(B_rg, S_rg),
+#   cov_canonical(mash_set_data(B_rg, S_rg))
+# )
+#
+# cat(
+#   "── mashr posterior means: CG × Treatment ────────────────────────────────\n"
+# )
+# print(round(get_pm(mash_cg), 3))
+# cat(
+#   "\n── mashr lfsr: CG × Treatment ───────────────────────────────────────────\n"
+# )
+# print(round(get_lfsr(mash_cg), 3))
+#
+# cat(
+#   "\n── mashr posterior means: RG × Treatment ────────────────────────────────\n"
+# )
+# print(round(get_pm(mash_rg), 3))
+# cat(
+#   "\n── mashr lfsr: RG × Treatment ───────────────────────────────────────────\n"
+# )
+# print(round(get_lfsr(mash_rg), 3))
 
 library(car)
+
+linearHypothesis(
+  m1_log,
+  "log_CG:as.factor(Treatment_Group)T1 = 0"
+)
 
 linearHypothesis(
   m1_log,
