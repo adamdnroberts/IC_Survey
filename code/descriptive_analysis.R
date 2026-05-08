@@ -100,6 +100,14 @@ all_parties <- magar2024 %>%
 # Top-20 municipalities by population (nationally, within eligible states)
 top20_munis <- names(sort(pop_lookup, decreasing = TRUE))[1:20]
 
+# Crime rates
+robo_data <- readRDS("data/robo_2025.rds")
+crime_lookup <- setNames(
+  robo_data$rate_per_100k,
+  sprintf("%05d", suppressWarnings(as.integer(robo_data$Cve..Municipio)))
+)
+crime_lookup <- crime_lookup[!is.na(names(crime_lookup))]
+
 # Nearest-10 lookup
 nearest10 <- readRDS("data/nearest10.rds")
 nearest10_set <- nearest10 %>%
@@ -195,13 +203,24 @@ cand_meta <- muni_meta_all %>%
 long_df <- long_df %>%
   left_join(cand_meta, by = "candidate_id")
 
+# ── Crime importance lookup (respondent-level) ───────────────────────────────
+
+ci_lookup <- setNames(
+  6 - as.numeric(survey_responses_wave1$Importance_Crime),
+  survey_responses_wave1$Respondent_ID
+)
+
 # ── Compute model covariates ──────────────────────────────────────────────────
 
 long_df <- long_df %>%
   mutate(
+    home_crime_rate = crime_lookup[home_id],
+    cand_crime_rate = crime_lookup[candidate_id],
+    CI = ci_lookup[as.character(Respondent_ID)],
     dist_km = haversine_km(home_lon, home_lat, cand_lon, cand_lat),
     log_dist_km = log(dist_km),
     log_pop_ratio = log((cand_pop + 1) / (home_pop + 1)),
+    crime_diff = cand_crime_rate - home_crime_rate,
     same_state = as.integer(cand_state == home_state),
     same_coalition = as.integer(
       !is.na(cand_coalition) &
@@ -241,7 +260,9 @@ long_df <- long_df %>%
     home_pop,
     cand_pop,
     cand_coalition,
-    cand_state
+    cand_state,
+    crime_diff,
+    CI
   )
 
 n_respondents <- n_distinct(long_df$Respondent_ID)
@@ -376,6 +397,156 @@ ggsave(
   plot = benchmark_coef_plot,
   width = 7,
   height = 4.5
+)
+
+# ── Bayesian model with crime rate ratio ──────────────────────────────────────
+
+long_df_crime <- long_df %>%
+  filter(!is.na(crime_diff), !is.na(CI))
+
+n_respondents_crime <- n_distinct(long_df_crime$Respondent_ID)
+
+cat(sprintf(
+  "Crime-ratio model: %d rows (%d respondents after dropping missing crime data)\n",
+  nrow(long_df_crime),
+  n_respondents_crime
+))
+
+fit_benchmark_crime <- brm(
+  bf(
+    Selected ~
+      log_dist_km +
+        log_pop_ratio +
+        log_dist_km * log_pop_ratio +
+        same_state +
+        same_coalition +
+        vote_coalition_match +
+        cand_coalition +
+        home_coalition +
+        log_home_pop +
+        pool +
+        crime_diff +
+        CI +
+        crime_diff * CI +
+        (1 | Respondent_ID),
+    decomp = "QR"
+  ),
+  data = long_df_crime,
+  family = bernoulli(link = "logit"),
+  prior = priors,
+  chains = 4,
+  cores = 4,
+  iter = 2000,
+  warmup = 1000,
+  seed = 42,
+  file = "data/fit_benchmark_crime"
+)
+
+summary(fit_benchmark_crime)
+
+# ── Coefficient plot for crime model ─────────────────────────────────────────
+
+coef_labels_crime <- c(
+  "crime_diff" = "Crime difference (cand - home, per 100k)",
+  "crime_diff:CI" = "Crime difference × crime importance"
+)
+
+fe_draws_crime <- as.data.frame(fixef(fit_benchmark_crime, summary = FALSE))
+
+cat("Crime model coefficient names:\n")
+print(names(fe_draws_crime))
+
+draws_crime <- fe_draws_crime %>%
+  pivot_longer(everything(), names_to = "term", values_to = "draw") %>%
+  filter(term %in% names(coef_labels_crime)) %>%
+  mutate(pp_change = (plogis(draw) - 0.5) * 100)
+
+plot_df_crime <- draws_crime %>%
+  group_by(term) %>%
+  summarise(
+    mean = mean(pp_change),
+    lo95 = quantile(pp_change, 0.025),
+    hi95 = quantile(pp_change, 0.975),
+    lo50 = quantile(pp_change, 0.25),
+    hi50 = quantile(pp_change, 0.75),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    label = factor(coef_labels_crime[term], levels = rev(coef_labels_crime))
+  )
+
+benchmark_crime_coef_plot <- ggplot(plot_df_crime, aes(x = mean, y = label)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 0.6) +
+  geom_linerange(aes(xmin = lo50, xmax = hi50), linewidth = 1.6) +
+  geom_point(size = 2.5, shape = 21, fill = "white", stroke = 1) +
+  labs(
+    x = "Posterior mean percentage-point change (from 50% baseline)",
+    y = NULL,
+    title = "Predictors of comparison municipality selection (with crime ratio)",
+    caption = sprintf(
+      "N = %d respondents. Thick lines: 50%% CI. Thin lines: 95%% CI.",
+      n_respondents_crime
+    )
+  ) +
+  theme_classic() +
+  theme(axis.text.y = element_text(size = 10))
+
+print(benchmark_crime_coef_plot)
+
+ggsave(
+  "latex/images/comparison_crime_coef_plot.pdf",
+  plot = benchmark_crime_coef_plot,
+  width = 7,
+  height = 5
+)
+
+# ── Interaction plot: marginal effect of crime_diff at each CI level ──────────
+# Find the interaction column name as brms may name it differently
+crime_ci_col <- grep("crime_diff.*CI|CI.*crime_diff", names(fe_draws_crime), value = TRUE)[1]
+
+interaction_df <- purrr::map_dfr(1:5, function(ci_val) {
+  marginal <- fe_draws_crime[["crime_diff"]] + fe_draws_crime[[crime_ci_col]] * ci_val
+  dplyr::tibble(
+    CI_val = ci_val,
+    draw = marginal
+  )
+}) %>%
+  group_by(CI_val) %>%
+  summarise(
+    mean  = mean((plogis(draw) - 0.5) * 100),
+    lo95  = quantile((plogis(draw) - 0.5) * 100, 0.025),
+    hi95  = quantile((plogis(draw) - 0.5) * 100, 0.975),
+    lo50  = quantile((plogis(draw) - 0.5) * 100, 0.25),
+    hi50  = quantile((plogis(draw) - 0.5) * 100, 0.75),
+    .groups = "drop"
+  )
+
+interaction_plot <- ggplot(interaction_df, aes(x = CI_val, y = mean)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_ribbon(aes(ymin = lo95, ymax = hi95), alpha = 0.15) +
+  geom_ribbon(aes(ymin = lo50, ymax = hi50), alpha = 0.3) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2.5, shape = 21, fill = "white", stroke = 1) +
+  scale_x_continuous(
+    breaks = 1:5,
+    labels = c("1\n(least)", "2", "3", "4", "5\n(most)")
+  ) +
+  labs(
+    x = "Crime importance (CI)",
+    y = "Marginal effect of crime difference\n(pp change from 50% baseline, per 100k)",
+    title = "Interaction: effect of crime difference by crime importance",
+    caption = sprintf("N = %d respondents. Dark band: 50%% CI. Light band: 95%% CI.", n_respondents_crime)
+  ) +
+  theme_classic()
+
+print(interaction_plot)
+
+ggsave(
+  "latex/images/comparison_crime_interaction_plot.pdf",
+  plot = interaction_plot,
+  width = 6,
+  height = 4
 )
 
 #test <- long_df %>% group_by(Respondent_ID) %>% summarize(selected_num = sum(Selected == TRUE))

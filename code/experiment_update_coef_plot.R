@@ -103,7 +103,14 @@ test$Home_Crime_Handling_Change <- as.numeric(test$Home_Crime_Handling_Post) -
 
 test$CI <- 6 - as.numeric(test$Importance_Crime)
 
-test <- filter(test, Attention_Check == "somewhat_agree" & abs(CG) < 100000)
+test_all <- filter(test, abs(CG) < 100000)
+test_all$CG_wins <- winsorize(test_all$CG)
+
+test <- filter(
+  test,
+  Attention_Check == "somewhat_agree" &
+    abs(CG) < 100000
+)
 
 m <- lm_robust(
   Home_Crime_Handling_Change ~
@@ -118,6 +125,13 @@ m_wins <- lm_robust(
   Home_Crime_Handling_Change ~
     CG_wins * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
   data = test,
+  se_type = "HC2"
+)
+
+m_wins_all <- lm_robust(
+  Home_Crime_Handling_Change ~
+    CG_wins * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
+  data = test_all,
   se_type = "HC2"
 )
 
@@ -137,6 +151,8 @@ CG_sd <- sd(test$CG, na.rm = TRUE)
 logCG_sd <- sd(test$log_CG, na.rm = TRUE)
 CG_wins_sd <- sd(test$CG_wins, na.rm = TRUE)
 RG_sd <- sd(test$RG, na.rm = TRUE)
+CG_wins_all_sd <- sd(test_all$CG_wins, na.rm = TRUE)
+RG_all_sd <- sd(test_all$RG, na.rm = TRUE)
 
 extract_coef_plot <- function(model, cg_pattern, model_label, cg_sd, rg_sd) {
   tidy(model, conf.int = TRUE) %>%
@@ -270,3 +286,50 @@ m1_gam <- gam(
 
 summary(m1_gam)
 plot(m1_gam, pages = 1, shade = TRUE)
+
+# Attention check robustness: winsorized model with vs without attention check filter
+coef_data_attn <- bind_rows(
+  extract_coef_plot(m_wins, "CG_wins", "Attn. check passed", CG_wins_sd, RG_sd),
+  extract_coef_plot(
+    m_wins_all,
+    "CG_wins",
+    "All respondents",
+    CG_wins_all_sd,
+    RG_all_sd
+  )
+)
+
+coef_plot_attn <- ggplot(
+  coef_data_attn,
+  aes(
+    y = treatment,
+    x = estimate,
+    xmin = conf.low,
+    xmax = conf.high,
+    color = model
+  )
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_pointrange(position = position_dodge(width = 0.5)) +
+  facet_wrap(~group, scales = "free_x") +
+  labs(
+    y = "Treatment group",
+    x = "Standardized coefficient (1 SD increase in perception gap)",
+    color = "Sample",
+    caption = paste0(
+      "N (attn. check passed) = ",
+      m_wins$nobs,
+      "  |  N (all respondents) = ",
+      m_wins_all$nobs
+    )
+  ) +
+  theme_minimal()
+
+print(coef_plot_attn)
+
+ggsave(
+  "latex/images/incumbent_coef_update_attn.pdf",
+  plot = coef_plot_attn,
+  width = 6,
+  height = 6
+)
