@@ -158,10 +158,35 @@ to_coalition <- function(x) {
 
 test$coalition_pre <- to_coalition(test$Vote_Intention_Pre)
 test$coalition_post <- to_coalition(test$Vote_Intention_Post)
-test$Vote_Switch <- as.integer(
-  !is.na(test$coalition_pre) &
-    !is.na(test$coalition_post) &
-    test$coalition_pre != test$coalition_post
+
+load("data/magar2024_coalitions.Rdata")
+all_parties_tmp <- magar2024 %>%
+  mutate(
+    muni_id = sprintf("%05d", inegi),
+    home_coalition = case_when(
+      grepl("morena|pvem|pt", l01) ~ "MORENA/PVEM/PT",
+      grepl("pan|pri|prd", l01) ~ "PAN/PRI/PRD",
+      grepl("mc", l01) ~ "MC",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  select(muni_id, home_coalition)
+
+test <- test %>%
+  left_join(all_parties_tmp, join_by("Found_Municipality_ID" == "muni_id"))
+
+test$Vote_Switch <- case_when(
+  is.na(test$coalition_pre) | is.na(test$coalition_post) ~ NA_integer_,
+  test$coalition_pre == test$coalition_post ~ 0L,
+  test$coalition_post == test$home_coalition ~ 1L,
+  test$coalition_pre == test$home_coalition ~ -1L,
+  TRUE ~ 0L
+)
+
+test$Vote_home_post <- as.integer(
+  !is.na(test$coalition_post) &
+    !is.na(test$home_coalition) &
+    test$home_coalition == test$coalition_post
 )
 
 test$MORENA_Change <- as.numeric(test$MORENA_Crime_Rating_Post) -
@@ -184,8 +209,8 @@ m1_lm <- lm(
 m_log_lm <- lm(
   Home_Crime_Handling_Change ~
     log_CG *
-    as.factor(Treatment_Group) +
-    RG * as.factor(Treatment_Group),
+      as.factor(Treatment_Group) +
+      RG * as.factor(Treatment_Group),
   data = test
 )
 
@@ -328,7 +353,52 @@ ggplot(
     y = "Treatment group",
     x = "Standardized coefficient (1 SD increase in predictor)",
     color = "Model",
-    title = "m1 vs m1_log interaction coefficients"
+    title = "m1 vs m1_log interaction coefficients",
+    caption = paste0("N = ", m1$nobs)
+  ) +
+  theme_minimal()
+
+# ── Vote intention incumbent model ───────────────────────────────────────────────
+
+m_vote <- lm_robust(
+  Vote_home_post ~
+    log_CG *
+      as.factor(Treatment_Group) +
+      RG * as.factor(Treatment_Group) +
+      coalition_pre,
+  data = test,
+  se_type = "HC2"
+)
+
+summary(m_vote)
+
+coef_plot_data_vote <- tidy(m_vote, conf.int = TRUE) %>%
+  filter(grepl(
+    "log_CG:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
+    term,
+    perl = TRUE
+  )) %>%
+  filter(!grepl("log_CG:RG:as\\.factor", term)) %>%
+  mutate(
+    group = case_when(
+      grepl("^log_CG:as\\.factor", term) ~ "CG × Treatment",
+      TRUE ~ "RG × Treatment"
+    ),
+    treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .)
+  )
+
+ggplot(
+  coef_plot_data_vote,
+  aes(y = treatment, x = estimate, xmin = conf.low, xmax = conf.high)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_pointrange() +
+  facet_wrap(~group, scales = "free_x") +
+  labs(
+    y = "Treatment group",
+    x = "Coefficient estimate",
+    title = "Incumbent vote post: interaction coefficients",
+    caption = paste0("N = ", m_vote$nobs)
   ) +
   theme_minimal()
 

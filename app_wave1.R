@@ -1524,13 +1524,13 @@ server <- function(input, output, session) {
     } else {
       NULL
     }
-    region_cell <- if (
-      !is.null(nq_region) && nq_region %in% names(QUOTA_REGION)
-    ) {
-      nq_region
-    } else {
-      NULL
-    }
+    # region_cell <- if (
+    #   !is.null(nq_region) && nq_region %in% names(QUOTA_REGION)
+    # ) {
+    #   nq_region
+    # } else {
+    #   NULL
+    # }
 
     # Safe count lookup: returns 0 if key is missing or NULL
     get_n <- function(vec, key) {
@@ -1547,11 +1547,7 @@ server <- function(input, output, session) {
         get_n(counts$age, age_cell) >= QUOTA_AGE[age_cell] + QUOTA_BUFFER) ||
       (!is.null(sel_cell) &&
         !is.na(sel_cell) &&
-        get_n(counts$sel, sel_cell) >= QUOTA_SEL[sel_cell] + QUOTA_BUFFER) ||
-      (!is.null(region_cell) &&
-        !is.na(region_cell) &&
-        get_n(counts$region, region_cell) >=
-          QUOTA_REGION[region_cell] + QUOTA_BUFFER)
+        get_n(counts$sel, sel_cell) >= QUOTA_SEL[sel_cell] + QUOTA_BUFFER)
 
     if (isTRUE(over_quota)) {
       save_screenout(respondent_id, "over_quota", NULL,
@@ -2321,13 +2317,13 @@ server <- function(input, output, session) {
           } else {
             NULL
           }
-          region_cell <- if (
-            !is.null(nq_region) && nq_region %in% names(QUOTA_REGION)
-          ) {
-            nq_region
-          } else {
-            NULL
-          }
+          # region_cell <- if (
+          #   !is.null(nq_region) && nq_region %in% names(QUOTA_REGION)
+          # ) {
+          #   nq_region
+          # } else {
+          #   NULL
+          # }
 
           bump <- function(vec, key) {
             v <- vec[[key]]
@@ -2344,10 +2340,6 @@ server <- function(input, output, session) {
           if (!is.null(sel_cell) && !is.na(sel_cell)) {
             counts$sel <- bump(counts$sel, sel_cell)
           }
-          if (!is.null(region_cell) && !is.na(region_cell)) {
-            counts$region <- bump(counts$region, region_cell)
-          }
-
           write_quota_counts(s3_bucket, counts)
         },
         error = function(e) warning("Quota count update failed: ", e$message)
