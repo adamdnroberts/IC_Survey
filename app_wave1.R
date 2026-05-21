@@ -1214,8 +1214,6 @@ ui <- fluidPage(
 
 # ── Marginal quota targets ─────────────────────────────────────────────────
 # Sources:
-#   Sex:    INEGI, Censo de Población y Vivienda 2020, population 18+
-#           Male 48.3%, Female 51.7%
 #   Age:    INEGI, Censo de Población y Vivienda 2020, population 18+
 #           (Tabulados del Cuestionario Ampliado, edad quinquenal)
 #   SEL:    AMAI, Regla AMAI NSE 8x7, actualización 2018
@@ -1226,9 +1224,6 @@ ui <- fluidPage(
 # Total N = 2,180. Marginal (per-variable) quotas only.
 
 QUOTA_N <- 2180L
-
-# Sex (INEGI 2020 18+ pop., eligible states)
-QUOTA_SEX <- c("1" = 1067L, "2" = 1113L)
 
 # Age bracket helper — maps raw Netquest age value to bracket label
 age_bracket <- function(age_val) {
@@ -1284,7 +1279,6 @@ QUOTA_S3_KEY <- "quota_counts/wave1_quota_counts.json"
 
 .quota_empty_counts <- function() {
   list(
-    sex = as.list(setNames(rep(0L, length(QUOTA_SEX)), names(QUOTA_SEX))),
     age = as.list(setNames(rep(0L, length(QUOTA_AGE)), names(QUOTA_AGE))),
     sel = as.list(setNames(rep(0L, length(QUOTA_SEL)), names(QUOTA_SEL))),
     region = as.list(setNames(
@@ -1301,7 +1295,7 @@ read_quota_counts <- function(bucket) {
       res <- client$get_object(Bucket = bucket, Key = QUOTA_S3_KEY)
       counts <- jsonlite::fromJSON(rawToChar(res$Body), simplifyVector = FALSE)
       # Ensure each dimension is a named list with integer values
-      for (dim in c("sex", "age", "sel", "region")) {
+      for (dim in c("age", "sel", "region")) {
         counts[[dim]] <- lapply(counts[[dim]], as.integer)
       }
       # Migrate any pre-merge SEL D (6) and E (7) counts into the combined D+/D/E cell (5)
@@ -1513,11 +1507,6 @@ server <- function(input, output, session) {
 
     counts <- read_quota_counts(s3_bucket)
 
-    sex_cell <- if (!is.null(nq_sex) && nq_sex %in% names(QUOTA_SEX)) {
-      nq_sex
-    } else {
-      NULL
-    }
     age_cell <- if (!is.null(nq_age)) age_bracket(nq_age) else NULL
     sel_cell <- if (!is.null(nq_sel) && nq_sel %in% names(QUOTA_SEL)) {
       nq_sel
@@ -1539,9 +1528,6 @@ server <- function(input, output, session) {
     }
 
     over_quota <-
-      (!is.null(sex_cell) &&
-        !is.na(sex_cell) &&
-        get_n(counts$sex, sex_cell) >= QUOTA_SEX[sex_cell] + QUOTA_BUFFER) ||
       (!is.null(age_cell) &&
         !is.na(age_cell) &&
         get_n(counts$age, age_cell) >= QUOTA_AGE[age_cell] + QUOTA_BUFFER) ||
@@ -2306,11 +2292,6 @@ server <- function(input, output, session) {
         {
           counts <- read_quota_counts(s3_bucket)
 
-          sex_cell <- if (!is.null(nq_sex) && nq_sex %in% names(QUOTA_SEX)) {
-            nq_sex
-          } else {
-            NULL
-          }
           age_cell <- if (!is.null(nq_age)) age_bracket(nq_age) else NULL
           sel_cell <- if (!is.null(nq_sel) && nq_sel %in% names(QUOTA_SEL)) {
             nq_sel
@@ -2331,9 +2312,6 @@ server <- function(input, output, session) {
             vec
           }
 
-          if (!is.null(sex_cell) && !is.na(sex_cell)) {
-            counts$sex <- bump(counts$sex, sex_cell)
-          }
           if (!is.null(age_cell) && !is.na(age_cell)) {
             counts$age <- bump(counts$age, age_cell)
           }

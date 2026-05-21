@@ -214,7 +214,7 @@ m_log_lm <- lm(
   data = test
 )
 
-plot(m_log_lm)
+#plot(m_log_lm)
 
 stargazer::stargazer(m1_lm, type = "text")
 
@@ -358,14 +358,82 @@ ggplot(
   ) +
   theme_minimal()
 
+inc_coef_update <- ggplot(
+  subset(
+    coef_plot_both,
+    model == "m1 (wins CG)" &
+      group == "CG × Treatment" &
+      treatment != "control2"
+  ),
+  aes(
+    y = treatment,
+    x = estimate,
+    xmin = conf.low,
+    xmax = conf.high
+  )
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_pointrange(position = position_dodge(width = 0.5)) +
+  facet_wrap(~group, scales = "free_x") +
+  labs(
+    y = "Treatment group",
+    x = "Standardized coefficient (1 SD increase in predictor)",
+    #color = "Model",
+    #title = "m1 vs m1_log interaction coefficients",
+    caption = paste0("N = ", m1$nobs)
+  ) +
+  theme_minimal()
+
+ggsave(
+  "latex/images/incumbent_coef_update.pdf",
+  plot = inc_coef_update,
+  width = 7,
+  height = 4.5
+)
+
+rank_coef_update <- ggplot(
+  subset(
+    coef_plot_both,
+    model == "m1 (wins CG)" &
+      group == "RG × Treatment" &
+      treatment != "control2"
+  ),
+  aes(
+    y = treatment,
+    x = estimate,
+    xmin = conf.low,
+    xmax = conf.high
+  )
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_pointrange(position = position_dodge(width = 0.5)) +
+  facet_wrap(~group, scales = "free_x") +
+  labs(
+    y = "Treatment group",
+    x = "Standardized coefficient (1 SD increase in predictor)",
+    #color = "Model",
+    #title = "m1 vs m1_log interaction coefficients",
+    caption = paste0("N = ", m1$nobs)
+  ) +
+  theme_minimal()
+
+ggsave(
+  "latex/images/rank_coef_update.pdf",
+  plot = rank_coef_update,
+  width = 7,
+  height = 4.5
+)
+
 # ── Vote intention incumbent model ───────────────────────────────────────────────
+
+test$coalition_pre[is.na(test$coalition_pre)] <- "Other"
 
 m_vote <- lm_robust(
   Vote_home_post ~
     log_CG *
       as.factor(Treatment_Group) +
       RG * as.factor(Treatment_Group) +
-      coalition_pre,
+      as.factor(coalition_pre),
   data = test,
   se_type = "HC2"
 )
@@ -387,8 +455,8 @@ coef_plot_data_vote <- tidy(m_vote, conf.int = TRUE) %>%
     treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .)
   )
 
-ggplot(
-  coef_plot_data_vote,
+vote_coef_update <- ggplot(
+  subset(coef_plot_data_vote, treatment != "control2"),
   aes(y = treatment, x = estimate, xmin = conf.low, xmax = conf.high)
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
@@ -397,10 +465,17 @@ ggplot(
   labs(
     y = "Treatment group",
     x = "Coefficient estimate",
-    title = "Incumbent vote post: interaction coefficients",
+    #title = "Incumbent vote post: interaction coefficients",
     caption = paste0("N = ", m_vote$nobs)
   ) +
   theme_minimal()
+
+ggsave(
+  "latex/images/vote_coef_update.pdf",
+  plot = vote_coef_update,
+  width = 7,
+  height = 4.5
+)
 
 # ── Vote intention switch model ───────────────────────────────────────────────
 
