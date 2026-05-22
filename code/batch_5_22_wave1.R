@@ -17,12 +17,12 @@ print(paste0(
   round(nrow(w2) / length(excluded_pids), 2)
 ))
 
-batch_5_18 <- responses %>%
+batch_5_22 <- responses %>%
   filter(!Netquest_PID %in% excluded_pids) %>%
   filter(as.Date(as.POSIXct(Timestamp)) <= Sys.Date() - 7) %>%
   select(Netquest_PID, Timestamp)
 
-overlap <- intersect(batch_5_18$Netquest_PID, excluded_pids)
+overlap <- intersect(batch_5_22$Netquest_PID, excluded_pids)
 if (length(overlap) > 0) {
   stop(sprintf(
     "Overlap detected: %d PIDs appear in a previous batch.",
@@ -32,4 +32,4 @@ if (length(overlap) > 0) {
   cat("No overlap with previous batches.\n")
 }
 
-write.csv(batch_5_18, "data/batch_5_18_wave1_pids.csv", row.names = FALSE)
+write.csv(batch_5_22, "data/batch_5_22_wave1_pids.csv", row.names = FALSE)

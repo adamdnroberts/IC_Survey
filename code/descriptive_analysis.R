@@ -401,105 +401,119 @@ ggsave(
 
 # ── Bayesian model with crime rate ratio ──────────────────────────────────────
 
-# long_df_crime <- long_df %>%
-#   filter(!is.na(crime_diff), !is.na(CI))
-#
-# n_respondents_crime <- n_distinct(long_df_crime$Respondent_ID)
-#
-# cat(sprintf(
-#   "Crime-ratio model: %d rows (%d respondents after dropping missing crime data)\n",
-#   nrow(long_df_crime),
-#   n_respondents_crime
-# ))
-#
-# fit_benchmark_crime <- brm(
-#   bf(
-#     Selected ~
-#       log_dist_km +
-#         log_pop_ratio +
-#         log_dist_km * log_pop_ratio +
-#         same_state +
-#         same_coalition +
-#         vote_coalition_match +
-#         cand_coalition +
-#         home_coalition +
-#         log_home_pop +
-#         pool +
-#         crime_diff +
-#         CI +
-#         crime_diff * CI +
-#         (1 | Respondent_ID),
-#     decomp = "QR"
-#   ),
-#   data = long_df_crime,
-#   family = bernoulli(link = "logit"),
-#   prior = priors,
-#   chains = 4,
-#   cores = 4,
-#   iter = 2000,
-#   warmup = 1000,
-#   seed = 42,
-#   file = "data/fit_benchmark_crime"
-# )
+n_respondents_crime <- n_distinct(long_df$Respondent_ID)
+
+summary(long_df$crime_diff)
+
+long_df$CI_f <- relevel(as.factor(long_df$CI), ref = "3")
+test <- lm(crime_diff ~ CI_f, data = long_df)
+
+em <- emmeans(test, ~CI_f)
+
+as.data.frame(em) %>%
+  ggplot(aes(y = CI_f, x = emmean, xmin = lower.CL, xmax = upper.CL)) +
+  geom_point(size = 3) +
+  geom_errorbar(width = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+  labs(
+    x = "CI Level",
+    y = "Mean Crime Difference",
+    title = "Estimated Means by CI Level"
+  ) +
+  theme_minimal()
+
+#file.remove("data/fit_benchmark_crime.rds")
+
+fit_benchmark_crime <- brm(
+  bf(
+    Selected ~
+      log_dist_km +
+        log_pop_ratio +
+        log_dist_km * log_pop_ratio +
+        same_state +
+        same_coalition +
+        vote_coalition_match +
+        cand_coalition +
+        home_coalition +
+        log_home_pop +
+        pool +
+        crime_diff +
+        CI_f +
+        crime_diff * CI_f +
+        (1 | Respondent_ID),
+    decomp = "QR"
+  ),
+  data = long_df,
+  family = bernoulli(link = "logit"),
+  prior = priors,
+  chains = 4,
+  cores = 4,
+  iter = 2000,
+  warmup = 1000,
+  seed = 42,
+  file = "data/fit_benchmark_crime"
+)
 #
 # summary(fit_benchmark_crime)
 #
-# # ── Coefficient plot for crime model ─────────────────────────────────────────
-#
-# coef_labels_crime <- c(
-#   "crime_diff" = "Crime difference (cand - home, per 100k)",
-#   "crime_diff:CI" = "Crime difference × crime importance"
-# )
-#
-# fe_draws_crime <- as.data.frame(fixef(fit_benchmark_crime, summary = FALSE))
-#
-# cat("Crime model coefficient names:\n")
-# print(names(fe_draws_crime))
-#
-# draws_crime <- fe_draws_crime %>%
-#   pivot_longer(everything(), names_to = "term", values_to = "draw") %>%
-#   filter(term %in% names(coef_labels_crime)) %>%
-#   mutate(pp_change = (plogis(draw) - 0.5) * 100)
-#
-# plot_df_crime <- draws_crime %>%
-#   group_by(term) %>%
-#   summarise(
-#     mean = mean(pp_change),
-#     lo95 = quantile(pp_change, 0.025),
-#     hi95 = quantile(pp_change, 0.975),
-#     lo50 = quantile(pp_change, 0.25),
-#     hi50 = quantile(pp_change, 0.75),
-#     .groups = "drop"
-#   ) %>%
-#   mutate(
-#     label = factor(coef_labels_crime[term], levels = rev(coef_labels_crime))
-#   )
-#
-# benchmark_crime_coef_plot <- ggplot(plot_df_crime, aes(x = mean, y = label)) +
-#   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-#   geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 0.6) +
-#   geom_linerange(aes(xmin = lo50, xmax = hi50), linewidth = 1.6) +
-#   geom_point(size = 2.5, shape = 21, fill = "white", stroke = 1) +
-#   labs(
-#     x = "Posterior mean percentage-point change (from 50% baseline)",
-#     y = NULL,
-#     title = "Predictors of comparison municipality selection (with crime ratio)",
-#     caption = sprintf(
-#       "N = %d respondents. Thick lines: 50%% CI. Thin lines: 95%% CI.",
-#       n_respondents_crime
-#     )
-#   ) +
-#   theme_classic() +
-#   theme(axis.text.y = element_text(size = 10))
-#
-# print(benchmark_crime_coef_plot)
-#
-# ggsave(
-#   "latex/images/comparison_crime_coef_plot.pdf",
-#   plot = benchmark_crime_coef_plot,
-#   width = 7,
-#   height = 5
-# )
+# ── Coefficient plot for crime model ─────────────────────────────────────────
+
+coef_labels_crime <- c(
+  "crime_diff:CI_f1" = "Crime difference × crime importance1",
+  "crime_diff:CI_f2" = "Crime difference × crime importance2",
+  "crime_diff:CI_f4" = "Crime difference × crime importance4",
+  "crime_diff:CI_f5" = "Crime difference × crime importance5"
+)
+
+fe_draws_crime <- as.data.frame(fixef(fit_benchmark_crime, summary = FALSE))
+
+cat("Crime model coefficient names:\n")
+print(names(fe_draws_crime))
+
+draws_crime <- fe_draws_crime %>%
+  pivot_longer(everything(), names_to = "term", values_to = "draw") %>%
+  filter(term %in% names(coef_labels_crime)) %>%
+  mutate(pp_change = (plogis(draw) - 0.5) * 100)
+
+plot_df_crime <- draws_crime %>%
+  group_by(term) %>%
+  summarise(
+    mean = mean(pp_change),
+    lo95 = quantile(pp_change, 0.025),
+    hi95 = quantile(pp_change, 0.975),
+    lo50 = quantile(pp_change, 0.25),
+    hi50 = quantile(pp_change, 0.75),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    label = factor(coef_labels_crime[term], levels = rev(coef_labels_crime))
+  )
+
+benchmark_crime_coef_plot <- ggplot(plot_df_crime, aes(x = mean, y = label)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 0.6) +
+  geom_linerange(aes(xmin = lo50, xmax = hi50), linewidth = 1.6) +
+  geom_point(size = 2.5, shape = 21, fill = "white", stroke = 1) +
+  labs(
+    x = "Posterior mean percentage-point change (from 50% baseline)",
+    y = NULL,
+    title = "Crime ratio as a predictor of municipality selection",
+    caption = sprintf(
+      "N = %d respondents. Thick lines: 50%% CI. Thin lines: 95%% CI.",
+      n_respondents_crime
+    )
+  ) +
+  theme_classic() +
+  theme(axis.text.y = element_text(size = 10))
+
+print(benchmark_crime_coef_plot)
+
+ggsave(
+  "latex/images/comparison_crime_coef_plot.pdf",
+  plot = benchmark_crime_coef_plot,
+  width = 7,
+  height = 5
+)
 
 # ── Interaction plot: marginal effect of crime_diff at each CI level ──────────
 # Find the interaction column name as brms may name it differently

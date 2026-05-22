@@ -74,9 +74,12 @@ all_long <- bind_rows(home_long, comp_long) %>%
 
 tg_order <- c("control", "control2", "T1", "T2", "T3", "T4")
 
+all_long$T_pooled_control <- all_long$Treatment_Group
+all_long$T_pooled_control[all_long$Treatment_Group == "control2"] <- "control"
+
 acc_overall <- all_long %>%
   filter(!is.na(correct)) %>%
-  group_by(Treatment_Group) %>%
+  group_by(T_pooled_control) %>%
   summarise(
     n_obs = n(),
     n_correct = sum(correct),
@@ -85,13 +88,13 @@ acc_overall <- all_long %>%
     .groups = "drop"
   ) %>%
   mutate(
-    Treatment_Group = factor(Treatment_Group, levels = tg_order),
+    Treatment_Group = factor(T_pooled_control, levels = tg_order),
     muni_type = "Overall"
   )
 
 acc_by_type <- all_long %>%
   filter(!is.na(correct)) %>%
-  group_by(Treatment_Group, muni_type) %>%
+  group_by(T_pooled_control, muni_type) %>%
   summarise(
     n_obs = n(),
     n_correct = sum(correct),
@@ -99,12 +102,12 @@ acc_by_type <- all_long %>%
     se = sqrt(accuracy * (1 - accuracy) / n_obs),
     .groups = "drop"
   ) %>%
-  mutate(Treatment_Group = factor(Treatment_Group, levels = tg_order))
+  mutate(T_pooled_control = factor(T_pooled_control, levels = tg_order))
 
 cat("\n=== Overall accuracy by treatment arm ===\n")
 print(
   acc_overall %>%
-    select(Treatment_Group, n_obs, n_correct, accuracy, se) %>%
+    select(T_pooled_control, n_obs, n_correct, accuracy, se) %>%
     mutate(across(c(accuracy, se), \(x) round(x, 3))),
   row.names = FALSE
 )
@@ -112,9 +115,9 @@ print(
 cat("\n=== Accuracy by treatment arm and municipality type ===\n")
 print(
   acc_by_type %>%
-    select(Treatment_Group, muni_type, n_obs, n_correct, accuracy, se) %>%
+    select(T_pooled_control, muni_type, n_obs, n_correct, accuracy, se) %>%
     mutate(across(c(accuracy, se), \(x) round(x, 3))) %>%
-    arrange(muni_type, Treatment_Group),
+    arrange(muni_type, T_pooled_control),
   row.names = FALSE
 )
 
@@ -125,10 +128,17 @@ plot_df <- acc_by_type %>%
 
 p <- ggplot(
   plot_df,
-  aes(x = Treatment_Group, y = accuracy, fill = muni_type)
+  aes(x = T_pooled_control, y = accuracy, fill = muni_type)
 ) +
   geom_col(position = position_dodge(width = 0.7), width = 0.6) +
   geom_hline(yintercept = 0.33, linetype = "dashed", color = "gray40") +
+  geom_hline(
+    yintercept = plot_df$accuracy[
+      plot_df$T_pooled_control == "control" & plot_df$muni_type == "comparison"
+    ],
+    linetype = "solid",
+    color = "gray40"
+  ) +
   geom_errorbar(
     aes(ymin = accuracy - 1.96 * se, ymax = accuracy + 1.96 * se),
     position = position_dodge(width = 0.7),
