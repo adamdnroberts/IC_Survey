@@ -3,53 +3,117 @@ library(modelsummary)
 library(dplyr)
 library(ggplot2)
 library(broom)
+library(readxl)
 
 wave1 <- readRDS("data/wave1_responses.rds")
 wave2 <- readRDS("data/wave2_responses.rds")
+
+match_ids <- read_excel("data/Match ID.xlsx")
+match_ids <- janitor::clean_names(match_ids)
+# Columns are now snake_case: wave_1, wave_2, status_wave_2
+
+duplicates_wave2 <- match_ids %>%
+  filter(status_wave_2 != "0") %>%
+  count(wave_2, sort = TRUE) %>%
+  filter(n > 1)
+write.csv(duplicates_wave2, file = "data/duplicate_PIDs_wave2.csv")
+
+# All wave_1 / wave_2 PID pairs for the wave_2 PIDs that are duplicated
+duplicate_pid_pairs_wave2 <- match_ids %>%
+  filter(status_wave_2 != "0") %>%
+  filter(wave_2 %in% duplicates_wave2$wave_2) %>%
+  arrange(wave_2) %>%
+  select(wave_2, wave_1)
+write.csv(
+  duplicate_pid_pairs_wave2,
+  file = "data/duplicate_PID_pairs_wave2.csv",
+  row.names = FALSE
+)
+
+# Same check for wave_1 PIDs: which wave_1 PIDs appear more than once
+duplicates_wave1 <- match_ids %>%
+  filter(status_wave_2 != "0") %>%
+  count(wave_1, sort = TRUE) %>%
+  filter(n > 1)
+write.csv(duplicates_wave1, file = "data/duplicate_PIDs_wave1.csv")
+
+duplicate_pid_pairs_wave1 <- match_ids %>%
+  filter(status_wave_2 != "0") %>%
+  filter(wave_1 %in% duplicates_wave1$wave_1) %>%
+  arrange(wave_1) %>%
+  select(wave_1, wave_2)
+write.csv(
+  duplicate_pid_pairs_wave1,
+  file = "data/duplicate_PID_pairs_wave1.csv",
+  row.names = FALSE
+)
 
 # match_ids <- read.csv(
 #   "data/wave_match_ids.csv",
 #   stringsAsFactors = FALSE,
 #   fileEncoding = "UTF-8-BOM"
 # )
-# names(match_ids) <- trimws(names(match_ids))
-# names(match_ids) <- c("pid_w2", "pid_w1")
+# Columns: "Wave 1" = wave 1 PID, "Wave 2" = wave 2 PID, "Status Wave 2" =
+# wave 2 completion status (a "..._0" suffix means they did not take wave 2).
+match_ids <- match_ids %>%
+  rename(
+    pid_w1 = wave_1,
+    pid_w2 = wave_2,
+    status_w2 = status_wave_2
+  ) %>%
+  select(pid_w2, pid_w1) %>%
+  # Drop any rows whose wave-1 or wave-2 PID is duplicated, keeping only
+  # clean one-to-one matches before merging the two waves.
+  add_count(pid_w2, name = "n_w2") %>%
+  add_count(pid_w1, name = "n_w1") %>%
+  filter(n_w2 == 1, n_w1 == 1) %>%
+  select(pid_w2, pid_w1)
+
+test <- wave2 %>%
+  inner_join(match_ids, by = c("Netquest_PID" = "pid_w2")) %>%
+  inner_join(
+    wave1,
+    by = c("pid_w1" = "Netquest_PID"),
+    suffix = c("_w2", "_w1")
+  ) %>%
+  select(-pid_w1) %>%
+  filter(Found_Municipality_ID_w2 == Found_Municipality_ID_w1) %>%
+  # # Found_Municipality_ID is present in both waves, so the join suffixed it;
+  # # the two are equal after the filter, so rebuild the unified column the
+  # # downstream code expects.
+  mutate(Found_Municipality_ID = Found_Municipality_ID_w2)
+
+sum(test$NQ_Age_w1 == test$NQ_Age_w2) / nrow(test)
+sum(test$NQ_Sex_w1 == test$NQ_Sex_w2) / nrow(test)
+sum(test$NQ_Region_w1 == test$NQ_Region_w2) / nrow(test)
+sum(test$NQ_SEL_w1 == test$NQ_SEL_w2) / nrow(test)
+
+
+# match_keys <- c(
+#   "NQ_Sex",
+#   "NQ_Age",
+#   "NQ_Region",
+#   "NQ_SEL",
+#   "Found_Municipality_ID"
+# )
 #
-# test <- wave2 %>%
-#   inner_join(match_ids, by = c("Netquest_PID" = "pid_w2")) %>%
-#   inner_join(
-#     wave1,
-#     by = c("pid_w1" = "Netquest_PID"),
-#     suffix = c("_w2", "_w1")
-#   ) %>%
-#   select(-pid_w1) %>%
-#   filter(Found_Municipality_ID_w2 == Found_Municipality_ID_w1)
-
-match_keys <- c(
-  "NQ_Sex",
-  "NQ_Age",
-  "NQ_Region",
-  "NQ_SEL",
-  "Found_Municipality_ID"
-)
-
-wave1_unique <- wave1 %>%
-  filter(as.POSIXct(Timestamp) <= as.POSIXct("2026-04-27 23:59:59")) %>%
-  group_by(across(all_of(match_keys))) %>%
-  filter(n() == 1) %>%
-  ungroup()
-
-wave2_unique <- wave2 %>%
-  group_by(across(all_of(match_keys))) %>%
-  filter(n() == 1) %>%
-  ungroup()
-
-test <- inner_join(
-  wave2_unique,
-  wave1_unique,
-  by = match_keys,
-  suffix = c("_w2", "_w1")
-)
+# wave1_unique <- wave1 %>%
+#   filter(as.POSIXct(Timestamp) <= as.POSIXct("2026-04-27 23:59:59")) %>%
+#   group_by(across(all_of(match_keys))) %>%
+#   filter(n() == 1) %>%
+#   ungroup()
+#
+# wave2_unique <- wave2 %>%
+#   group_by(across(all_of(match_keys))) %>%
+#   filter(n() == 1) %>%
+#   ungroup()
+#
+# test <- inner_join(
+#   wave2_unique,
+#   wave1_unique,
+#   by = match_keys,
+#   suffix = c("_w2", "_w1")
+# )
 
 rank_cols <- c(
   "Crime_Rank_Comp_1",
@@ -198,7 +262,8 @@ test$PAN_PRI_PRD_Change <- as.numeric(
 test$MC_Change <- as.numeric(test$MC_Crime_Rating_Post) -
   as.numeric(test$MC_Crime_Rating_Pre)
 
-test <- filter(test, Attention_Check == "somewhat_agree" & abs(CG) < 100000)
+test <- filter(test, Attention_Check == "somewhat_agree")
+#test <- filter(test, abs(CG) < 100000)
 
 m1_lm <- lm(
   Home_Crime_Handling_Change ~
@@ -358,11 +423,10 @@ ggplot(
   ) +
   theme_minimal()
 
-inc_coef_update <- ggplot(
+inc_rank_coef_update <- ggplot(
   subset(
     coef_plot_both,
     model == "m1 (wins CG)" &
-      group == "CG × Treatment" &
       treatment != "control2"
   ),
   aes(
@@ -385,52 +449,19 @@ inc_coef_update <- ggplot(
   theme_minimal()
 
 ggsave(
-  "latex/images/incumbent_coef_update.pdf",
-  plot = inc_coef_update,
+  "latex/images/incumbent_rank_coef_update.pdf",
+  plot = inc_rank_coef_update,
   width = 7,
   height = 4.5
 )
 
-rank_coef_update <- ggplot(
-  subset(
-    coef_plot_both,
-    model == "m1 (wins CG)" &
-      group == "RG × Treatment" &
-      treatment != "control2"
-  ),
-  aes(
-    y = treatment,
-    x = estimate,
-    xmin = conf.low,
-    xmax = conf.high
-  )
-) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_pointrange(position = position_dodge(width = 0.5)) +
-  facet_wrap(~group, scales = "free_x") +
-  labs(
-    y = "Treatment group",
-    x = "Standardized coefficient (1 SD increase in predictor)",
-    #color = "Model",
-    #title = "m1 vs m1_log interaction coefficients",
-    caption = paste0("N = ", m1$nobs)
-  ) +
-  theme_minimal()
-
-ggsave(
-  "latex/images/rank_coef_update.pdf",
-  plot = rank_coef_update,
-  width = 7,
-  height = 4.5
-)
-
-# ── Vote intention incumbent model ───────────────────────────────────────────────
+#── Vote intention incumbent model ───────────────────────────────────────────────
 
 test$coalition_pre[is.na(test$coalition_pre)] <- "Other"
 
 m_vote <- lm_robust(
   Vote_home_post ~
-    log_CG *
+    CG_wins *
       as.factor(Treatment_Group) +
       RG * as.factor(Treatment_Group) +
       as.factor(coalition_pre),
@@ -442,14 +473,14 @@ summary(m_vote)
 
 coef_plot_data_vote <- tidy(m_vote, conf.int = TRUE) %>%
   filter(grepl(
-    "log_CG:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
+    "CG_wins:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
     term,
     perl = TRUE
   )) %>%
-  filter(!grepl("log_CG:RG:as\\.factor", term)) %>%
+  filter(!grepl("CG_wins:RG:as\\.factor", term)) %>%
   mutate(
     group = case_when(
-      grepl("^log_CG:as\\.factor", term) ~ "CG × Treatment",
+      grepl("^CG_wins:as\\.factor", term) ~ "CG × Treatment",
       TRUE ~ "RG × Treatment"
     ),
     treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .)
@@ -481,7 +512,7 @@ ggsave(
 
 m_vote <- lm_robust(
   Vote_Switch ~
-    log_CG *
+    CG_wins *
       as.factor(Treatment_Group) +
       RG * as.factor(Treatment_Group),
   data = subset(test, !is.na(Vote_Switch)),
@@ -492,14 +523,14 @@ summary(m_vote)
 
 coef_plot_data_vote <- tidy(m_vote, conf.int = TRUE) %>%
   filter(grepl(
-    "log_CG:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
+    "CG_wins:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
     term,
     perl = TRUE
   )) %>%
-  filter(!grepl("log_CG:RG:as\\.factor", term)) %>%
+  filter(!grepl("CG_wins:RG:as\\.factor", term)) %>%
   mutate(
     group = case_when(
-      grepl("^log_CG:as\\.factor", term) ~ "CG × Treatment",
+      grepl("^CG_wins:as\\.factor", term) ~ "CG × Treatment",
       TRUE ~ "RG × Treatment"
     ),
     treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .)
@@ -579,7 +610,7 @@ test2 <- test2 %>%
 coalition_interaction_formula <- function(outcome) {
   as.formula(paste0(
     outcome,
-    " ~ log_CG * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group) + as.factor(coalition_label)"
+    " ~ CG_wins * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group) + as.factor(coalition_label)"
   ))
 }
 
@@ -605,15 +636,15 @@ coef_plot_data_coalitions <- bind_rows(lapply(
   function(nm) {
     tidy(coalition_models[[nm]], conf.int = TRUE) %>%
       filter(grepl(
-        "log_CG:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
+        "CG_wins:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
         term,
         perl = TRUE
       )) %>%
-      filter(!grepl("log_CG:RG:as\\.factor", term)) %>%
+      filter(!grepl("CG_wins:RG:as\\.factor", term)) %>%
       mutate(
         coalition = nm,
         group = case_when(
-          grepl("^log_CG:as\\.factor", term) ~ "CG × Treatment",
+          grepl("^CG_wins:as\\.factor", term) ~ "CG × Treatment",
           TRUE ~ "RG × Treatment"
         ),
         treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .)
@@ -749,6 +780,29 @@ linearHypothesis(
   m1_log,
   "as.factor(Treatment_Group)T2:RG - as.factor(Treatment_Group)T1:RG = 0"
 )
+
+test$new_treatment <- test$Treatment_Group
+test$new_treatment[
+  test$Treatment_Group == "control" | test$Treatment_Group == "control2"
+] <- "control_combined"
+new_log <- lm_robust(
+  Home_Crime_Handling_Change ~
+    log_CG *
+      as.factor(new_treatment) +
+      RG * as.factor(new_treatment),
+  data = test, # log_CG < 30),
+  se_type = "HC2"
+)
+
+linearHypothesis(
+  new_log,
+  c(
+    "as.factor(new_treatment)T2:RG - as.factor(new_treatment)T1:RG = 0",
+    "as.factor(new_treatment)T3:RG - as.factor(new_treatment)T1:RG = 0",
+    "as.factor(new_treatment)T4:RG - as.factor(new_treatment)T1:RG = 0"
+  )
+)
+
 
 linearHypothesis(
   m1_log,

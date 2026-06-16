@@ -1221,9 +1221,10 @@ ui <- fluidPage(
 #   Region: INEGI, Censo de Población y Vivienda 2020, state totals
 #           Proportional within eligible states (excl. CDMX, Durango, Oaxaca,
 #           Veracruz).
-# Total N = 2,180. Marginal (per-variable) quotas only.
+# Base total N = 2,180, scaled by larger_sample. Marginal (per-variable) quotas only.
 
-QUOTA_N <- 2180L
+# Scale-up factor for the enlarged sample (keep in sync with code/quota_summary.R)
+larger_sample <- 1.4
 
 # Age bracket helper — maps raw Netquest age value to bracket label
 age_bracket <- function(age_val) {
@@ -1250,29 +1251,38 @@ age_bracket <- function(age_val) {
 
 # Age targets (INEGI 2020 18+ distribution, eligible states only)
 # Denominator = sum of 18+ age groups = 70,678,795 (excludes under-18)
-QUOTA_AGE <- c(
-  "18-24" = 377L,
-  "25-34" = 491L,
-  "35-44" = 441L,
-  "45-54" = 371L,
-  "55-64" = 255L,
-  "65+" = 245L
+QUOTA_AGE <- ceiling(
+  c(
+    "18-24" = 377,
+    "25-34" = 491,
+    "35-44" = 441,
+    "45-54" = 371,
+    "55-64" = 255,
+    "65+" = 245
+  ) *
+    larger_sample
 )
+
+# Total target N = sum of scaled age cells
+QUOTA_N <- sum(QUOTA_AGE)
 
 # SEL targets (from Netquest; codes: 1=AB, 2=C+, 3=C, 4=C-, 5=D+/D/E merged)
 # D+ (5), D (6), and E (7) are merged: codes 6 and 7 are remapped to 5 at session start
-QUOTA_SEL <- c(
-  "1" = 189L,
-  "2" = 346L,
-  "3" = 415L,
-  "4" = 430L,
-  "5" = 800L
+QUOTA_SEL <- ceiling(
+  c(
+    "1" = 189,
+    "2" = 346,
+    "3" = 415,
+    "4" = 430,
+    "5" = 800
+  ) *
+    larger_sample
 )
 
 # Region targets: loaded from pre-computed RDS (run code/census_quotas.R to generate)
 # Source: INEGI Censo de Población y Vivienda 2020, state totals,
 #         proportional within eligible states (excl. CDMX, Durango, Oaxaca, Veracruz)
-QUOTA_REGION <- readRDS("data/region_quotas_wave1.rds")
+QUOTA_REGION <- ceiling(readRDS("data/region_quotas_wave1.rds") * larger_sample)
 
 # ── S3 quota counter helpers ────────────────────────────────────────────────
 QUOTA_S3_KEY <- "quota_counts/wave1_quota_counts.json"

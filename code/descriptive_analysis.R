@@ -408,19 +408,19 @@ summary(long_df$crime_diff)
 long_df$CI_f <- relevel(as.factor(long_df$CI), ref = "3")
 test <- lm(crime_diff ~ CI_f, data = long_df)
 
-em <- emmeans(test, ~CI_f)
-
-as.data.frame(em) %>%
-  ggplot(aes(y = CI_f, x = emmean, xmin = lower.CL, xmax = upper.CL)) +
-  geom_point(size = 3) +
-  geom_errorbar(width = 0.2) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
-  labs(
-    x = "CI Level",
-    y = "Mean Crime Difference",
-    title = "Estimated Means by CI Level"
-  ) +
-  theme_minimal()
+# em <- emmeans(test, ~CI_f)
+#
+# as.data.frame(em) %>%
+#   ggplot(aes(y = CI_f, x = emmean, xmin = lower.CL, xmax = upper.CL)) +
+#   geom_point(size = 3) +
+#   geom_errorbar(width = 0.2) +
+#   geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+#   labs(
+#     x = "CI Level",
+#     y = "Mean Crime Difference",
+#     title = "Estimated Means by CI Level"
+#   ) +
+#   theme_minimal()
 
 #file.remove("data/fit_benchmark_crime.rds")
 

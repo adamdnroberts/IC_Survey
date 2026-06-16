@@ -1,28 +1,38 @@
+.script_start_time <- Sys.time()
+
 library(dplyr)
 library(jsonlite)
 library(paws.storage)
 
+larger_sample <- 1.4
+
 # ── Targets ──────────────────────────────────────────────────────────────────
-# QUOTA_SEX <- c("1" = 1067L, "2" = 1113L)
+QUOTA_SEX <- ceiling(c("1" = 1067, "2" = 1113) * larger_sample)
 
-QUOTA_AGE <- c(
-  "18-24" = 377L,
-  "25-34" = 491L,
-  "35-44" = 441L,
-  "45-54" = 371L,
-  "55-64" = 255L,
-  "65+" = 245L
+QUOTA_AGE <- ceiling(
+  c(
+    "18-24" = 377,
+    "25-34" = 491,
+    "35-44" = 441,
+    "45-54" = 371,
+    "55-64" = 255,
+    "65+" = 245
+  ) *
+    larger_sample
 )
 
-QUOTA_SEL <- c(
-  "1" = 189L,
-  "2" = 346L,
-  "3" = 415L,
-  "4" = 430L,
-  "5" = 800L # D+/D/E merged (469+600)
+QUOTA_SEL <- ceiling(
+  c(
+    "1" = 189,
+    "2" = 346,
+    "3" = 415,
+    "4" = 430,
+    "5" = 800 # D+/D/E merged (469+600)
+  ) *
+    larger_sample
 )
 
-QUOTA_REGION <- readRDS("data/region_quotas_wave1.rds")
+QUOTA_REGION <- ceiling(readRDS("data/region_quotas_wave1.rds") * larger_sample)
 
 SEL_LABELS <- c(
   "1" = "AB",
@@ -84,11 +94,12 @@ print_quota <- function(title, counts_vec, targets, extra_labels = NULL) {
 
 # ── Summary line ─────────────────────────────────────────────────────────────
 total_n <- sum(as.integer(unlist(counts$age)), na.rm = TRUE)
+quota_target_n <- sum(QUOTA_AGE)
 cat(sprintf(
   "\nWave 1 Quota Summary  (total completes tracked: %d / %d = %.1f%%)\n",
   total_n,
-  2180L,
-  100 * total_n / 2180
+  quota_target_n,
+  100 * total_n / quota_target_n
 ))
 cat(rep("=", 60), "\n", sep = "")
 
@@ -104,8 +115,12 @@ all_counts <- c(
   as.integer(counts$sel[names(QUOTA_SEL)]),
   as.integer(counts$region[names(QUOTA_REGION)])
 )
-all_targets <- c(# QUOTA_SEX,
-                 QUOTA_AGE, QUOTA_SEL, QUOTA_REGION)
+all_targets <- c(
+  # QUOTA_SEX,
+  QUOTA_AGE,
+  QUOTA_SEL,
+  QUOTA_REGION
+)
 all_counts[is.na(all_counts)] <- 0L
 n_met <- sum(all_counts >= all_targets)
 cat(sprintf(
@@ -117,12 +132,15 @@ cat(sprintf(
 
 # ── Cross-check against actual responses ─────────────────────────────────────
 
+# Pull fresh responses from S3 (writes data/wave1_responses.rds)
+#source("code/pull_responses_wave1.R")
 responses <- readRDS("data/wave1_responses.rds")
 
 n_raw <- nrow(responses)
 responses <- responses |>
   filter(
-    !is.na(Netquest_PID), nchar(Netquest_PID) > 0,
+    !is.na(Netquest_PID),
+    nchar(Netquest_PID) > 0,
     !is.na(NQ_Age),
     !is.na(NQ_Sex),
     !is.na(NQ_Region),
@@ -130,7 +148,9 @@ responses <- responses |>
   )
 cat(sprintf(
   "\nScreened out %d obs with missing PID or demographics (kept %d / %d)\n",
-  n_raw - nrow(responses), nrow(responses), n_raw
+  n_raw - nrow(responses),
+  nrow(responses),
+  n_raw
 ))
 
 resp_counts <- function(col) {
@@ -140,21 +160,26 @@ resp_counts <- function(col) {
 
 age_bracket <- function(age) {
   age <- as.integer(age)
-  cut(age,
+  cut(
+    age,
     breaks = c(18, 25, 35, 45, 55, 65, Inf),
-    right  = FALSE,
+    right = FALSE,
     labels = c("18-24", "25-34", "35-44", "45-54", "55-64", "65+")
   )
 }
 
 # resp_sex    <- resp_counts(responses$NQ_Sex)
-resp_age    <- resp_counts(age_bracket(responses$NQ_Age))
-resp_sel    <- resp_counts(responses$NQ_SEL)
+resp_age <- resp_counts(age_bracket(responses$NQ_Age))
+resp_sel <- resp_counts(responses$NQ_SEL)
 resp_region <- resp_counts(responses$NQ_Region)
 
 cat(sprintf(
-  "\n\n%s\nWave 1 Response-Based Quota Check  (N = %d responses)\n%s\n",
-  strrep("=", 60), nrow(responses), strrep("=", 60)
+  "\n\n%s\nWave 1 Response-Based Quota Check  (N = %d / %d = %.1f%% responses)\n%s\n",
+  strrep("=", 60),
+  nrow(responses),
+  quota_target_n,
+  100 * nrow(responses) / quota_target_n,
+  strrep("=", 60)
 ))
 
 # print_quota("Sex (1=Male, 2=Female)", resp_sex, QUOTA_SEX)
@@ -167,4 +192,10 @@ print_quota("Region (state INEGI code)", resp_region, QUOTA_REGION)
 cat(sprintf(
   "\nDiscrepancy (responses − JSON counter): %+d\n",
   nrow(responses) - total_n
+))
+
+# ── Runtime ───────────────────────────────────────────────────────────────────
+cat(sprintf(
+  "\nScript runtime: %.1f mins\n",
+  as.numeric(difftime(Sys.time(), .script_start_time, units = "mins"))
 ))
