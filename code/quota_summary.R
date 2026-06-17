@@ -133,7 +133,7 @@ cat(sprintf(
 # ── Cross-check against actual responses ─────────────────────────────────────
 
 # Pull fresh responses from S3 (writes data/wave1_responses.rds)
-#source("code/pull_responses_wave1.R")
+source("code/pull_responses_wave1.R")
 responses <- readRDS("data/wave1_responses.rds")
 
 n_raw <- nrow(responses)
