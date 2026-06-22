@@ -5,185 +5,17 @@ library(ggplot2)
 library(broom)
 library(readxl)
 
-robbery_cap_mult <- 10
-min_days_between <- 6
-ci_alpha <- 0.01
-
-wave1 <- readRDS("data/wave1_responses.rds")
-wave2 <- readRDS("data/wave2_responses.rds")
-
-wave1 <- distinct(wave1, Netquest_PID, .keep_all = TRUE)
-wave2 <- distinct(wave2, Netquest_PID, .keep_all = TRUE)
-
-match_ids <- read_excel("data/Match ID.xlsx")
-match_ids <- janitor::clean_names(match_ids)
-
-match_ids2 <- read.csv(
-  "data/wave_match_ids.csv",
-  stringsAsFactors = FALSE,
-  fileEncoding = "UTF-8-BOM"
-)
-
-match_ids <- match_ids %>%
-  rename(
-    pid_w1 = wave_1,
-    pid_w2 = wave_2,
-    status_w2 = status_wave_2
-  ) %>%
-  select(pid_w2, pid_w1) %>%
-  mutate(across(c(pid_w2, pid_w1), as.character))
-
-match_ids2 <- match_ids2 %>%
-  rename(
-    pid_w1 = Wave.1,
-    pid_w2 = Wave.2
-  ) %>%
-  select(pid_w2, pid_w1) %>%
-  mutate(across(c(pid_w2, pid_w1), as.character))
-
-match_ids <- bind_rows(match_ids, match_ids2) %>%
-  distinct(pid_w2, pid_w1)
-
-match_ids <- match_ids %>%
-  add_count(pid_w2, name = "n_w2") %>%
-  filter(n_w2 == 1) %>%
-  select(pid_w2, pid_w1)
-
-wave2_times <- wave2 %>%
-  transmute(
-    pid_w2 = as.character(Netquest_PID),
-    w2_time = as.POSIXct(Timestamp)
-  )
-
-match_ids <- match_ids %>%
-  left_join(wave2_times, by = "pid_w2") %>%
-  group_by(pid_w1) %>%
-  slice_min(w2_time, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  select(pid_w2, pid_w1)
-
-panel <- wave2 %>%
-  inner_join(match_ids, by = c("Netquest_PID" = "pid_w2")) %>%
-  inner_join(
-    wave1,
-    by = c("pid_w1" = "Netquest_PID"),
-    suffix = c("_w2", "_w1")
-  ) %>%
-  select(-pid_w1) %>%
-  filter(Found_Municipality_ID_w2 == Found_Municipality_ID_w1) %>%
-  mutate(
-    Found_Municipality_ID = Found_Municipality_ID_w2,
-    ts_w1 = as.POSIXct(Timestamp_w1, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC"),
-    ts_w2 = as.POSIXct(Timestamp_w2, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC"),
-    days_between = as.numeric(difftime(ts_w2, ts_w1, units = "days"))
-  )
-
-sum(panel$NQ_Age_w1 == panel$NQ_Age_w2) / nrow(panel)
-sum(panel$NQ_Sex_w1 == panel$NQ_Sex_w2) / nrow(panel)
-sum(panel$NQ_Region_w1 == panel$NQ_Region_w2) / nrow(panel)
-sum(panel$NQ_SEL_w1 == panel$NQ_SEL_w2) / nrow(panel)
-
-rank_cols <- c(
-  "Crime_Rank_Comp_1",
-  "Crime_Rank_Comp_2",
-  "Crime_Rank_Comp_3",
-  "Crime_Rank_Comp_4"
-)
-
-panel$rank_prior <- 1 +
-  rowSums(
-    sapply(panel[rank_cols], function(x) x %in% c("fewer")),
-    na.rm = TRUE
-  )
-
-robo <- readRDS("data/robo_2025.rds") %>%
-  mutate(Cve..Municipio = sprintf("%05d", as.integer(Cve..Municipio))) %>%
-  select(Cve..Municipio, rate_per_100k)
-
-panel <- panel %>%
-  left_join(robo, by = c("Found_Municipality_ID" = "Cve..Municipio")) %>%
-  rename(home_rate = rate_per_100k)
-
-for (i in 1:4) {
-  id_col <- paste0("Comparison_Muni_", i, "_ID")
-  rate_col <- paste0("comp_rate_", i)
-  panel <- panel %>%
-    left_join(
-      rename(robo, !!rate_col := rate_per_100k),
-      by = setNames("Cve..Municipio", id_col)
-    )
-}
-
-panel$actual_rank <- 1 +
-  rowSums(
-    sapply(paste0("comp_rate_", 1:4), function(col) {
-      panel[[col]] < panel$home_rate
-    }),
-    na.rm = TRUE
-  )
-
-panel$Robbery_Estimate_wins <- pmin(
-  as.numeric(panel$Robbery_Estimate),
-  max(panel$home_rate, na.rm = TRUE) * robbery_cap_mult
-)
-
-panel$crime_gap <- as.numeric(panel$Robbery_Estimate) - panel$home_rate
-panel$crime_gap_wins <- panel$Robbery_Estimate_wins - panel$home_rate
-panel$rank_gap <- panel$rank_prior - panel$actual_rank
-
-ggplot(panel, aes(x = actual_rank, fill = Treatment_Group)) +
-  geom_histogram(binwidth = 1, position = "dodge") +
-  facet_wrap(~Treatment_Group) +
-  theme_bw()
-
-panel$log_crime_gap <- sign(panel$crime_gap) * log(abs(panel$crime_gap))
-
-panel$Home_Crime_Handling_Change <- as.numeric(panel$Home_Crime_Handling_Post) -
-  as.numeric(panel$Home_Crime_Handling_Pre)
-
-load("data/magar2024_coalitions.Rdata")
-all_parties_tmp <- magar2024 %>%
-  mutate(
-    muni_id = sprintf("%05d", inegi),
-    home_coalition = case_when(
-      grepl("morena|pvem|pt", l01) ~ "MORENA/PVEM/PT",
-      grepl("pan|pri|prd", l01) ~ "PAN/PRI/PRD",
-      grepl("mc", l01) ~ "MC",
-      TRUE ~ NA_character_
-    )
-  ) %>%
-  select(muni_id, home_coalition)
-
-coalition_vec <- setNames(all_parties_tmp$home_coalition, all_parties_tmp$muni_id)
-
-belief_to_coalition <- c(
-  "morena_pt_pvem" = "MORENA/PVEM/PT",
-  "pan_pri_prd" = "PAN/PRI/PRD",
-  "mc" = "MC"
-)
-
-comp_correct <- sapply(1:4, function(i) {
-  belief <- panel[[paste0("Comp_Governing_Party_Belief_", i)]]
-  muni <- sprintf("%05d", as.integer(panel[[paste0("Comparison_Muni_", i, "_ID")]]))
-  guessed <- belief_to_coalition[belief]
-  actual <- coalition_vec[muni]
-  as.integer(
-    !is.na(belief) & belief != "" & belief != "dont_know" &
-      !is.na(actual) & guessed == actual
-  )
-})
-
-panel$comp_party_known <- rowSums(comp_correct, na.rm = TRUE)
-
-panel <- filter(panel, !is.na(days_between) & days_between >= min_days_between)
+load("~/IC_Survey/data/survey_panel_dataset.Rdata")
 
 panel_with_failures <- panel
 panel <- filter(panel, Attention_Check == "somewhat_agree")
 
 m_winsorized <- lm_robust(
   Home_Crime_Handling_Change ~
-    crime_gap_wins * as.factor(Treatment_Group) + rank_gap * as.factor(Treatment_Group) +
-    comp_party_known,
+    crime_gap_wins *
+      as.factor(Treatment_Group) +
+      rank_gap * as.factor(Treatment_Group) +
+      comp_party_known,
   alpha = ci_alpha,
   data = panel,
   se_type = "HC2"
@@ -191,13 +23,16 @@ m_winsorized <- lm_robust(
 
 panel_exclude_extreme <- subset(
   panel,
-  as.numeric(Robbery_Estimate) <= max(panel$home_rate, na.rm = TRUE) * robbery_cap_mult
+  as.numeric(Robbery_Estimate) <=
+    max(panel$home_rate, na.rm = TRUE) * robbery_cap_mult
 )
 
 m_exclude_extreme <- lm_robust(
   Home_Crime_Handling_Change ~
-    log_crime_gap * as.factor(Treatment_Group) + rank_gap * as.factor(Treatment_Group) +
-    comp_party_known,
+    log_crime_gap *
+      as.factor(Treatment_Group) +
+      rank_gap * as.factor(Treatment_Group) +
+      comp_party_known,
   alpha = ci_alpha,
   data = panel_exclude_extreme,
   se_type = "HC2"
@@ -216,7 +51,10 @@ m_log <- lm_robust(
 
 log_crime_gap_sd <- sd(panel$log_crime_gap, na.rm = TRUE)
 crime_gap_wins_sd <- sd(panel$crime_gap_wins, na.rm = TRUE)
-log_crime_gap_exclude_sd <- sd(panel_exclude_extreme$log_crime_gap, na.rm = TRUE)
+log_crime_gap_exclude_sd <- sd(
+  panel_exclude_extreme$log_crime_gap,
+  na.rm = TRUE
+)
 rank_gap_sd <- sd(panel$rank_gap, na.rm = TRUE)
 
 extract_coef_plot <- function(model, cg_pattern, model_label, cg_sd, rg_sd) {
@@ -249,7 +87,13 @@ extract_coef_plot <- function(model, cg_pattern, model_label, cg_sd, rg_sd) {
 }
 
 coef_plot_both <- bind_rows(
-  extract_coef_plot(m_winsorized, "crime_gap_wins", "m_winsorized", crime_gap_wins_sd, rank_gap_sd),
+  extract_coef_plot(
+    m_winsorized,
+    "crime_gap_wins",
+    "m_winsorized",
+    crime_gap_wins_sd,
+    rank_gap_sd
+  ),
   extract_coef_plot(
     m_exclude_extreme,
     "log_crime_gap",
@@ -257,7 +101,13 @@ coef_plot_both <- bind_rows(
     log_crime_gap_exclude_sd,
     rank_gap_sd
   ),
-  extract_coef_plot(m_log, "log_crime_gap", "m_log", log_crime_gap_sd, rank_gap_sd)
+  extract_coef_plot(
+    m_log,
+    "log_crime_gap",
+    "m_log",
+    log_crime_gap_sd,
+    rank_gap_sd
+  )
 )
 
 inc_update_coef_plot <- ggplot(
@@ -367,8 +217,10 @@ ggsave(
 
 m_attn_all <- lm_robust(
   Home_Crime_Handling_Change ~
-    crime_gap_wins * as.factor(Treatment_Group) + rank_gap * as.factor(Treatment_Group) +
-    comp_party_known,
+    crime_gap_wins *
+      as.factor(Treatment_Group) +
+      rank_gap * as.factor(Treatment_Group) +
+      comp_party_known,
   alpha = ci_alpha,
   data = panel_with_failures,
   se_type = "HC2"
@@ -525,8 +377,10 @@ rank_gap_25_sd <- sd(panel$rank_gap_25, na.rm = TRUE)
 
 m_rg25 <- lm_robust(
   Home_Crime_Handling_Change ~
-    crime_gap_wins * as.factor(Treatment_Group) + rank_gap_25 * as.factor(Treatment_Group) +
-    comp_party_known,
+    crime_gap_wins *
+      as.factor(Treatment_Group) +
+      rank_gap_25 * as.factor(Treatment_Group) +
+      comp_party_known,
   alpha = ci_alpha,
   data = panel,
   se_type = "HC2"
