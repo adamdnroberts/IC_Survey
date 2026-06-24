@@ -2,7 +2,7 @@ library(dplyr)
 library(readxl)
 
 robbery_cap_mult <- 10
-min_days_between <- 6
+min_days_between <- 5
 ci_alpha <- 0.01
 
 wave1 <- readRDS("data/wave1_responses.rds")

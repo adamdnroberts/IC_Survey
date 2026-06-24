@@ -185,7 +185,7 @@ cat(sprintf(
 # print_quota("Sex (1=Male, 2=Female)", resp_sex, QUOTA_SEX)
 print_quota("Age brackets", resp_age, QUOTA_AGE)
 print_quota("SEL", resp_sel, QUOTA_SEL, SEL_LABELS)
-print_quota("Region (state INEGI code)", resp_region, QUOTA_REGION)
+# print_quota("Region (state INEGI code)", resp_region, QUOTA_REGION)
 
 # ── Discrepancy: JSON counter vs responses ────────────────────────────────────
 
