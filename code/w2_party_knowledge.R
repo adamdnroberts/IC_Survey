@@ -123,6 +123,9 @@ print(
 
 # ── Plot ──────────────────────────────────────────────────────────────────────
 
+# Okabe-Ito colorblind-friendly palette (base R >= 4.0)
+ok_palette <- palette.colors(palette = "Okabe-Ito")
+
 plot_df <- acc_by_type %>%
   mutate(muni_type = factor(muni_type, levels = c("home", "comparison")))
 
@@ -136,8 +139,8 @@ p <- ggplot(
     yintercept = plot_df$accuracy[
       plot_df$T_pooled_control == "control" & plot_df$muni_type == "comparison"
     ],
-    linetype = "solid",
-    color = "gray40"
+    linetype = "dashed",
+    color = "black"
   ) +
   geom_errorbar(
     aes(ymin = accuracy - 1.96 * se, ymax = accuracy + 1.96 * se),
@@ -146,7 +149,11 @@ p <- ggplot(
   ) +
   scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1)) +
   scale_fill_manual(
-    values = c(home = "#0072B2", comparison = "#E69F00", Overall = "#999999"),
+    values = c(
+      home = ok_palette[6], # blue   #0072B2
+      comparison = ok_palette[2], # orange #E69F00
+      Overall = ok_palette[9] # gray   #999999
+    ),
     labels = c(
       home = "Home municipality",
       comparison = "Comparison municipalities",
@@ -157,7 +164,8 @@ p <- ggplot(
   labs(
     title = "Accuracy of governing coalition responses",
     x = NULL,
-    y = "Proportion correct"
+    y = "Proportion correct",
+    caption = paste0("N = ", nrow(responses))
   ) +
   theme_minimal(base_size = 13) +
   theme(legend.position = "bottom")

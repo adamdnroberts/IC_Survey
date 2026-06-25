@@ -47,6 +47,7 @@ coef_plot_data_vote <- tidy(m_vote, conf.int = TRUE) %>%
     conf.low95 = estimate - qt(0.975, df) * std.error,
     conf.high95 = estimate + qt(0.975, df) * std.error
   ) %>%
+  filter(treatment != "control2") %>%
   select(-sd)
 
 vote_coef_update <- ggplot(
@@ -99,7 +100,7 @@ m_log <- lm_robust(
   se_type = "HC2"
 )
 
-coef_plot_data_vote <- tidy(m_log, conf.int = TRUE) %>%
+coef_plot_data_log <- tidy(m_log, conf.int = TRUE) %>%
   filter(grepl("Treatment_Group", term) & grepl(":", term)) %>%
   mutate(
     group = case_when(
@@ -112,10 +113,11 @@ coef_plot_data_vote <- tidy(m_log, conf.int = TRUE) %>%
     conf.low95 = estimate - qt(0.975, df) * std.error,
     conf.high95 = estimate + qt(0.975, df) * std.error
   ) %>%
+  filter(treatment != "control2") %>%
   select(-sd)
 
-vote_coef_update <- ggplot(
-  subset(coef_plot_data_vote),
+vote_coef_update_log <- ggplot(
+  subset(coef_plot_data_log),
   aes(y = treatment, x = estimate)
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
@@ -140,8 +142,15 @@ vote_coef_update <- ggplot(
     y = "Treatment group",
     x = "Standardized coefficient (1 SD increase in predictor)",
     #title = "Incumbent vote post: interaction coefficients",
-    caption = paste0("N = ", m_vote$nobs, ", thick bar 95% CI, thin 99% CI")
+    caption = paste0("N = ", m_log$nobs, ", thick bar 95% CI, thin 99% CI")
   ) +
   theme_minimal()
 
-print(vote_coef_update)
+print(vote_coef_update_log)
+
+ggsave(
+  "latex/images/vote_coef_update_log.pdf",
+  plot = vote_coef_update_log,
+  width = 7,
+  height = 4.5
+)
