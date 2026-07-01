@@ -23,6 +23,9 @@ match_ids2 <- read.csv(
   fileEncoding = "UTF-8-BOM"
 )
 
+match_ids3 <- read_excel("data/match IDs 29 Jun.xlsx")
+match_ids3 <- janitor::clean_names(match_ids3)
+
 # ── 2. Cross-wave PID merge (same logic as belief_update_analysis.R) ──────────
 
 match_ids <- match_ids %>%
@@ -42,9 +45,17 @@ match_ids2 <- match_ids2 %>%
   select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
-# Append the second match table, drop exact duplicate pairs, then keep only
-# clean one-to-one matches before merging the two waves.
-match_ids_new <- bind_rows(match_ids, match_ids2) %>%
+match_ids3 <- match_ids3 %>%
+  rename(
+    pid_w1 = wave_1,
+    pid_w2 = wave_2
+  ) %>%
+  select(pid_w2, pid_w1) %>%
+  mutate(across(c(pid_w2, pid_w1), as.character))
+
+# Append the second and third match tables, drop exact duplicate pairs, then
+# keep only clean one-to-one matches before merging the two waves.
+match_ids_new <- bind_rows(match_ids, match_ids2, match_ids3) %>%
   distinct(pid_w2, pid_w1) %>%
   add_count(pid_w2, name = "n_w2") %>%
   add_count(pid_w1, name = "n_w1")
@@ -106,6 +117,100 @@ print(p_time_diff)
 ggsave(
   "latex/images/time_between_waves.pdf",
   p_time_diff,
+  width = 7,
+  height = 4.5
+)
+
+# ── 3b. Recording dates of wave-1 responses with no wave-2 match ──────────────
+
+# A wave-1 response is unmatched when no actual wave-2 response is linked to it
+# (ts_w2 is NA after the full join). Plot the date each such response was made.
+w1_unmatched <- test %>%
+  filter(!is.na(ts_w1) & is.na(ts_w2)) %>%
+  mutate(date_w1 = as.Date(ts_w1))
+
+cat(sprintf(
+  "Wave-1 responses with no wave-2 match: N = %d\n",
+  nrow(w1_unmatched)
+))
+
+p_w1_unmatched <- ggplot(w1_unmatched, aes(x = date_w1)) +
+  geom_histogram(binwidth = 1, fill = "#0072B2", color = "white") +
+  labs(
+    x = "Date wave 1 response was recorded",
+    y = "Number of respondents",
+    title = "Wave 1 responses without a wave 2 match"
+  ) +
+  theme_minimal()
+
+print(p_w1_unmatched)
+
+ggsave(
+  "latex/images/wave1_unmatched_dates.pdf",
+  p_w1_unmatched,
+  width = 7,
+  height = 4.5
+)
+
+# ── 3c. Recording dates of wave-2 responses with no wave-1 match ──────────────
+
+# A wave-2 response is unmatched when no wave-1 response is linked to it
+# (ts_w1 is NA after the full join). Plot the date each such response was made.
+w2_unmatched <- test %>%
+  filter(!is.na(ts_w2) & is.na(ts_w1)) %>%
+  mutate(date_w2 = as.Date(ts_w2))
+
+cat(sprintf(
+  "Wave-2 responses with no wave-1 match: N = %d\n",
+  nrow(w2_unmatched)
+))
+
+p_w2_unmatched <- ggplot(w2_unmatched, aes(x = date_w2)) +
+  geom_histogram(binwidth = 1, fill = "#0072B2", color = "white") +
+  labs(
+    x = "Date wave 2 response was recorded",
+    y = "Number of respondents",
+    title = "Wave 2 responses without a wave 1 match"
+  ) +
+  theme_minimal()
+
+print(p_w2_unmatched)
+
+ggsave(
+  "latex/images/wave2_unmatched_dates.pdf",
+  p_w2_unmatched,
+  width = 7,
+  height = 4.5
+)
+
+# ── 3d. Wave-2 responses whose wave-1 match was recorded later ────────────────
+
+# days_between < 0 means the linked wave-1 response post-dates the wave-2
+# response (an impossible ordering, flagging a bad match). Plot the date each
+# such wave-2 response was recorded.
+w2_w1_after <- test %>%
+  filter(!is.na(days_between) & days_between < 0) %>%
+  mutate(date_w2 = as.Date(ts_w2))
+
+cat(sprintf(
+  "Wave-2 responses whose wave-1 match was recorded later: N = %d\n",
+  nrow(w2_w1_after)
+))
+
+p_w2_w1_after <- ggplot(w2_w1_after, aes(x = date_w2)) +
+  geom_histogram(binwidth = 1, fill = "#0072B2", color = "white") +
+  labs(
+    x = "Date wave 2 response was recorded",
+    y = "Number of respondents",
+    title = "Wave 2 responses whose wave 1 match was recorded later"
+  ) +
+  theme_minimal()
+
+print(p_w2_w1_after)
+
+ggsave(
+  "latex/images/wave2_w1_recorded_later_dates.pdf",
+  p_w2_w1_after,
   width = 7,
   height = 4.5
 )

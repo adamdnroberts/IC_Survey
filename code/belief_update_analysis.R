@@ -7,15 +7,21 @@ library(readxl)
 
 load("~/IC_Survey/data/survey_panel_dataset.Rdata")
 
-panel_with_failures <- panel
-panel <- filter(panel, Attention_Check == "somewhat_agree")
+panel_full <- panel
+
+if (!exists("ci_alpha")) {
+  ci_alpha <- 0.01
+}
+
+panel_with_failures <- filter(panel_full, muni_changed == 0)
+panel <- filter(panel_with_failures, Attention_Check == "somewhat_agree")
 
 m_winsorized <- lm_robust(
   Home_Crime_Handling_Change ~
     crime_gap_wins *
-      as.factor(Treatment_Group) +
-      rank_gap * as.factor(Treatment_Group) +
-      comp_party_known,
+    as.factor(Treatment_Group) +
+    rank_gap * as.factor(Treatment_Group) +
+    comp_party_known,
   alpha = ci_alpha,
   data = panel,
   se_type = "HC2"
@@ -30,9 +36,9 @@ panel_exclude_extreme <- subset(
 m_exclude_extreme <- lm_robust(
   Home_Crime_Handling_Change ~
     log_crime_gap *
-      as.factor(Treatment_Group) +
-      rank_gap * as.factor(Treatment_Group) +
-      comp_party_known,
+    as.factor(Treatment_Group) +
+    rank_gap * as.factor(Treatment_Group) +
+    comp_party_known,
   alpha = ci_alpha,
   data = panel_exclude_extreme,
   se_type = "HC2"
@@ -41,9 +47,9 @@ m_exclude_extreme <- lm_robust(
 m_log <- lm_robust(
   Home_Crime_Handling_Change ~
     log_crime_gap *
-      as.factor(Treatment_Group) +
-      rank_gap * as.factor(Treatment_Group) +
-      comp_party_known,
+    as.factor(Treatment_Group) +
+    rank_gap * as.factor(Treatment_Group) +
+    comp_party_known,
   alpha = ci_alpha,
   data = panel,
   se_type = "HC2"
@@ -218,9 +224,9 @@ ggsave(
 m_attn_all <- lm_robust(
   Home_Crime_Handling_Change ~
     crime_gap_wins *
-      as.factor(Treatment_Group) +
-      rank_gap * as.factor(Treatment_Group) +
-      comp_party_known,
+    as.factor(Treatment_Group) +
+    rank_gap * as.factor(Treatment_Group) +
+    comp_party_known,
   alpha = ci_alpha,
   data = panel_with_failures,
   se_type = "HC2"
@@ -300,9 +306,9 @@ panel$t_pooled_control[panel$Treatment_Group == "control2"] <- "control"
 m_log_pooled <- lm_robust(
   Home_Crime_Handling_Change ~
     log_crime_gap *
-      as.factor(t_pooled_control) +
-      rank_gap * as.factor(t_pooled_control) +
-      comp_party_known,
+    as.factor(t_pooled_control) +
+    rank_gap * as.factor(t_pooled_control) +
+    comp_party_known,
   alpha = ci_alpha,
   data = panel,
   se_type = "HC2"
@@ -371,16 +377,16 @@ panel$actual_rank_25 <- 1 +
     na.rm = TRUE
   )
 
-panel$rank_gap_25 <- panel$rank_prior - panel$actual_rank_25
+panel$rank_gap_25 <- panel$actual_rank_25 - panel$rank_prior
 
 rank_gap_25_sd <- sd(panel$rank_gap_25, na.rm = TRUE)
 
 m_rg25 <- lm_robust(
   Home_Crime_Handling_Change ~
     crime_gap_wins *
-      as.factor(Treatment_Group) +
-      rank_gap_25 * as.factor(Treatment_Group) +
-      comp_party_known,
+    as.factor(Treatment_Group) +
+    rank_gap_25 * as.factor(Treatment_Group) +
+    comp_party_known,
   alpha = ci_alpha,
   data = panel,
   se_type = "HC2"

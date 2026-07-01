@@ -290,16 +290,16 @@ fit_benchmark <- brm(
   bf(
     Selected ~
       log_dist_km +
-        log_pop_ratio +
-        log_dist_km * log_pop_ratio +
-        same_state +
-        same_coalition +
-        vote_coalition_match +
-        cand_coalition +
-        home_coalition +
-        log_home_pop +
-        pool +
-        (1 | Respondent_ID),
+      log_pop_ratio +
+      log_dist_km * log_pop_ratio +
+      same_state +
+      same_coalition +
+      vote_coalition_match +
+      cand_coalition +
+      home_coalition +
+      log_home_pop +
+      pool +
+      (1 | Respondent_ID),
     decomp = "QR"
   ),
   data = long_df,
@@ -373,7 +373,14 @@ plot_df <- draws %>%
     label = factor(coef_labels[term], levels = rev(coef_labels))
   )
 
-benchmark_coef_plot <- ggplot(plot_df, aes(x = mean, y = label)) +
+benchmark_coef_plot <- ggplot(
+  filter(
+    plot_df,
+    label != "Cand. coalition: MORENA/PVEM/PT" &
+      label != "Cand. coalition: PAN/PRI/PRD"
+  ),
+  aes(x = mean, y = label)
+) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
   geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 0.6) +
   geom_linerange(aes(xmin = lo50, xmax = hi50), linewidth = 1.6) +
@@ -428,19 +435,19 @@ fit_benchmark_crime <- brm(
   bf(
     Selected ~
       log_dist_km +
-        log_pop_ratio +
-        log_dist_km * log_pop_ratio +
-        same_state +
-        same_coalition +
-        vote_coalition_match +
-        cand_coalition +
-        home_coalition +
-        log_home_pop +
-        pool +
-        crime_diff +
-        CI_f +
-        crime_diff * CI_f +
-        (1 | Respondent_ID),
+      log_pop_ratio +
+      log_dist_km * log_pop_ratio +
+      same_state +
+      same_coalition +
+      vote_coalition_match +
+      cand_coalition +
+      home_coalition +
+      log_home_pop +
+      pool +
+      crime_diff +
+      CI_f +
+      crime_diff * CI_f +
+      (1 | Respondent_ID),
     decomp = "QR"
   ),
   data = long_df,

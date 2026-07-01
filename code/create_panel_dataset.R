@@ -2,7 +2,7 @@ library(dplyr)
 library(readxl)
 
 robbery_cap_mult <- 10
-min_days_between <- 5
+min_days_between <- 4
 ci_alpha <- 0.01
 
 wave1 <- readRDS("data/wave1_responses.rds")
@@ -11,8 +11,8 @@ wave2 <- readRDS("data/wave2_responses.rds")
 wave1 <- distinct(wave1, Netquest_PID, .keep_all = TRUE)
 wave2 <- distinct(wave2, Netquest_PID, .keep_all = TRUE)
 
-match_ids <- read_excel("data/Match ID.xlsx")
-match_ids <- janitor::clean_names(match_ids)
+match_ids1 <- read_excel("data/Match ID.xlsx")
+match_ids1 <- janitor::clean_names(match_ids1)
 
 match_ids2 <- read.csv(
   "data/wave_match_ids.csv",
@@ -20,7 +20,10 @@ match_ids2 <- read.csv(
   fileEncoding = "UTF-8-BOM"
 )
 
-match_ids <- match_ids %>%
+match_ids3 <- read_excel("data/match IDs 29 Jun.xlsx")
+match_ids3 <- janitor::clean_names(match_ids3)
+
+match_ids1 <- match_ids1 %>%
   rename(
     pid_w1 = wave_1,
     pid_w2 = wave_2,
@@ -37,13 +40,32 @@ match_ids2 <- match_ids2 %>%
   select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
-match_ids <- bind_rows(match_ids, match_ids2) %>%
+match_ids3 <- match_ids3 %>%
+  rename(
+    pid_w1 = wave_1,
+    pid_w2 = wave_2
+  ) %>%
+  select(pid_w2, pid_w1) %>%
+  mutate(across(c(pid_w2, pid_w1), as.character))
+
+match_ids1_2 <- bind_rows(match_ids1, match_ids2) %>%
   distinct(pid_w2, pid_w1)
 
+match_ids <- bind_rows(match_ids1_2, match_ids3) %>%
+  distinct(pid_w2, pid_w1)
+
+# wave1 is the filtered set (data/wave1_responses.rds), in which each wave-2
+# response links to at most one surviving wave-1 response. Restrict the
+# crosswalk to those surviving wave-1 PIDs so the spurious arm of each ambiguous
+# match drops out, leaving the resolved one-to-one pairs.
 match_ids <- match_ids %>%
-  add_count(pid_w2, name = "n_w2") %>%
-  filter(n_w2 == 1) %>%
-  select(pid_w2, pid_w1)
+  filter(pid_w1 %in% as.character(wave1$Netquest_PID))
+
+wave1_times <- wave1 %>%
+  transmute(
+    pid_w1 = as.character(Netquest_PID),
+    w1_time = as.POSIXct(Timestamp, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC")
+  )
 
 wave2_times <- wave2 %>%
   transmute(
@@ -51,6 +73,17 @@ wave2_times <- wave2 %>%
     w2_time = as.POSIXct(Timestamp)
   )
 
+# Safety: guarantee one wave-1 per wave-2 (earliest-recorded wave-1, mirroring
+# filter_wave1_bad_links.R) in case both arms of an ambiguous match survive.
+match_ids <- match_ids %>%
+  left_join(wave1_times, by = "pid_w1") %>%
+  group_by(pid_w2) %>%
+  slice_min(w1_time, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(pid_w2, pid_w1)
+
+# A wave-1 respondent matched to multiple wave-2 responses keeps the earliest
+# wave-2 response.
 match_ids <- match_ids %>%
   left_join(wave2_times, by = "pid_w2") %>%
   group_by(pid_w1) %>%
@@ -66,8 +99,8 @@ panel <- wave2 %>%
     suffix = c("_w2", "_w1")
   ) %>%
   select(-pid_w1) %>%
-  filter(Found_Municipality_ID_w2 == Found_Municipality_ID_w1) %>%
   mutate(
+    muni_changed = Found_Municipality_ID_w2 != Found_Municipality_ID_w1,
     Found_Municipality_ID = Found_Municipality_ID_w2,
     ts_w1 = as.POSIXct(Timestamp_w1, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC"),
     ts_w2 = as.POSIXct(Timestamp_w2, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC"),
@@ -123,9 +156,9 @@ panel$Robbery_Estimate_wins <- pmin(
   max(panel$home_rate, na.rm = TRUE) * robbery_cap_mult
 )
 
-panel$crime_gap <- as.numeric(panel$Robbery_Estimate) - panel$home_rate
-panel$crime_gap_wins <- panel$Robbery_Estimate_wins - panel$home_rate
-panel$rank_gap <- panel$rank_prior - panel$actual_rank
+panel$crime_gap <- panel$home_rate - as.numeric(panel$Robbery_Estimate)
+panel$crime_gap_wins <- panel$home_rate - panel$Robbery_Estimate_wins
+panel$rank_gap <- panel$actual_rank - panel$rank_prior
 
 panel$log_crime_gap <- sign(panel$crime_gap) * log(abs(panel$crime_gap))
 
@@ -207,6 +240,6 @@ panel$home_coalition <- coalition_vec[
   sprintf("%05d", as.integer(panel$Found_Municipality_ID))
 ]
 
-panel <- filter(panel, !is.na(days_between) & days_between >= min_days_between)
+panel <- filter(panel, !is.na(days_between) & days_between > min_days_between)
 
-save(panel, file = "~/IC_Survey/data/survey_panel_dataset.Rdata")
+save(panel, file = "data/survey_panel_dataset.Rdata")

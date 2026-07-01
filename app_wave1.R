@@ -1498,64 +1498,6 @@ server <- function(input, output, session) {
     }
   })
 
-  # ── Per-cell quota check at session start ──────────────────────────────────
-  # Reads S3 counts once per session; redirects to quota-full if any marginal
-  # cell for this respondent is at or above its target + QUOTA_BUFFER.
-  # QUOTA_BUFFER = 5 absorbs concurrent sessions that haven't yet incremented.
-  QUOTA_BUFFER <- 5L
-
-  observe({
-    s3_bucket <- Sys.getenv("S3_BUCKET")
-    if (nchar(s3_bucket) == 0) {
-      return()
-    }
-    pid <- if (!is.null(netquest_pid) && nchar(netquest_pid) > 0) {
-      netquest_pid
-    } else {
-      ""
-    }
-
-    counts <- read_quota_counts(s3_bucket)
-
-    age_cell <- if (!is.null(nq_age)) age_bracket(nq_age) else NULL
-    sel_cell <- if (!is.null(nq_sel) && nq_sel %in% names(QUOTA_SEL)) {
-      nq_sel
-    } else {
-      NULL
-    }
-    # region_cell <- if (
-    #   !is.null(nq_region) && nq_region %in% names(QUOTA_REGION)
-    # ) {
-    #   nq_region
-    # } else {
-    #   NULL
-    # }
-
-    # Safe count lookup: returns 0 if key is missing or NULL
-    get_n <- function(vec, key) {
-      v <- vec[[key]]
-      if (is.null(v) || is.na(v)) 0L else as.integer(v)
-    }
-
-    over_quota <-
-      (!is.null(age_cell) &&
-        !is.na(age_cell) &&
-        get_n(counts$age, age_cell) >= QUOTA_AGE[age_cell] + QUOTA_BUFFER) ||
-      (!is.null(sel_cell) &&
-        !is.na(sel_cell) &&
-        get_n(counts$sel, sel_cell) >= QUOTA_SEL[sel_cell] + QUOTA_BUFFER)
-
-    if (isTRUE(over_quota)) {
-      save_screenout(respondent_id, "over_quota", NULL,
-                     netquest_pid, nq_age, nq_sex, nq_region, nq_sel,
-                     Sys.getenv("S3_BUCKET"))
-      shinyjs::runjs(sprintf(
-        'window.location.href = "https://transit.nicequest.com/transit/participation?tp=qf_1&c=ok&ticket=%s"',
-        pid
-      ))
-    }
-  })
-
   # Define the file path for saving responses (local fallback)
   responses_file <- "data/survey_responses.csv"
 

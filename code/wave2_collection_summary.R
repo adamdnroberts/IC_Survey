@@ -120,11 +120,13 @@ cat(sprintf(
 
 # ── Wave 1 panel match ──────────────────────────────────────────────────────
 # How many wave 2 responses can be linked back to a wave 1 respondent?
-# Crosswalk logic mirrors code/create_panel_dataset.R.
+# Crosswalk logic mirrors code/create_panel_dataset.R: combined crosswalk from
+# all three match files, ambiguity resolved by restricting to the surviving
+# (filtered) wave-1 PIDs rather than dropping ambiguous wave-2 PIDs.
 wave1 <- readRDS("data/wave1_responses.rds") %>%
   distinct(Netquest_PID, .keep_all = TRUE)
 
-match_ids <- read_excel("data/Match ID.xlsx") %>%
+match_ids1 <- read_excel("data/Match ID.xlsx") %>%
   janitor::clean_names() %>%
   rename(pid_w1 = wave_1, pid_w2 = wave_2) %>%
   select(pid_w2, pid_w1) %>%
@@ -139,20 +141,42 @@ match_ids2 <- read.csv(
   select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
-match_ids <- bind_rows(match_ids, match_ids2) %>%
-  distinct(pid_w2, pid_w1) %>%
-  add_count(pid_w2, name = "n_w2") %>%
-  filter(n_w2 == 1) %>%
+match_ids3 <- read_excel("data/match IDs 29 Jun.xlsx") %>%
+  janitor::clean_names() %>%
+  rename(pid_w1 = wave_1, pid_w2 = wave_2) %>%
+  select(pid_w2, pid_w1) %>%
+  mutate(across(c(pid_w2, pid_w1), as.character))
+
+# Combined raw crosswalk (before resolving to the filtered wave-1 set).
+match_ids_raw <- bind_rows(match_ids1, match_ids2, match_ids3) %>%
+  distinct(pid_w2, pid_w1)
+
+w1_pids <- as.character(wave1$Netquest_PID)
+
+# Restrict to surviving wave-1 PIDs (drops the spurious arm of each ambiguous
+# match), then a safety dedup keeping the earliest-recorded wave-1 per wave-2.
+wave1_times <- wave1 %>%
+  transmute(
+    pid_w1 = as.character(Netquest_PID),
+    w1_time = as.POSIXct(Timestamp, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC")
+  )
+
+match_ids <- match_ids_raw %>%
+  filter(pid_w1 %in% w1_pids) %>%
+  left_join(wave1_times, by = "pid_w1") %>%
+  group_by(pid_w2) %>%
+  slice_min(w1_time, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
   select(pid_w2, pid_w1)
 
 w2_pids <- as.character(wave2$Netquest_PID)
-w1_pids <- as.character(wave1$Netquest_PID)
 
-# pid_w2 present in the crosswalk
-in_xwalk <- w2_pids %in% match_ids$pid_w2
-# crosswalk maps to a pid_w1 that actually has a wave 1 response
-xwalk_to_real_w1 <- match_ids$pid_w2[match_ids$pid_w1 %in% w1_pids]
-linked_to_w1 <- w2_pids %in% xwalk_to_real_w1
+# pid_w2 present in the raw combined crosswalk
+in_xwalk <- w2_pids %in% match_ids_raw$pid_w2
+
+test <- !(w2_pids %in% match_ids_raw$pid_w2)
+# resolved to a surviving (filtered) wave 1 response
+linked_to_w1 <- w2_pids %in% match_ids$pid_w2
 
 cat("\nWave 1 panel match\n", rep("-", 18), "\n", sep = "")
 cat(sprintf("Wave 2 responses (unique PID):        %d\n", length(w2_pids)))
@@ -162,13 +186,13 @@ cat(sprintf(
   100 * mean(in_xwalk)
 ))
 cat(sprintf(
-  "  linked to an actual wave 1 response: %d (%.1f%%)\n",
+  "  linked to a surviving wave 1 response: %d (%.1f%%)\n",
   sum(linked_to_w1),
   100 * mean(linked_to_w1)
 ))
 
 # Days between waves for linked responses (mirrors create_panel_dataset.R)
-min_days_between <- 5
+min_days_between <- 4
 
 linked <- wave2 %>%
   transmute(pid_w2 = as.character(Netquest_PID), ts_w2 = Timestamp) %>%
@@ -183,9 +207,9 @@ linked <- wave2 %>%
     days_between = as.numeric(difftime(ts_w2, ts_w1, units = "days"))
   )
 
-n_days_ok <- sum(linked$days_between >= min_days_between, na.rm = TRUE)
+n_days_ok <- sum(linked$days_between > min_days_between, na.rm = TRUE)
 cat(sprintf(
-  "  with days_between >= %d:             %d (%.1f%% of linked)\n",
+  "  with days_between > %d:              %d (%.1f%% of linked)\n",
   min_days_between,
   n_days_ok,
   100 * n_days_ok / nrow(linked)
@@ -195,12 +219,15 @@ cat(sprintf(
 # Why the linked count exceeds the N used in vote_update_analysis.R. Mirrors the
 # filters in create_panel_dataset.R (home-muni match, days_between) plus the
 # attention-check filter applied in vote_update_analysis.R.
-min_days_panel <- 6 # create_panel_dataset.R threshold
 
 # earliest wave 2 response per wave 1 PID (dedups multiple w2 -> same w1)
 mi <- match_ids %>%
   left_join(
-    transmute(wave2, pid_w2 = as.character(Netquest_PID), w2_time = as.POSIXct(Timestamp)),
+    transmute(
+      wave2,
+      pid_w2 = as.character(Netquest_PID),
+      w2_time = as.POSIXct(Timestamp)
+    ),
     by = "pid_w2"
   ) %>%
   group_by(pid_w1) %>%
@@ -217,21 +244,33 @@ fpanel <- filter(fpanel, Found_Municipality_ID_w2 == Found_Municipality_ID_w1)
 n_muni <- nrow(fpanel)
 
 fpanel <- fpanel %>%
-  mutate(days_between = as.numeric(difftime(
-    as.POSIXct(Timestamp_w2, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC"),
-    as.POSIXct(Timestamp_w1, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC"),
-    units = "days"
-  ))) %>%
-  filter(!is.na(days_between) & days_between >= min_days_panel)
+  mutate(
+    days_between = as.numeric(difftime(
+      as.POSIXct(Timestamp_w2, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+      as.POSIXct(Timestamp_w1, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC"),
+      units = "days"
+    ))
+  ) %>%
+  filter(!is.na(days_between) & days_between > min_days_between)
 n_days <- nrow(fpanel)
 
 n_attn <- sum(fpanel$Attention_Check == "somewhat_agree", na.rm = TRUE)
 
 cat("\nAnalysis-panel funnel\n", rep("-", 21), "\n", sep = "")
 cat(sprintf("Linked to a wave 1 response:           %d\n", n_linked))
-cat(sprintf("  home muni matches across waves:      %d (-%d)\n",
-            n_muni, n_linked - n_muni))
-cat(sprintf("  days_between >= %d:                   %d (-%d)\n",
-            min_days_panel, n_days, n_muni - n_days))
-cat(sprintf("  passes attention check (vote model): %d (-%d)\n",
-            n_attn, n_days - n_attn))
+cat(sprintf(
+  "  home muni matches across waves:      %d (-%d)\n",
+  n_muni,
+  n_linked - n_muni
+))
+cat(sprintf(
+  "  days_between > %d:                    %d (-%d)\n",
+  min_days_between,
+  n_days,
+  n_muni - n_days
+))
+cat(sprintf(
+  "  passes attention check (vote model): %d (-%d)\n",
+  n_attn,
+  n_days - n_attn
+))

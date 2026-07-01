@@ -94,7 +94,7 @@ print_quota <- function(title, counts_vec, targets, extra_labels = NULL) {
 
 # ── Summary line ─────────────────────────────────────────────────────────────
 total_n <- sum(as.integer(unlist(counts$age)), na.rm = TRUE)
-quota_target_n <- sum(QUOTA_AGE)
+quota_target_n <- 3030
 cat(sprintf(
   "\nWave 1 Quota Summary  (total completes tracked: %d / %d = %.1f%%)\n",
   total_n,
@@ -171,6 +171,13 @@ age_bracket <- function(age) {
 # resp_sex    <- resp_counts(responses$NQ_Sex)
 resp_age <- resp_counts(age_bracket(responses$NQ_Age))
 resp_sel <- resp_counts(responses$NQ_SEL)
+# Fold codes 6 and 7 into code 5 (D+/D/E combined), matching the JSON counter
+for (code in c("6", "7")) {
+  if (!is.na(resp_sel[code])) {
+    resp_sel["5"] <- sum(resp_sel["5"], resp_sel[code], na.rm = TRUE)
+    resp_sel <- resp_sel[names(resp_sel) != code]
+  }
+}
 resp_region <- resp_counts(responses$NQ_Region)
 
 cat(sprintf(

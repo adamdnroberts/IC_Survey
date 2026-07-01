@@ -1,0 +1,456 @@
+---
+title: "405PS01"
+author: "Adam Roberts"
+date: "2023-01-25"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts = list(width.cutoff = 60), tidy=TRUE)
+
+rm(list = ls()) # clear workspace
+
+library(dplyr)
+library(tidyr)
+library(haven)
+library(randomizr)
+library(data.table)
+library(ggplot2)
+library(broom)
+library(purrr)
+library(stargazer)
+library(MatchIt)
+library(robomit)
+```
+
+A.  
+
+```{r}
+set.seed(99)
+X1 <- rnorm(10000, mean=0, sd=5)
+df <- as.data.frame(X1)
+
+df$X2 <- rnorm(10000, mean=0, sd=5)
+df$Z1 <- rnorm(10000, mean=0, sd=5)
+df$Z2 <- rnorm(10000, mean=0, sd=5)
+df$e <- rnorm(10000, mean=0, sd=5)
+
+df$p = 1 / (1 + exp(-(df$X1 + df$X2 + df$e)))
+df$T = rbinom(10000, 1, df$p)
+df$u <- rnorm(10000, mean=0, sd=5)
+
+df$y <- 1 + df$X1 + df$X2 + df$T + df$u
+
+#propensity score A
+logit1 <- glm(T ~ X1 + X2 + u, data=df, family=binomial(link='logit'))
+
+#pred values
+df$A <- predict(logit1, type="response")
+
+#propensity score B
+logit2 <- glm(T ~ Z1 + Z2 + u, data=df, family=binomial(link='logit'))
+
+#pred values
+df$B <- predict(logit2, type="response")
+
+df <- df[, c(1,2,3,4,10,11,5:9)]
+```
+
+```{r, results='asis'}
+ttest1 <- t.test(X1 ~ T, data = df)
+ttest2 <- t.test(X2 ~ T, data = df)
+ttest3 <- t.test(Z1 ~ T, data = df)
+ttest4 <- t.test(Z2 ~ T, data = df)
+ttest5 <- t.test(A ~ T, data = df)
+ttest6 <- t.test(B ~ T, data = df)
+
+dm <- function(x,y) {
+  mean(x) - mean(y)
+}
+
+diffs <- c(dm(df$X1[df$T==1],df$X1[df$T==0]),dm(df$X2[df$T==1],df$X2[df$T==0]),dm(df$Z1[df$T==1],df$Z1[df$T==0]),dm(df$Z2[df$T==1],df$Z2[df$T==0]),dm(df$A[df$T==1],df$A[df$T==0]),dm(df$B[df$T==1],df$B[df$T==0]))
+
+pvals_t <- c(ttest1$p.value, ttest2$p.value,
+             ttest3$p.value,ttest4$p.value,
+             ttest5$p.value,ttest6$p.value) 
+ts_t <- c(ttest1$statistic, ttest2$statistic,
+             ttest3$statistic,ttest4$statistic,
+             ttest5$statistic,ttest6$statistic) 
+
+bal <- as.matrix(cbind(t(aggregate(.~ T, data=df, FUN=mean))[2:7,], "diff" = diffs, "t"=c(ts_t),"p"=c(pvals_t)))
+bal <- round(bal, 2)
+colnames(bal) <- c("Control","Treat", "Diff.", "t stat","p value")
+stargazer(bal,type="latex",header=FALSE, title="Balance Testing")
+```
+
+As can be seen in the table above, it seems that covariates are essentially balanced. The difference in means for Z1 and Z2 are both small (less than 0.2), and the p-values are sufficiently high to not reject the null hypothesis of a mean of zero for $\alpha \leq 0.5$.
+
+```{r, results='asis'}
+naive <- lm(y ~ T, data=df)
+covX <- lm(y ~ T + X1 + X2, data=df)
+covZ <- lm(y ~ T + Z1 + Z2, data=df)
+
+#generate weight variable
+df$weight <- NA
+df[df$T==1,]$weight <- 1/df[df$T==1,]$A
+df[df$T==0,]$weight <- 1/(1 - df[df$T==0,]$A)
+
+#estimate ATE with weights
+treatweight <- lm(y ~ T, weights=weight, data=df)
+
+stargazer(naive,covX,covZ,treatweight, type="latex", header = FALSE, omit.stat = "f", title="OLS Treatment Effect Estimates")
+```
+
+As we can see from Table 2 above, the naive estimate is biased upward. The coefficient is almost 10, i.e. about 10 times larger than the true coefficient. Comparing the models with the X variables vs the Z variables, the X variable model is very close to the true model (not exactly, since we added an error term) while the Z variable model yields essentially the same treatment effect as the naive model as we would expect. This illustrates the point that only observables that are relevant to the model of interest will reduce bias. It also is a good example of why it is important to add a naive model in your regression table; readers will be able to see if certain variables are not important for the model at all. Finally, the model based on propensity score matching is much less biased than the naive model but still is over 2 times the true estimate, suggesting that propensity score matching may not always be a perfect strategy for precise causal inference.
+
+```{r, results='asis'}
+#5 blocks
+df$block5 <- ntile(df$A, 5)
+
+b5_coef<- rep(NA,5)
+b5_se<- rep(NA,5)
+
+for (i in 1:5){
+  m <- lm(y ~ T, dat=df[df$block5==i,])
+  b5_coef[i] <- m$coefficients[2]
+  b5_se[i] <- summary(m)$coef[2,2]
+}
+
+vb5 <- sum(((1/5)^2)*b5_se^2)
+se <- sqrt(vb5)
+
+m5 <- mean(b5_coef)
+
+#10 blocks
+df$block10 <- ntile(df$A, 10)
+
+b10_coef<- rep(NA,10)
+b10_se<- rep(NA,10)
+
+for (i in 1:10){
+  m <- lm(y ~ T, dat=df[df$block10==i,])
+  b10_coef[i] <- m$coefficients[2]
+  b10_se[i] <- summary(m)$coef[2,2]
+}
+
+vb10 <- sum(((1/10)^2)*b10_se^2)
+se <- sqrt(vb10)
+
+m10 <- mean(b10_coef)
+
+#30 blocks
+df$block30 <- ntile(df$A, 30)
+
+#note that in the 30th block, all observations are treated so I omit it in order to do analysis
+
+b30_coef<- rep(NA,29)
+b30_se<- rep(NA,29)
+
+for (i in 1:29){
+  m <- lm(y ~ T, dat=df[df$block30==i,])
+  b30_coef[i] <- m$coefficients[2]
+  b30_se[i] <- summary(m)$coef[2,2]
+}
+
+vb30 <- sum(((1/30)^2)*b30_se^2)
+se <- sqrt(vb30)
+
+m30 <- mean(b30_coef)
+
+ate.table <- as.matrix(c(m5,m10,m30))
+ate.table <- round(ate.table, 2)
+colnames(ate.table) <- "ATE"
+rownames(ate.table) <- c("5 Block", "10 Block", "30 Block")
+stargazer(ate.table,type="latex",header=FALSE, title="ATE, Stratified Samples")
+```
+
+The table above shows the ATE for the stratified samples using 5, 10, and 30 blocks. Increasing the number of blocks, or reducing the number of observations in each block, leads to a less biased estimate. This is because the models with less blocks have less observations per block, so any outlier in one block (based on the way the blocks are cut off) will have less of an effect on the final ATE. On the other hand, a model with fewer blocks can easily be biased by one or two blocks with outliers.
+
+B.  
+
+```{r, results='asis'}
+gg <- read.csv("C:/Users/adamd/Downloads/Gerber_Green_APSR_2005_NHrep_individual.csv")
+
+itt <- lm(v98 ~ phongotv, data=gg)
+ate <- lm(v98 ~ pcntany, data=gg)
+
+gg$age1[gg$age1 == 999] <- NA
+gg$newvoter <- 0
+gg$newvoter[gg$v96_0 == 0 & gg$v96_1 == 0] <- 1
+full <- lm(v98 ~ pcntany + age1 + v96_1 + majorpty + newvoter + persons, data=gg)
+
+stargazer(itt, ate, full, type="latex", header=FALSE, title="Gerber and Green Models")
+```
+
+The ITT measure includes all individuals who were in the phone group, meaning it includes individuals who were attempted to be contacted over the phone but did not answer. There are a lot of people who were in the phone contact group but weren't actually contacted (about 66%). Therefore, the ITT effect should be biased downward from the ATE. The ATE could potentially be biased if the people who are more likely to respond to contact are also those who are most likely to vote. To address this in the paper, the authors divide the difference in outcomes by the contact rate and use an IV strategy. In the IV regression, they also control for observables, assuming that turnout is not correlated with the propensity to respond to contact once controlling for certain characteristics.
+
+```{r, results='asis'}
+match1 <- matchit(pcntany ~ age1 + v96_1 + majorpty + newvoter + persons, data=subset(gg, !is.na(age1)),method="nearest", replace = TRUE)
+
+match2 <- matchit(pcntany ~ age1 + v96_1 + majorpty + newvoter + persons, data=subset(gg, !is.na(age1)),method="nearest", replace = FALSE)
+
+match3 <- matchit(pcntany ~ age1 + v96_1 + majorpty + newvoter + persons, data=subset(gg, !is.na(age1)),method="nearest", replace = TRUE, caliper = .1)
+
+m1_match <- lm(v98 ~ pcntany, data=match.data(match1))
+
+m2_match <- lm(v98 ~ pcntany, data=match.data(match2))
+
+m3_match <- lm(v98 ~ pcntany, data=match.data(match3))
+
+stargazer(m1_match, m2_match, m3_match, type="latex", header=FALSE, title="Imai Matching Models")
+```
+
+The 1-to-1 matching and caliper matching with replacement yield treatment effects slightly higher than Gerber and Green, while the 1-to-1 matching without replacement is slightly lower. However, the estimates are all in the same direction as Gerber and Green and are statistically significant. I think matching is a slightly better strategy here, because it relaxes assumptions about all covariates having a linear effect on the outcome. However, if treatment assignment were not random, matching may not be the best strategy. For example, if treatment was given equally to men and women but there were very few men and substantial women in the control, it would be difficult to get matches for the treated men. This is a simplified example, but matching can be difficult if treatment status is highly correlated with observable characteristics.
+
+C.  
+
+Blattman's quantitative analysis is based on survey data of youth in Uganda (specifically, in the districts of Kitgum and Pader). The surveyors were able to contact a relatively high proportion of male youth in the area (about 84%). However, the sample selection could be a source of bias if abductees that did not respond are less likely to be politically active. Since former abductees were oversampled this may be of less concern. (It seems less likely that non-abductees who did not respond are systematically more politically active, but not impossible.) Another source of bias could result from the data collection if the families of those abducted and killed (never returned) left the area and were not able to fill out the absentee questionaire. This seems plausible, as grief from losing a child or the loss of help with family business/household could force some families to move. The authors claim that assignment of abduction is random because abductees weren't targeted based on wealth and other observed household characteristics. However, it could be possible that unobserved characteristics were at play in the abductions. For example, certain families may live far away from main villages because they are skeptical of authority/others, which would correlate with an unwillingness to vote and be politcally active as well. Finally, it's possible that there could be systematic measurement error in the responses of abductees vs non-abductees. For example, it's possible that abducted Ugandan youth felt that they needed to be more vocal about their support for the country and its political instituions for fear of being labeled as "brainwashed" by the LRA.
+
+D. This article uses variation of which citizens in Brazil received CCTs prior to a presidential election. The author uses matching to identify the causal effects of CCTs on presidential candidate votes. Matching assumes that treated units (in this case, those who received CCTs) can be compared to control units with similar observed characteristics.
+
+```{r, results='asis'}
+load("~/Replication Materials/bolsafamiliadataset.RData")
+
+log.transform <- function(x,off=0.1){
+    if(sign(min(x,na.rm=T))!=1){x <- x + abs(min(x,na.rm=T)) + off} #move min to 1
+    x <- log(x)
+    return(x)
+}
+
+c2 <- lm(serra.vs.2002~ spentH.2002.cct+hdi.2000+log(pop.2002)+fhc.vs.1998+distcap+
+                nonwhite.2000+
+                log.transform(dgdpH.1.2002)+
+                I(mayorpty.2000==45)+I(incgov.2002==45)+I(mayorpty.2004==13)+I(incgov.2006==13)
+               +as.factor(state)
+                , data=dd)
+
+c6 <- lm(lula.vs.2006~ spentH.2006.cct+hdi.2000+log(pop.2006)+lula.vs.1998+distcap+
+                nonwhite.2010+
+                log.transform(dgdpH.1.2006)+
+                I(mayorpty.2004==45)+I(incgov.2006==45)+I(mayorpty.2004==13)+I(incgov.2006==13)
+               +as.factor(state)
+                , data=dd)
+
+c10 <- lm(dilma.vs.2010~ spentH.2010.cct+hdi.2000+log(pop.2010)+lula.vs.1998+
+				distcap+
+                nonwhite.2010+
+                log.transform(dgdpH.1.2010)+
+                I(mayorpty.2008==45)+I(incgov.2010==45)+I(mayorpty.2008==13)+I(incgov.2010==13)
+                +as.factor(state)
+                , data=dd)
+
+nc2 <- lm(serra.vs.2002~ spentH.2002.cct, data=dd)
+
+nc6 <- lm(lula.vs.2006~ spentH.2006.cct, data=dd)
+
+nc10 <- lm(dilma.vs.2010~ spentH.2010.cct, data=dd)
+
+stargazer(c2,c6,c10,nc2,nc6,nc10, type="latex", header=FALSE, keep = c("spentH.2002.cct","spentH.2006.cct","spentH.2010.cct"), omit.stat = c("f", "ser"), font.size = 'footnotesize', column.sep.width = "1pt", no.space=T, title="Zucco Replication Table")
+
+#add.lines=list(c("stuff")) to add a line indicating controls
+```
+
+Table 5 reports the models, with columns 1-3 with controls and columns 4-6 without controls. The models without control have a lower R-squared than their corresponding models with controls, with model 4's R-squared significantly lower than model 1. However, R-squared isn't a very useful measure of appropriateness of identification since with noisy data a variable could be an accurate predictor and have a low R-squared. The ATE is lower in model 4 than in model 1, but higher in the naive models for 2006 and 2010 (5 and 6) than in the models with controls (2 and 3). Without knowing the true data generating process, we can't know for sure that these estimates are biased. However, it seems likely that there are many factors that could correlate with signing up for CCTs and supporting the incumbent party. Therefore, it is likely more appropriate to control for relevant observed characteristics than to simply compare the means of the treated and control groups.
+
+```{r}
+#2002 case 
+rtilda2 <- summary(c2)$r.squared
+rdot2 <- summary(nc2)$r.squared
+
+rmax2.1 <- rtilda2 + (rtilda2 - rdot2)
+if (rmax2.1 > 1){
+  rmax2.1 <- 1
+}
+
+rmax2.2 <- 1.3*rtilda2
+
+btilda2 <- summary(c2)$coefficients[2]
+bdot2 <- summary(nc2)$coefficients[2]
+
+delta2 <- ((btilda2 - 0)*(rtilda2-rdot2))/((bdot2-btilda2)*(rmax2.1)-rtilda2)
+
+bstar2 <- btilda2 - 1*(bdot2 - btilda2)*((rmax2.1-rtilda2)/(rtilda2 - rdot2))
+
+hi <- o_beta(y="serra.vs.2002",
+              x="spentH.2002.cct",
+              con="hdi.2000+log(pop.2002)+fhc.vs.1998+distcap+nonwhite.2000+log.transform(dgdpH.1.2002)+I(mayorpty.2000==45)+I(incgov.2002==45)+I(mayorpty.2004==13)+I(incgov.2006==13)+as.factor(state)",
+              delta=1,
+              R2max = 1,
+              type="lm",
+              data=dd)
+
+p2 <- o_delta_rsq_viz(y="serra.vs.2002",
+              x="spentH.2002.cct",
+              con="hdi.2000+log(pop.2002)+fhc.vs.1998+distcap+nonwhite.2000+log.transform(dgdpH.1.2002)+I(mayorpty.2000==45)+I(incgov.2002==45)+I(mayorpty.2004==13)+I(incgov.2006==13)+as.factor(state)",
+              beta=0,
+              type="lm",
+              data=dd)
+
+p2 +
+  ggtitle("2002 Cash Transfer Sensitivity Analysis")
+  
+
+p6 <- o_delta_rsq_viz(y="lula.vs.2006",
+              x="spentH.2006.cct",
+              con="hdi.2000+log(pop.2006)+lula.vs.1998+distcap+nonwhite.2010+log.transform(dgdpH.1.2006)+I(mayorpty.2004==45)+I(incgov.2006==45)+I(mayorpty.2004==13)+I(incgov.2006==13)+as.factor(state)",
+              beta=0,
+              type="lm",
+              data=dd)
+
+p6 +
+  ggtitle("2006 Cash Transfer Sensitivity Analysis")
+
+p10 <- o_delta_rsq_viz(y="dilma.vs.2010",
+              x="spentH.2010.cct",
+              con="hdi.2000+log(pop.2010)+lula.vs.1998+distcap+nonwhite.2010+log.transform(dgdpH.1.2010)+I(mayorpty.2008==45)+I(incgov.2010==45)+I(mayorpty.2008==13)+I(incgov.2010==13)+as.factor(state)",
+              beta=0,
+              type="lm",
+              data=dd)
+
+p10 +
+  ggtitle("2010 Cash Transfer Sensitivity Analysis")
+```
+
+Based on the plots above, the results seem reasonably robust to potential unobserved confounders. Recall that $\delta > 1$ implies that the omitted variables are more important than the observed variables. Looking at the 2002 plot, you would need to assume that confounding variables have a much larger effect on presidential vote, or that with near full-controls for all determinants of presidential vote (higher R-squared), the confounding variables would still have a relatively large effect. The plots for 2006 and 2010 show that a smaller $\delta$ would be required to push the effect of the CCTs to zero. However, both show that the confounding variables would need to be about 2-3 times as important without full controls, which I think we can reasonably argue is unlikely.
+
+E. Below I create the inverse covariance matrix weighted index based on Anderson (2008) and with help from [this blogpost](https://cyrussamii.com/?p=2656) with intuition and R coding.
+
+```{r, results='asis'}
+aej <- read_dta("survey_data_AEJ.dta") %>%
+  mutate(cash2 = -(cash))
+
+
+index <- aej %>%
+  select(discuss_total, discuss_other_ethn, num_knows, plat_inform, plat_convinc, cash2, knows_plat, qualifications, country_prob)
+
+index <- index*(-1)
+
+demean <- function(x, control){
+				for(j in 1:ncol(x)){
+					x[,j] <- (x[,j] - mean(x[control,j]))/sd(x[control,j])
+				}
+				return(x)
+}
+
+icwIndex <- function(index, control){
+					i.vec <- as.matrix(rep(1,ncol(index)))
+					X <- demean(index, control)
+					icm <- cov(X)
+					index <- t(solve(t(i.vec)%*%solve(icm)%*%i.vec)%*%t(i.vec)%*%solve(icm)%*%t(X))
+					return(index)
+}
+
+aej$icw.index <- icwIndex(as.matrix(index),aej$treat==0)
+
+diff <- lm(icw.index ~ treat, data = aej)
+
+cme <- mean(aej$icw.index[aej$treat==0])
+tme <- mean(aej$icw.index[aej$treat==1])
+diff2 <- tme - cme
+
+
+icwIndex.table <- as.matrix(c(cme,tme,diff2))
+icwIndex.table <- t(round(icwIndex.table, 2))
+
+colnames(icwIndex.table) <- c("Control Mean", "Treat Mean", "Difference")
+stargazer(icwIndex.table,type="text",header=FALSE, title="ICW Index, Difference in Means")
+
+stargazer(diff, type="text", header=FALSE, title="ICW Index, Difference in Means")
+```
+
+Calculate randomization inference p-value
+
+```{r}
+
+b0 <- summary(diff)$coefficients[2,1]  
+
+tcvec <- aej$treat
+
+n <- 1000
+rand <- NULL
+
+for (i in 1:n) {
+  rand[[i]] <- sample(tcvec)
+}
+
+rand <- as.data.table(rand)
+
+#for (i in 1:n) {
+  #colnames(rand)[i] <- paste0("t",i)
+#}
+
+rand[ , `:=` (icw.index = aej$icw.index)]
+
+bNew <- NULL
+
+for (i in 1:n) {
+  x <- colnames(rand)[i]
+
+f <- as.formula(
+  paste("icw.index", x, 
+        sep = " ~ "))
+
+model <- lm(f, data = rand)
+bNew[i] <- summary(model)$coefficients[2,1]
+}
+
+pRand <- length(bNew[bNew < b0])/n
+```
+
+FWER-adjusted p-values
+
+```{r, eval=FALSE}
+set.seed(99)
+
+variables <- c("discuss_total", "discuss_other_ethn", "num_knows", "plat_inform", "plat_convinc", "cash2", "knows_plat", "qualifications", "country_prob")
+
+
+pns <- NULL
+for (j in 1:length(variables)){
+    f <- as.formula(
+      paste(variables[j], 
+      "treat", 
+      sep = " ~ "))
+    
+    model <- lm(f, data = aej)
+    pn <- summary(model)$coefficients[2,4]
+    pns[j] <- pn
+}
+
+pns <- sort(pns)
+mono <- function(x) {
+   x < pns
+}   
+
+n <- 1000
+
+mat <- matrix(data=NA,nrow=9,ncol=n)
+
+newdat_fwer <- aej
+
+for (i in 1:n) {
+  print(i)
+  newdat_fwer$treat <- sample(aej$treat)
+  pVals <- NULL
+  for (j in 1:length(variables)){
+    f <- as.formula(
+      paste(variables[j], "treat", 
+      sep = " ~ "))
+    model <- lm(f, data = newdat_fwer)
+    pVal <- summary(model)$coefficients[2,4]
+    pVals[j] <- pVal
+  }
+  prs<- as.vector(sort(pVals))
+  mat[,i] <- prs
+}
+
+result <- matrix(nrow=9, ncol=n)
+for (i in 1:n){
+    result[,i] <- pns > mat[,i]
+}
+
+pval_mat <- matrix(nrow=9, ncol=1)
+for(i in 1:9){
+    pval_mat[i,] <- sum(result[i,])/n
+}
+```

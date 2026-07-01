@@ -1,38 +1,37 @@
 # manipulation_check.R
 # Manipulation check analysis per PAP §"Manipulation Check"
 #
-# Two checks:
-#   1. Comparative accuracy check — do comparison arms (T2, T3, T4) improve
-#      respondents' post-treatment beliefs about relative robbery rankings?
-#      Outcomes: tau_b (Kendall concordance), accuracy count acc_i (correct
-#      classifications out of 4); both in levels (post) and as change (post - pre).
-#   2. Placebo check — does the weather chart alone (control2) produce
-#      crime-driven belief updating on the home-municipality slider?
+# Comparative accuracy check — do comparison arms (T2, T3, T4) improve
+# respondents' post-treatment beliefs about relative robbery rankings?
+#   Outcomes: tau_b (Kendall concordance), accuracy count acc_i (correct
+#   classifications out of 4); both in levels (post) and as change (post - pre).
+# (Robbery-rate level accuracy is analyzed separately in
+# crime_rate_accuracy_update.R.)
 #
 # Estimating equation (PAP Eq. 1):
 #   Outcome_i = mu + lambda0*control2 + lambda1*T1 + lambda2*T2 + lambda3*T3 + lambda4*T4 + e_i
 #
-# Both outcomes are higher-is-better. Two-sided tests throughout.
+# Outcomes are higher-is-better. Two-sided tests throughout.
 #
-# Data source: data/wave2_responses.rds (has Comparison_Muni_*_ID columns)
+# Data source: data/survey_panel_dataset.Rdata (cross-wave panel; carries the
+# Comparison_Muni_*_ID and Crime_Rank_Comp_*(_Post) columns needed here).
 
 library(dplyr)
 library(estimatr)
 
 # ── 1. Load data ──────────────────────────────────────────────────────────────
 
-if (!file.exists("data/wave2_responses.rds")) {
-  stop("data/wave2_responses.rds not found. Run pull_responses.R first.")
+if (!file.exists("data/survey_panel_dataset.Rdata")) {
+  stop(
+    "data/survey_panel_dataset.Rdata not found. Run create_panel_dataset.R first."
+  )
 }
 
-d <- readRDS("data/wave2_responses.rds")
+load("data/survey_panel_dataset.Rdata")
 
+# Same sample restrictions as crime_rate_accuracy_update.R / vote_update_analysis.R.
+d <- filter(panel, muni_changed == 0)
 d <- filter(d, Attention_Check == "somewhat_agree")
-d <- filter(
-  d,
-  is.na(Robbery_Estimate_Post) | as.numeric(Robbery_Estimate_Post) <= 100000
-)
-
 
 robo_rate <- readRDS("data/robo_2025.rds") |>
   mutate(
@@ -40,12 +39,7 @@ robo_rate <- readRDS("data/robo_2025.rds") |>
   ) |>
   select(CVEGEO, rate_per_100k)
 
-# ── 2. Filter valid respondents ───────────────────────────────────────────────
-
-d <- d |>
-  filter(!is.na(Found_Municipality_ID) & Found_Municipality_ID != "")
-
-# ── 3. Standardize CVEGEOs and join robbery rates ─────────────────────────────
+# ── 2. Standardize CVEGEOs and join robbery rates ─────────────────────────────
 
 pad5 <- function(x) {
   suppressWarnings(
@@ -227,12 +221,8 @@ d <- d |>
     T4 = as.integer(Treatment_Group == "T4")
   )
 
-# ── 7. Robbery estimate gap (true - post estimate) ───────────────────────────
-
-d <- d |>
-  mutate(gap_post = -abs(rate_home - as.numeric(Robbery_Estimate_Post)))
-
-# ── 8. Fit Equation 1 for each accuracy outcome ───────────────────────────────
+# ── 7. Fit Equation 1 for each accuracy outcome ───────────────────────────────
+# (Robbery-rate level accuracy lives in crime_rate_accuracy_update.R.)
 
 fit_eq1 <- function(outcome, data) {
   sub <- data[!is.na(data[[outcome]]), ]
@@ -241,8 +231,7 @@ fit_eq1 <- function(outcome, data) {
 }
 
 rank_outcomes <- c("tau_post", "acc_post", "delta_tau", "delta_acc")
-rob_outcomes <- c("gap_post")
-acc_outcomes <- c(rank_outcomes, rob_outcomes)
+acc_outcomes <- rank_outcomes
 models_acc <- setNames(lapply(acc_outcomes, fit_eq1, data = d), acc_outcomes)
 
 # ── 9. Two-sided p-values for comparison arms ────────────────────────────────
@@ -268,7 +257,6 @@ results_df <- do.call(rbind, lapply(acc_outcomes, extract_results))
 
 sensitivity_results <- lapply(c(0.20, 0.33), function(thresh) {
   d_s <- compute_accuracy(d, thresh = thresh)
-  d_s$gap_post <- -abs(d_s$rate_home - as.numeric(d_s$Robbery_Estimate_Post))
   fits <- setNames(lapply(rank_outcomes, fit_eq1, data = d_s), rank_outcomes)
   do.call(
     rbind,
@@ -302,7 +290,6 @@ arm_summary <- d |>
     acc_pre = round(mean(acc_pre, na.rm = TRUE), 3),
     acc_post = round(mean(acc_post, na.rm = TRUE), 3),
     delta_acc = round(mean(delta_acc, na.rm = TRUE), 3),
-    gap_post = round(mean(gap_post, na.rm = TRUE), 1),
     .groups = "drop"
   )
 
@@ -342,8 +329,7 @@ outcome_labels <- c(
   tau_post = "Kendall tau-b (post)",
   acc_post = "Accuracy count (post)",
   delta_tau = "Change in Kendall tau-b (post - pre)",
-  delta_acc = "Change in accuracy count (post - pre)",
-  gap_post = "Robbery estimate accuracy: -|true - post|"
+  delta_acc = "Change in accuracy count (post - pre)"
 )
 
 arm_colors <- c(
@@ -366,6 +352,8 @@ plot_coef_df <- do.call(
       estimate = b,
       lo95 = b - 1.96 * se,
       hi95 = b + 1.96 * se,
+      lo99 = b - 2.576 * se,
+      hi99 = b + 2.576 * se,
       row.names = NULL
     )
   })
@@ -380,24 +368,25 @@ plot_coef_df <- do.call(
   )
 
 manip_coef_plot <- ggplot(
-  plot_coef_df,
+  filter(
+    plot_coef_df,
+    outcome == "Change in Kendall tau-b (post - pre)" & arm != "control2"
+  ),
   aes(x = estimate, y = arm, color = arm)
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 0.7) +
+  geom_linerange(aes(xmin = lo99, xmax = hi99), linewidth = 0.5) +
+  geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 2, alpha = 0.4) +
   geom_point(size = 2.5) +
   scale_color_manual(values = arm_colors, guide = "none") +
-  facet_wrap(~outcome, scales = "free", ncol = 2) +
+  #facet_wrap(~outcome, scales = "free", ncol = 2) +
   labs(
-    x = "Estimate relative to control (HC2 SEs, 95% CI)",
+    x = "Change in Accuracy (Post - Pre)",
     y = NULL,
-    title = "Manipulation check estimates",
-    caption = paste0(
-      "Baseline = control (home-only, weather placebo). Threshold = ±25%. n = ",
-      nrow(d)
-    )
+    title = "Relative crime ranking accuracy",
+    caption = paste0("Thick bar 95% CI, thin 99% CI. n = ", nrow(d))
   ) +
-  theme_classic() +
+  theme_minimal() +
   theme(
     strip.text = element_text(size = 9),
     axis.text.y = element_text(size = 9)
@@ -408,8 +397,8 @@ print(manip_coef_plot)
 ggsave(
   "latex/images/manip_check_coef_plot.pdf",
   plot = manip_coef_plot,
-  width = 8,
-  height = 5
+  width = 3.5,
+  height = 4
 )
 
 # ── Threshold sensitivity plot ────────────────────────────────────────────────
@@ -428,6 +417,8 @@ sensitivity_plot_df <- bind_rows(
   mutate(
     lo95 = estimate - 1.96 * se,
     hi95 = estimate + 1.96 * se,
+    lo99 = estimate - 2.576 * se,
+    hi99 = estimate + 2.576 * se,
     thresh = factor(
       thresh,
       levels = c("0.2", "0.25", "0.33"),
@@ -443,20 +434,31 @@ sensitivity_plot_df <- bind_rows(
 
 sensitivity_plot <- ggplot(
   subset(sensitivity_plot_df, !is.na(outcome)),
-  aes(x = estimate, xmin = lo95, xmax = hi95, y = thresh, color = arm)
+  aes(x = estimate, y = thresh, color = arm)
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_pointrange(position = position_dodge(width = 0.5)) +
+  geom_linerange(
+    aes(xmin = lo99, xmax = hi99),
+    linewidth = 0.4,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_linerange(
+    aes(xmin = lo95, xmax = hi95),
+    linewidth = 1.5,
+    alpha = 0.4,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_point(position = position_dodge(width = 0.5)) +
   scale_color_manual(values = arm_colors[c("T2", "T3", "T4")]) +
   facet_wrap(~outcome, scales = "free_x", ncol = 2) +
   labs(
-    x = "Estimate relative to control (95% CI)",
+    x = "Estimate relative to control",
     y = "Threshold",
     color = "Treatment arm",
     title = "Sensitivity to accuracy threshold definition",
-    caption = paste0("n = ", nrow(d))
+    caption = paste0("Thick bar 95% CI, thin 99% CI. n = ", nrow(d))
   ) +
-  theme_classic() +
+  theme_minimal() +
   theme(strip.text = element_text(size = 9))
 
 print(sensitivity_plot)

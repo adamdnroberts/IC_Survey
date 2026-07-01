@@ -33,7 +33,20 @@ cat(nrow(all_responses), "total\n")
 cat(sum(is.na(all_responses$Netquest_PID)), "missing Netquest_PID\n")
 all_responses <- filter(all_responses, !is.na(Netquest_PID))
 
+# Save the full, unfiltered set (still contains the bad/duplicate cross-wave
+# matches that the filter below removes). This is the filter's input.
 saveRDS(
   all_responses,
+  "C:/Users/adamd/Documents/IC_Survey/data/wave1_responses_w_duplicates.rds"
+)
+
+# Remove implausible-timing and duplicate cross-wave matches. Reads the full set
+# above plus data/wave2_responses.rds and the match files; creates
+# `wave1_filtered`.
+source("code/filter_wave1_bad_links.R")
+
+# wave1_responses.rds is the canonical (filtered) wave-1 dataset.
+saveRDS(
+  wave1_filtered,
   "C:/Users/adamd/Documents/IC_Survey/data/wave1_responses.rds"
 )
