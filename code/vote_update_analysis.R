@@ -105,7 +105,6 @@ ggsave(
   width = 7,
   height = 4.5
 )
-
 m_log <- lm_robust(
   Vote_home_post ~
     log_crime_gap *
@@ -331,7 +330,9 @@ coef_compare_25 <- bind_rows(
   build_interaction_coefs(m_vote, rank_gap_sd, "Original rank gap"),
   build_interaction_coefs(m_vote_25, rank_gap_25_sd, "25% threshold")
 ) %>%
-  mutate(model = factor(model, levels = c("Original rank gap", "25% threshold")))
+  mutate(
+    model = factor(model, levels = c("Original rank gap", "25% threshold"))
+  )
 
 vote_coef_compare_25 <- ggplot(
   coef_compare_25,
@@ -363,7 +364,11 @@ vote_coef_compare_25 <- ggplot(
     y = "Treatment group",
     x = "Standardized coefficient (1 SD increase in predictor)",
     caption = paste0(
-      "N = ", m_vote$nobs, " (original) / ", m_vote_25$nobs, " (25%)",
+      "N = ",
+      m_vote$nobs,
+      " (original) / ",
+      m_vote_25$nobs,
+      " (25%)",
       ", thick bar 95% CI, thin 99% CI"
     )
   ) +

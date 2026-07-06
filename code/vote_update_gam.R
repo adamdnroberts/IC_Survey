@@ -63,7 +63,7 @@ m_vote_gam <- gam(
   Vote_home_post ~
     arm_group +
     s(rank_gap, by = arm_group, k = 5) +
-    s(crime_gap_wins, k = 5) +
+    s(crime_gap_wins, by = arm_group, k = 5) +
     coalition_pre +
     inc_vote,
   family = binomial(),
@@ -175,7 +175,7 @@ vote_update_curve_rank <- ggplot(
   scale_x_continuous(breaks = -4:4) +
   labs(
     y = "P(Vote for incumbent)",
-    x = "Rank gap",
+    x = "RG",
     caption = "ribbon 95% CI"
   ) +
   theme_minimal()

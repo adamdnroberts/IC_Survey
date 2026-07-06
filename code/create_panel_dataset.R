@@ -1,7 +1,7 @@
 library(dplyr)
 library(readxl)
 
-robbery_cap_mult <- 10
+robbery_cap_mult <- 2
 min_days_between <- 4
 ci_alpha <- 0.01
 

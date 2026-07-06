@@ -18,7 +18,8 @@ excluded_pids <- c(
   read.csv("data/batch_6_26_wave1_pids.csv")$Netquest_PID,
   read.csv("data/batch_6_29_wave1_pids.csv")$Netquest_PID,
   read.csv("data/batch_6_30_wave1_pids.csv")$Netquest_PID,
-  read.csv("data/batch_7_1_wave1_pids.csv")$Netquest_PID
+  read.csv("data/batch_7_1_wave1_pids.csv")$Netquest_PID,
+  read.csv("data/batch_7_2_wave1_pids.csv")$Netquest_PID
 )
 
 w2 <- readRDS("C:/Users/adamd/Documents/IC_Survey/data/wave2_responses.rds")
@@ -28,12 +29,12 @@ print(paste0(
   round(nrow(w2) / length(excluded_pids), 2)
 ))
 
-batch_7_2 <- responses %>%
+batch_7_6 <- responses %>%
   filter(!Netquest_PID %in% excluded_pids) %>%
   filter(as.Date(as.POSIXct(Timestamp)) <= Sys.Date() - 5) %>%
   select(Netquest_PID, Timestamp)
 
-overlap <- intersect(batch_7_2$Netquest_PID, excluded_pids)
+overlap <- intersect(batch_7_6$Netquest_PID, excluded_pids)
 if (length(overlap) > 0) {
   stop(sprintf(
     "Overlap detected: %d PIDs appear in a previous batch.",
@@ -43,4 +44,4 @@ if (length(overlap) > 0) {
   cat("No overlap with previous batches.\n")
 }
 
-write.csv(batch_7_2, "data/batch_7_2_wave1_pids.csv", row.names = FALSE)
+write.csv(batch_7_6, "data/batch_7_6_wave1_pids.csv", row.names = FALSE)
