@@ -32,7 +32,7 @@ panel_full$inc_vote <- as.numeric(
 )
 
 panel_with_failures <- filter(panel_full, muni_changed == 0)
-panel <- filter(panel_with_failures, Attention_Check == "somewhat_agree")
+panel <- filter(panel_with_failures, Attention_Check == "somewhat_agree" & Treatment_Group != "control2")
 
 crime_gap_wins_sd <- sd(panel$crime_gap_wins, na.rm = TRUE)
 log_crime_gap_sd <- sd(panel$log_crime_gap, na.rm = TRUE)
