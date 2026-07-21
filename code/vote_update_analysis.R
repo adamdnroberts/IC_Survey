@@ -25,12 +25,14 @@ panel$Vote_home_post <- as.integer(
 
 panel_full <- panel
 
+panel_full$coalition_pre[is.na(panel_full$coalition_pre)] <- "Other"
+
+panel_full$inc_vote <- as.numeric(
+  panel_full$coalition_pre == panel_full$home_coalition
+)
+
 panel_with_failures <- filter(panel_full, muni_changed == 0)
 panel <- filter(panel_with_failures, Attention_Check == "somewhat_agree")
-
-panel$coalition_pre[is.na(panel$coalition_pre)] <- "Other"
-
-panel$inc_vote <- as.numeric(panel$coalition_pre == panel$home_coalition)
 
 crime_gap_wins_sd <- sd(panel$crime_gap_wins, na.rm = TRUE)
 log_crime_gap_sd <- sd(panel$log_crime_gap, na.rm = TRUE)
@@ -63,7 +65,7 @@ coef_plot_data_vote <- tidy(m_vote, conf.int = TRUE) %>%
     conf.low95 = estimate - qt(0.975, df) * std.error,
     conf.high95 = estimate + qt(0.975, df) * std.error
   ) %>%
-  filter(treatment != "control2") %>%
+  #filter(treatment != "control2") %>%
   select(-sd)
 
 vote_coef_update <- ggplot(
@@ -110,7 +112,7 @@ m_log <- lm_robust(
     log_crime_gap *
     as.factor(Treatment_Group) +
     rank_gap * as.factor(Treatment_Group) +
-    as.factor(coalition_pre) +
+    #as.factor(coalition_pre) +
     inc_vote,
   alpha = ci_alpha,
   data = panel,
@@ -133,125 +135,73 @@ coef_plot_data_log <- tidy(m_log, conf.int = TRUE) %>%
   filter(treatment != "control2") %>%
   select(-sd)
 
-vote_coef_update_log <- ggplot(
-  subset(coef_plot_data_log),
-  aes(y = treatment, x = estimate, color = treatment)
-) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_errorbar(
-    aes(xmin = conf.low, xmax = conf.high),
-    orientation = "y",
-    width = 0,
-    linewidth = 0.5,
-    position = position_dodge(width = 0.5)
+make_vote_coef_update_log_plot <- function(plot_group) {
+  ggplot(
+    subset(coef_plot_data_log, group == plot_group),
+    aes(y = treatment, x = estimate, color = treatment)
   ) +
-  geom_errorbar(
-    aes(xmin = conf.low95, xmax = conf.high95),
-    orientation = "y",
-    width = 0,
-    linewidth = 2,
-    alpha = 0.4,
-    position = position_dodge(width = 0.5)
-  ) +
-  geom_point(position = position_dodge(width = 0.5)) +
-  scale_color_manual(values = arm_colors, guide = "none") +
-  facet_wrap(~group, scales = "free_x") +
-  labs(
-    y = "Treatment group",
-    x = "Standardized coefficient (1 SD increase in predictor)",
-    #title = "Incumbent vote post: interaction coefficients",
-    caption = paste0("N = ", m_log$nobs, ", thick bar 95% CI, thin 99% CI")
-  ) +
-  theme_minimal()
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+    geom_errorbar(
+      aes(xmin = conf.low, xmax = conf.high),
+      orientation = "y",
+      width = 0,
+      linewidth = 0.9,
+      position = position_dodge(width = 0.5)
+    ) +
+    geom_errorbar(
+      aes(xmin = conf.low95, xmax = conf.high95),
+      orientation = "y",
+      width = 0,
+      linewidth = 3,
+      alpha = 0.55,
+      position = position_dodge(width = 0.5)
+    ) +
+    geom_point(position = position_dodge(width = 0.5), size = 3.2) +
+    scale_color_manual(values = arm_colors, guide = "none") +
+    labs(
+      y = "Treatment group",
+      x = "Standardized coefficient (1 SD increase in predictor)",
+      title = plot_group,
+      caption = paste0("N = ", m_log$nobs, ",  thick bar 95% CI,  thin 99% CI")
+    ) +
+    theme_minimal(base_size = 16)
+}
 
-print(vote_coef_update_log)
+vote_coef_update_log_cg <- make_vote_coef_update_log_plot("CG × Treatment")
+vote_coef_update_log_rg <- make_vote_coef_update_log_plot("RG × Treatment")
+
+print(vote_coef_update_log_cg)
+print(vote_coef_update_log_rg)
 
 ggsave(
-  "latex/images/vote_coef_update_log.pdf",
-  plot = vote_coef_update_log,
+  "latex/images/vote_coef_update_log_cg.pdf",
+  plot = vote_coef_update_log_cg,
   width = 7,
   height = 4.5
 )
 
-# ── Test: comparison-treatment rank_gap interactions > control2's (m_vote) ─────
-# One-sided tests that the rank_gap x Treatment_Group interaction coefficient is
-# larger for each comparison treatment (T2, T3, T4) than for control2.
-# Difference = b_Tx - b_control2; SE from the HC2 variance-covariance matrix.
-rank_gap_term <- function(g) {
-  paste0("as.factor(Treatment_Group)", g, ":rank_gap")
-}
-
-b_vote <- coef(m_vote)
-V_vote <- vcov(m_vote)
-base_term <- rank_gap_term("control2")
-
-stopifnot(all(
-  c(base_term, sapply(c("T2", "T3", "T4"), rank_gap_term)) %in% names(b_vote)
-))
-
-rank_gap_contrasts <- bind_rows(lapply(c("T2", "T3", "T4"), function(g) {
-  tx <- rank_gap_term(g)
-  diff <- b_vote[[tx]] - b_vote[[base_term]]
-  se <- sqrt(
-    V_vote[tx, tx] + V_vote[base_term, base_term] - 2 * V_vote[tx, base_term]
-  )
-  tstat <- diff / se
-  data.frame(
-    treatment = g,
-    coef = b_vote[[tx]],
-    control2_coef = b_vote[[base_term]],
-    diff = diff,
-    std.error = se,
-    t = tstat,
-    p_one_sided = pt(tstat, m_vote$df.residual, lower.tail = TRUE)
-  )
-}))
-
-cat("\nH0: (Tx : rank_gap) - (control2 : rank_gap) <= 0   vs.  H1: > 0\n")
-print(rank_gap_contrasts, row.names = FALSE, digits = 4)
-
-library(car)
-
-# ── Wald tests on the rank_gap x Treatment interactions (m_vote, HC2 vcov) ─────
-# Pairwise equality of the rank_gap:Treatment interaction across arms, plus a
-# joint test that the three comparison arms' interactions are all zero.
-rg <- function(g) paste0("as.factor(Treatment_Group)", g, ":rank_gap")
-
-rank_gap_tests <- list(
-  "T2 = T1" = paste(rg("T2"), "=", rg("T1")),
-  "T2 = T3" = paste(rg("T2"), "=", rg("T3")),
-  "T2 = T4" = paste(rg("T2"), "=", rg("T4")),
-  "T3 = T4" = paste(rg("T3"), "=", rg("T4")),
-  "T2 = T3 = T4 = 0" = c(
-    paste0("0 = ", rg("T4")),
-    paste0("0 = ", rg("T3")),
-    paste0("0 = ", rg("T2"))
-  )
+ggsave(
+  "latex/images/vote_coef_update_log_rg.pdf",
+  plot = vote_coef_update_log_rg,
+  width = 7,
+  height = 4.5
 )
 
-# Extract the test statistic (Chisq or F), its df, and p-value from one test.
-lh_row <- function(hyp, label) {
-  res <- linearHypothesis(m_log, hyp)
-  stat_col <- intersect(c("Chisq", "F"), names(res))[1]
-  p_col <- grep("^Pr", names(res), value = TRUE)[1]
-  i <- nrow(res)
-  data.frame(
-    test = label,
-    df = res[["Df"]][i],
-    statistic = res[[stat_col]][i],
-    stat_type = stat_col,
-    p_value = res[[p_col]][i],
-    row.names = NULL
-  )
-}
-
-rank_gap_test_table <- do.call(
-  rbind,
-  Map(lh_row, rank_gap_tests, names(rank_gap_tests))
+# Also write to the Dropbox poster project so the poster picks up the updated
+# figures directly (matches the vote_coef_update.pdf save above).
+poster_fig_dir <- "C:/Users/adamd/Dropbox/Apps/Overleaf/PolMeth 2026 Poster/figures"
+ggsave(
+  file.path(poster_fig_dir, "vote_coef_update_log_cg.pdf"),
+  plot = vote_coef_update_log_cg,
+  width = 7,
+  height = 4.5
 )
-
-cat("\nWald tests: rank_gap x Treatment interaction contrasts (m_vote, HC2)\n")
-print(rank_gap_test_table, row.names = FALSE, digits = 4)
+ggsave(
+  file.path(poster_fig_dir, "vote_coef_update_log_rg.pdf"),
+  plot = vote_coef_update_log_rg,
+  width = 7,
+  height = 4.5
+)
 
 #updating curve
 panel$comparison_treat <- ifelse(
@@ -290,7 +240,7 @@ panel$rank_gap_25 <- panel$actual_rank_25 - panel$rank_prior
 rank_gap_25_sd <- sd(panel$rank_gap_25, na.rm = TRUE)
 
 m_vote_25 <- lm_robust(
-  Vote_home_post ~
+  log_crime_gap ~
     crime_gap_wins *
     as.factor(Treatment_Group) +
     rank_gap_25 * as.factor(Treatment_Group) +
@@ -311,7 +261,7 @@ build_interaction_coefs <- function(model, rg_sd, model_label) {
     filter(grepl("Treatment_Group", term) & grepl(":", term)) %>%
     mutate(
       group = if_else(
-        grepl("^crime_gap_wins:", term),
+        grepl("^log_crime_gap:", term),
         "CG × Treatment",
         "RG × Treatment"
       ),
@@ -327,7 +277,7 @@ build_interaction_coefs <- function(model, rg_sd, model_label) {
 }
 
 coef_compare_25 <- bind_rows(
-  build_interaction_coefs(m_vote, rank_gap_sd, "Original rank gap"),
+  build_interaction_coefs(m_log, rank_gap_sd, "Original rank gap"),
   build_interaction_coefs(m_vote_25, rank_gap_25_sd, "25% threshold")
 ) %>%
   mutate(

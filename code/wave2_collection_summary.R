@@ -186,7 +186,7 @@ cat(sprintf(
   100 * mean(in_xwalk)
 ))
 cat(sprintf(
-  "  linked to a surviving wave 1 response: %d (%.1f%%)\n",
+  "  linked to a non-duplicate wave 1 response: %d (%.1f%%)\n",
   sum(linked_to_w1),
   100 * mean(linked_to_w1)
 ))

@@ -181,11 +181,6 @@ test$CG <- as.numeric(test$Robbery_Estimate) - test$home_rate
 test$CG_wins <- test$Robbery_Estimate_wins - test$home_rate
 test$RG <- test$rank_prior - test$actual_rank
 
-ggplot(test, aes(x = actual_rank, fill = Treatment_Group)) +
-  geom_histogram(binwidth = 1, position = "dodge") +
-  facet_wrap(~Treatment_Group) +
-  theme_bw()
-
 test$log_CG <- sign(test$CG) * log(abs(test$CG))
 
 test$CG_decile <- dplyr::ntile(test$CG, 10)

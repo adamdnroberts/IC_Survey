@@ -23,6 +23,12 @@ match_ids2 <- read.csv(
 match_ids3 <- read_excel("data/match IDs 29 Jun.xlsx")
 match_ids3 <- janitor::clean_names(match_ids3)
 
+match_ids4 <- read_excel(
+  "C:/Users/adamd/Documents/IC_Survey/data/Match IDs final.xlsx"
+)
+match_ids4 <- janitor::clean_names(match_ids4)
+
+
 match_ids1 <- match_ids1 %>%
   rename(
     pid_w1 = wave_1,
@@ -48,17 +54,28 @@ match_ids3 <- match_ids3 %>%
   select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
+match_ids4 <- match_ids4 %>%
+  rename(
+    pid_w1 = wave_1,
+    pid_w2 = wave_2
+  ) %>%
+  select(pid_w2, pid_w1) %>%
+  mutate(across(c(pid_w2, pid_w1), as.character))
+
 match_ids1_2 <- bind_rows(match_ids1, match_ids2) %>%
   distinct(pid_w2, pid_w1)
 
-match_ids <- bind_rows(match_ids1_2, match_ids3) %>%
+match_ids3_4 <- bind_rows(match_ids3, match_ids4) %>%
+  distinct(pid_w2, pid_w1)
+
+match_ids <- bind_rows(match_ids1_2, match_ids3_4) %>%
   distinct(pid_w2, pid_w1)
 
 # wave1 is the filtered set (data/wave1_responses.rds), in which each wave-2
 # response links to at most one surviving wave-1 response. Restrict the
 # crosswalk to those surviving wave-1 PIDs so the spurious arm of each ambiguous
 # match drops out, leaving the resolved one-to-one pairs.
-match_ids <- match_ids %>%
+match_ids_full <- match_ids %>%
   filter(pid_w1 %in% as.character(wave1$Netquest_PID))
 
 wave1_times <- wave1 %>%
@@ -75,7 +92,7 @@ wave2_times <- wave2 %>%
 
 # Safety: guarantee one wave-1 per wave-2 (earliest-recorded wave-1, mirroring
 # filter_wave1_bad_links.R) in case both arms of an ambiguous match survive.
-match_ids <- match_ids %>%
+match_ids <- match_ids_full %>%
   left_join(wave1_times, by = "pid_w1") %>%
   group_by(pid_w2) %>%
   slice_min(w1_time, n = 1, with_ties = FALSE) %>%
@@ -227,7 +244,10 @@ to_coalition <- function(x) {
       }
       parties <- trimws(strsplit(s, ";")[[1]])
       coalitions <- unique(na.omit(party_to_coalition[parties]))
-      if (length(coalitions) == 1) coalitions else NA_character_
+      # No recognized party (e.g. "other" on its own) => its own category.
+      # A single coalition resolves; a cross-coalition ticket stays NA.
+      if (length(coalitions) == 0) "Other"
+      else if (length(coalitions) == 1) coalitions else NA_character_
     },
     USE.NAMES = FALSE
   )

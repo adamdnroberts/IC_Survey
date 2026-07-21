@@ -121,6 +121,25 @@ drop_w1_pids <- union(bad_w1_pids, dup_w1_pids)
 wave1_filtered <- wave1 %>%
   filter(!(as.character(Netquest_PID) %in% drop_w1_pids))
 
+# Combined list of every tossed wave-1 PID with its drop reason. A PID dropped
+# for both reasons is labelled "implausible_timing_and_duplicate".
+dropped_w1_ids <- data.frame(pid_w1 = drop_w1_pids, stringsAsFactors = FALSE) %>%
+  mutate(
+    reason = case_when(
+      pid_w1 %in% bad_w1_pids & pid_w1 %in% dup_w1_pids ~
+        "implausible_timing_and_duplicate",
+      pid_w1 %in% bad_w1_pids ~ "implausible_timing",
+      TRUE ~ "answered_wave1_twice"
+    )
+  ) %>%
+  arrange(reason, pid_w1)
+
+write.csv(
+  dropped_w1_ids,
+  "data/dropped_wave1_ids.csv",
+  row.names = FALSE
+)
+
 # ── 6. Copy/pasteable report ──────────────────────────────────────────────────
 
 n_start <- nrow(wave1)
