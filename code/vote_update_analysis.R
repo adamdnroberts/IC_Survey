@@ -135,70 +135,52 @@ coef_plot_data_log <- tidy(m_log, conf.int = TRUE) %>%
   filter(treatment != "control2") %>%
   select(-sd)
 
-make_vote_coef_update_log_plot <- function(plot_group) {
-  ggplot(
-    subset(coef_plot_data_log, group == plot_group),
-    aes(y = treatment, x = estimate, color = treatment)
+vote_coef_update_log <- ggplot(
+  subset(coef_plot_data_log),
+  aes(y = treatment, x = estimate, color = treatment)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_errorbar(
+    aes(xmin = conf.low, xmax = conf.high),
+    orientation = "y",
+    width = 0,
+    linewidth = 0.5,
+    position = position_dodge(width = 0.5)
   ) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-    geom_errorbar(
-      aes(xmin = conf.low, xmax = conf.high),
-      orientation = "y",
-      width = 0,
-      linewidth = 0.9,
-      position = position_dodge(width = 0.5)
-    ) +
-    geom_errorbar(
-      aes(xmin = conf.low95, xmax = conf.high95),
-      orientation = "y",
-      width = 0,
-      linewidth = 3,
-      alpha = 0.55,
-      position = position_dodge(width = 0.5)
-    ) +
-    geom_point(position = position_dodge(width = 0.5), size = 3.2) +
-    scale_color_manual(values = arm_colors, guide = "none") +
-    labs(
-      y = "Treatment group",
-      x = "Standardized coefficient (1 SD increase in predictor)",
-      title = plot_group,
-      caption = paste0("N = ", m_log$nobs, ",  thick bar 95% CI,  thin 99% CI")
-    ) +
-    theme_minimal(base_size = 16)
-}
+  geom_errorbar(
+    aes(xmin = conf.low95, xmax = conf.high95),
+    orientation = "y",
+    width = 0,
+    linewidth = 2,
+    alpha = 0.4,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  scale_color_manual(values = arm_colors, guide = "none") +
+  facet_wrap(~group, scales = "free_x") +
+  labs(
+    y = "Treatment group",
+    x = "Standardized coefficient (1 SD increase in predictor)",
+    #title = "Incumbent vote post: interaction coefficients",
+    caption = paste0("N = ", m_log$nobs, ", thick bar 95% CI, thin 99% CI")
+  ) +
+  theme_minimal()
 
-vote_coef_update_log_cg <- make_vote_coef_update_log_plot("CG × Treatment")
-vote_coef_update_log_rg <- make_vote_coef_update_log_plot("RG × Treatment")
-
-print(vote_coef_update_log_cg)
-print(vote_coef_update_log_rg)
+print(vote_coef_update_log)
 
 ggsave(
-  "latex/images/vote_coef_update_log_cg.pdf",
-  plot = vote_coef_update_log_cg,
-  width = 7,
-  height = 4.5
-)
-
-ggsave(
-  "latex/images/vote_coef_update_log_rg.pdf",
-  plot = vote_coef_update_log_rg,
+  "latex/images/vote_coef_update_log.pdf",
+  plot = vote_coef_update_log,
   width = 7,
   height = 4.5
 )
 
 # Also write to the Dropbox poster project so the poster picks up the updated
-# figures directly (matches the vote_coef_update.pdf save above).
+# figure directly (matches the vote_coef_update.pdf save above).
 poster_fig_dir <- "C:/Users/adamd/Dropbox/Apps/Overleaf/PolMeth 2026 Poster/figures"
 ggsave(
-  file.path(poster_fig_dir, "vote_coef_update_log_cg.pdf"),
-  plot = vote_coef_update_log_cg,
-  width = 7,
-  height = 4.5
-)
-ggsave(
-  file.path(poster_fig_dir, "vote_coef_update_log_rg.pdf"),
-  plot = vote_coef_update_log_rg,
+  file.path(poster_fig_dir, "vote_coef_update_log.pdf"),
+  plot = vote_coef_update_log,
   width = 7,
   height = 4.5
 )
@@ -240,11 +222,11 @@ panel$rank_gap_25 <- panel$actual_rank_25 - panel$rank_prior
 rank_gap_25_sd <- sd(panel$rank_gap_25, na.rm = TRUE)
 
 m_vote_25 <- lm_robust(
-  log_crime_gap ~
-    crime_gap_wins *
+  Vote_home_post ~
+    log_crime_gap *
     as.factor(Treatment_Group) +
     rank_gap_25 * as.factor(Treatment_Group) +
-    as.factor(coalition_pre) +
+    #as.factor(coalition_pre) +
     inc_vote,
   alpha = ci_alpha,
   data = panel,

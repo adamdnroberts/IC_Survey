@@ -1,7 +1,8 @@
-# Replicates the first analysis (m_winsorized) in belief_update_analysis.R —
-# Home_Crime_Handling_Change ~ crime_gap_wins * Treatment + rank_gap * Treatment
-# + comp_party_known, HC2 robust, sample = home muni unchanged & attention pass —
-# but with three post-treatment COALITION crime-rating levels as the outcomes:
+# Replicates the main analysis (m_log) in belief_update_analysis.R —
+# Home_Crime_Handling_Change ~ log_crime_gap * Treatment + rank_gap * Treatment
+# + comp_party_known, HC2 robust, sample = home muni unchanged, attention pass,
+# control2 excluded — but with three post-treatment COALITION crime-rating levels
+# as the outcomes:
 #   Coalition_PAN_PRI_PRD_Crime_Rating_Post, MORENA_Crime_Rating_Post,
 #   MC_Crime_Rating_Post  (0-100 sliders, stored as character -> coerced numeric).
 
@@ -16,9 +17,22 @@ if (!exists("ci_alpha")) {
   ci_alpha <- 0.01
 }
 
-# Same sample as m_winsorized
+# Colorblind-friendly (Okabe-Ito) palette, matching belief_update_analysis.R
+arm_colors <- c(
+  control2 = "#999999",
+  T1 = "#56B4E9",
+  T2 = "#009E73",
+  T3 = "#E69F00",
+  T4 = "#0072B2"
+)
+
+# Same sample as m_log (control2 excluded)
 panel <- panel %>%
-  filter(muni_changed == 0, Attention_Check == "somewhat_agree")
+  filter(
+    muni_changed == 0,
+    Attention_Check == "somewhat_agree",
+    Treatment_Group != "control2"
+  )
 
 # Outcomes (column name -> display label)
 outcomes <- c(
@@ -38,8 +52,8 @@ for (v in names(outcomes)) {
 }
 
 # SDs of the standardizing predictors (identical across outcomes — they share
-# the same right-hand side as m_winsorized)
-crime_gap_wins_sd <- sd(panel$crime_gap_wins, na.rm = TRUE)
+# the same right-hand side as m_log)
+log_crime_gap_sd <- sd(panel$log_crime_gap, na.rm = TRUE)
 rank_gap_sd <- sd(panel$rank_gap, na.rm = TRUE)
 
 # Coefficient extractor — copied verbatim from belief_update_analysis.R so the
@@ -74,12 +88,12 @@ extract_coef_plot <- function(model, cg_pattern, model_label, cg_sd, rg_sd) {
     select(-sd)
 }
 
-# Fit the m_winsorized spec for one outcome
+# Fit the m_log spec for one outcome
 fit_one <- function(v) {
   fml <- as.formula(paste0(
     v,
-    " ~ crime_gap_wins * as.factor(Treatment_Group) +",
-    " rank_gap * as.factor(Treatment_Group) + comp_party_known"
+    " ~ log_crime_gap * as.factor(Treatment_Group) +",
+    " rank_gap * as.factor(Treatment_Group) + coalition_pre"
   ))
   lm_robust(fml, alpha = ci_alpha, data = panel, se_type = "HC2")
 }
@@ -88,7 +102,14 @@ models <- lapply(names(outcomes), fit_one)
 names(models) <- names(outcomes)
 
 for (v in names(outcomes)) {
-  cat("\n================ ", outcomes[[v]], " (", v, ") ================\n", sep = "")
+  cat(
+    "\n================ ",
+    outcomes[[v]],
+    " (",
+    v,
+    ") ================\n",
+    sep = ""
+  )
   print(summary(models[[v]]))
 }
 
@@ -96,9 +117,9 @@ for (v in names(outcomes)) {
 coef_all <- bind_rows(lapply(names(outcomes), function(v) {
   extract_coef_plot(
     models[[v]],
-    "crime_gap_wins",
+    "log_crime_gap",
     sprintf("%s (N=%d)", outcomes[[v]], models[[v]]$nobs),
-    crime_gap_wins_sd,
+    log_crime_gap_sd,
     rank_gap_sd
   )
 }))
@@ -107,7 +128,7 @@ coef_all <- bind_rows(lapply(names(outcomes), function(v) {
 # matching inc_update_coef_plot in belief_update_analysis.R)
 coalition_rating_coef_plot <- ggplot(
   subset(coef_all, treatment != "control2"),
-  aes(y = treatment, x = estimate)
+  aes(y = treatment, x = estimate, color = treatment)
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
   geom_errorbar(
@@ -126,6 +147,7 @@ coalition_rating_coef_plot <- ggplot(
     position = position_dodge(width = 0.5)
   ) +
   geom_point(position = position_dodge(width = 0.5)) +
+  scale_color_manual(values = arm_colors, guide = "none") +
   facet_grid(model ~ group, scales = "free_x") +
   labs(
     y = "Treatment group",

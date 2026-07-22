@@ -105,7 +105,7 @@ rank_gap_tests <- list(
   "T2 = T4" = paste(rg("T2"), "=", rg("T4")),
   "T3 = T4" = paste(rg("T3"), "=", rg("T4")),
   "T2 = T3 = T4 = 0" = c(
-    #paste0("0 = ", rg("T4")),
+    paste0("0 = ", rg("T4")),
     paste0("0 = ", rg("T3")),
     paste0("0 = ", rg("T2"))
   )

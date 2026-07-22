@@ -260,6 +260,39 @@ panel$home_coalition <- coalition_vec[
   sprintf("%05d", as.integer(panel$Found_Municipality_ID))
 ]
 
+# ── Home-party crime-handling rating ─────────────────────────────────────────
+# For each respondent, select the coalition-specific crime-handling rating that
+# corresponds to the coalition governing their home municipality (home_coalition):
+#   MORENA/PVEM/PT -> MORENA_Crime_Rating_*,
+#   PAN/PRI/PRD    -> Coalition_PAN_PRI_PRD_Crime_Rating_*,
+#   MC             -> MC_Crime_Rating_*.
+# Pre ratings come from wave 1, post ratings from wave 2, so the change mirrors
+# Home_Crime_Handling_Change (a wave 1 -> wave 2 update). NA home_coalition -> NA.
+pick_home_party_rating <- function(coalition, morena, pan_pri_prd, mc) {
+  out <- rep(NA_real_, length(coalition))
+  out[coalition %in% "MORENA/PVEM/PT"] <- morena[coalition %in% "MORENA/PVEM/PT"]
+  out[coalition %in% "PAN/PRI/PRD"] <- pan_pri_prd[coalition %in% "PAN/PRI/PRD"]
+  out[coalition %in% "MC"] <- mc[coalition %in% "MC"]
+  out
+}
+
+panel$Home_Party_Crime_Handling_Pre <- pick_home_party_rating(
+  panel$home_coalition,
+  suppressWarnings(as.numeric(panel$MORENA_Crime_Rating_Pre)),
+  suppressWarnings(as.numeric(panel$Coalition_PAN_PRI_PRD_Crime_Rating_Pre)),
+  suppressWarnings(as.numeric(panel$MC_Crime_Rating_Pre))
+)
+
+panel$Home_Party_Crime_Handling_Post <- pick_home_party_rating(
+  panel$home_coalition,
+  suppressWarnings(as.numeric(panel$MORENA_Crime_Rating_Post)),
+  suppressWarnings(as.numeric(panel$Coalition_PAN_PRI_PRD_Crime_Rating_Post)),
+  suppressWarnings(as.numeric(panel$MC_Crime_Rating_Post))
+)
+
+panel$Home_Party_Crime_Handling_Change <-
+  panel$Home_Party_Crime_Handling_Post - panel$Home_Party_Crime_Handling_Pre
+
 panel <- filter(panel, !is.na(days_between) & days_between > min_days_between)
 
 save(panel, file = "data/survey_panel_dataset.Rdata")

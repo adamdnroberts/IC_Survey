@@ -13,8 +13,22 @@ if (!exists("ci_alpha")) {
   ci_alpha <- 0.01
 }
 
+robbery_cap_mult <- 2000
+
+# Colorblind-friendly (Okabe-Ito) palette, matching vote_update_analysis.R
+arm_colors <- c(
+  control2 = "#999999",
+  T1 = "#56B4E9",
+  T2 = "#009E73",
+  T3 = "#E69F00",
+  T4 = "#0072B2"
+)
+
 panel_with_failures <- filter(panel_full, muni_changed == 0)
-panel <- filter(panel_with_failures, Attention_Check == "somewhat_agree")
+panel <- filter(
+  panel_with_failures,
+  Attention_Check == "somewhat_agree" & Treatment_Group != "control2"
+)
 
 m_winsorized <- lm_robust(
   Home_Crime_Handling_Change ~
@@ -119,12 +133,13 @@ coef_plot_both <- bind_rows(
 inc_update_coef_plot <- ggplot(
   subset(
     coef_plot_both,
-    model == "m_winsorized" &
+    model == "m_log" &
       treatment != "control2"
   ),
   aes(
     y = treatment,
-    x = estimate
+    x = estimate,
+    color = treatment
   )
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
@@ -144,13 +159,15 @@ inc_update_coef_plot <- ggplot(
     position = position_dodge(width = 0.5)
   ) +
   geom_point(position = position_dodge(width = 0.5)) +
+  scale_color_manual(values = arm_colors, guide = "none") +
   facet_wrap(~group, scales = "free_x") +
   labs(
+    title = "Belief update: main spec (log gap, control2 excluded)",
     y = "Treatment group",
     x = "Standardized coefficient (1 SD increase in predictor)",
     caption = paste0(
       "N = ",
-      m_winsorized$nobs,
+      m_log$nobs,
       ", thick bar 95% CI, thin 99% CI"
     )
   ) +
@@ -201,6 +218,7 @@ spec_differences <- ggplot(
     )
   ) +
   labs(
+    title = "Belief update: comparison across gap specifications",
     y = "Treatment group",
     x = "Standardized coefficient (1 SD increase in predictor)",
     color = "Specification",
@@ -277,6 +295,7 @@ attn_check_coef_compare <- ggplot(
   facet_wrap(~group, scales = "free_x") +
   scale_color_brewer(palette = "Dark2") +
   labs(
+    title = "Belief update: including vs. excluding attn-check failures",
     y = "Treatment group",
     x = "Standardized coefficient (1 SD increase in predictor)",
     color = "Sample",
@@ -326,7 +345,8 @@ inc_update_coef_plot_pooled <- ggplot(
   coef_plot_pooled,
   aes(
     y = treatment,
-    x = estimate
+    x = estimate,
+    color = treatment
   )
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
@@ -346,8 +366,10 @@ inc_update_coef_plot_pooled <- ggplot(
     position = position_dodge(width = 0.5)
   ) +
   geom_point(position = position_dodge(width = 0.5)) +
+  scale_color_manual(values = arm_colors, guide = "none") +
   facet_wrap(~group, scales = "free_x") +
   labs(
+    title = "Belief update: control2 pooled into control",
     y = "Treatment group",
     x = "Standardized coefficient (1 SD increase in predictor)",
     caption = paste0(
@@ -383,7 +405,7 @@ rank_gap_25_sd <- sd(panel$rank_gap_25, na.rm = TRUE)
 
 m_rg25 <- lm_robust(
   Home_Crime_Handling_Change ~
-    crime_gap_wins *
+    log_crime_gap *
     as.factor(Treatment_Group) +
     rank_gap_25 * as.factor(Treatment_Group) +
     comp_party_known,
@@ -394,9 +416,9 @@ m_rg25 <- lm_robust(
 
 coef_plot_rg25 <- extract_coef_plot(
   m_rg25,
-  "crime_gap_wins",
+  "log_crime_gap",
   "m_rg25",
-  crime_gap_wins_sd,
+  log_crime_gap_sd,
   rank_gap_25_sd
 )
 
@@ -404,7 +426,8 @@ inc_update_coef_plot_rg25 <- ggplot(
   coef_plot_rg25,
   aes(
     y = treatment,
-    x = estimate
+    x = estimate,
+    color = treatment
   )
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
@@ -424,8 +447,10 @@ inc_update_coef_plot_rg25 <- ggplot(
     position = position_dodge(width = 0.5)
   ) +
   geom_point(position = position_dodge(width = 0.5)) +
+  scale_color_manual(values = arm_colors, guide = "none") +
   facet_wrap(~group, scales = "free_x") +
   labs(
+    title = "Belief update: alternative rank gap (25% threshold)",
     y = "Treatment group",
     x = "Standardized coefficient (1 SD increase in predictor)",
     caption = paste0("N = ", m_rg25$nobs, ", thick bar 95% CI, thin 99% CI")
@@ -441,7 +466,9 @@ ggsave(
   height = 4.5
 )
 
-car::linearHypothesis(
-  m_rg25,
-  "as.factor(Treatment_Group)control2:rank_gap_25 = as.factor(Treatment_Group)T3:rank_gap_25"
-)
+# control2 is now excluded from the panel (see filter above), so this control2
+# vs. T3 contrast is no longer estimable.
+# car::linearHypothesis(
+#   m_rg25,
+#   "as.factor(Treatment_Group)control2:rank_gap_25 = as.factor(Treatment_Group)T3:rank_gap_25"
+# )
