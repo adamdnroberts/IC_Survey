@@ -32,7 +32,10 @@ panel_full$inc_vote <- as.numeric(
 )
 
 panel_with_failures <- filter(panel_full, muni_changed == 0)
-panel <- filter(panel_with_failures, Attention_Check == "somewhat_agree" & Treatment_Group != "control2")
+panel <- filter(
+  panel_with_failures,
+  Attention_Check == "somewhat_agree" & Treatment_Group != "control2"
+)
 
 crime_gap_wins_sd <- sd(panel$crime_gap_wins, na.rm = TRUE)
 log_crime_gap_sd <- sd(panel$log_crime_gap, na.rm = TRUE)
@@ -44,6 +47,7 @@ m_vote <- lm_robust(
     as.factor(Treatment_Group) +
     rank_gap * as.factor(Treatment_Group) +
     as.factor(coalition_pre) +
+    as.factor(actual_rank) +
     inc_vote,
   alpha = ci_alpha,
   data = panel,
@@ -112,6 +116,9 @@ m_log <- lm_robust(
     log_crime_gap *
     as.factor(Treatment_Group) +
     rank_gap * as.factor(Treatment_Group) +
+    # as.numeric(MORENA_Crime_Rating_Pre) +
+    # as.numeric(MC_Crime_Rating_Pre) +
+    # as.numeric(Coalition_PAN_PRI_PRD_Crime_Rating_Pre) +
     #as.factor(coalition_pre) +
     inc_vote,
   alpha = ci_alpha,
