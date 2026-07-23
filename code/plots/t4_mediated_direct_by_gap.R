@@ -9,13 +9,97 @@
 # always positive and several times larger, so most of T4's (crime-gap
 # contingent) vote effect runs through channels other than this rating.
 #
-# Sources code/mediation_analysis.R for the reconciled pooled models
-# (m_mediator, m_outcome) and panel_med. NOTE: that source also runs the script's
-# own mediate() diagnostics, so this takes a couple of minutes to run.
+# Self-contained: rebuilds panel_med and the pooled mediator/outcome models
+# (m_mediator, m_outcome) inline, mirroring code/mediation_analysis.R, so this
+# script no longer sources it (and skips that script's slow mediate() diagnostics).
+# Keep this setup block in sync with mediation_analysis.R if the models change.
 # Output: latex/images/t4_mediated_direct_by_crimegap.pdf
 
-source("~/IC_Survey/code/mediation_analysis.R")
+library(dplyr)
 library(ggplot2)
+library(mediation)
+
+load("~/IC_Survey/data/survey_panel_dataset.Rdata")
+
+# Sample: drop muni movers + failed attention check (as in mediation_analysis.R).
+panel <- panel %>%
+  filter(muni_changed == 0, Attention_Check == "somewhat_agree")
+
+# ── Mediator: incumbent minus opposition-average crime rating (post) ──────────
+# inc_minus_opp_avg_post = Home_Crime_Handling_Post - (average post-treatment
+# crime rating across the coalitions that do NOT govern the home municipality).
+num <- function(x) suppressWarnings(as.numeric(x))
+
+coalition_post_rating <- cbind(
+  "MORENA/PVEM/PT" = num(panel$MORENA_Crime_Rating_Post),
+  "PAN/PRI/PRD" = num(panel$Coalition_PAN_PRI_PRD_Crime_Rating_Post),
+  "MC" = num(panel$MC_Crime_Rating_Post)
+)
+coalition_pre_rating <- cbind(
+  "MORENA/PVEM/PT" = num(panel$MORENA_Crime_Rating_Pre),
+  "PAN/PRI/PRD" = num(panel$Coalition_PAN_PRI_PRD_Crime_Rating_Pre),
+  "MC" = num(panel$MC_Crime_Rating_Pre)
+)
+
+# Per-respondent opposition benchmark: average across the non-home coalitions,
+# for both post and pre ratings. NA home_coalition or all-NA ratings -> NA.
+opp_benchmarks <- t(vapply(
+  seq_len(nrow(panel)),
+  function(i) {
+    hc <- panel$home_coalition[i]
+    if (is.na(hc)) {
+      return(c(avg_post = NA_real_, avg_pre = NA_real_))
+    }
+    keep <- colnames(coalition_post_rating) != hc
+    post <- coalition_post_rating[i, keep]
+    pre <- coalition_pre_rating[i, keep]
+    c(
+      avg_post = if (all(is.na(post))) NA_real_ else mean(post, na.rm = TRUE),
+      avg_pre = if (all(is.na(pre))) NA_real_ else mean(pre, na.rm = TRUE)
+    )
+  },
+  numeric(2)
+))
+
+panel$opp_avg_post <- opp_benchmarks[, "avg_post"]
+panel$opp_avg_pre <- opp_benchmarks[, "avg_pre"]
+panel$inc_post <- num(panel$Home_Crime_Handling_Post)
+panel$inc_pre <- num(panel$Home_Crime_Handling_Pre)
+panel$inc_minus_opp_avg_post <- panel$inc_post - panel$opp_avg_post
+
+panel$Vote_home_post <- as.integer(
+  !is.na(panel$coalition_post) &
+    !is.na(panel$home_coalition) &
+    panel$home_coalition == panel$coalition_post
+)
+
+# ── Pooled mediator & outcome models (all arms, control2 excluded) ────────────
+panel_med <- filter(panel, Treatment_Group != "control2")
+panel_med$Treatment_Group <- relevel(
+  droplevels(factor(panel_med$Treatment_Group)),
+  ref = "control"
+)
+
+m_mediator <- lm(
+  inc_minus_opp_avg_post ~
+    inc_pre +
+    opp_avg_pre +
+    log_crime_gap * Treatment_Group +
+    rank_gap * Treatment_Group +
+    coalition_pre,
+  data = panel_med
+)
+
+m_outcome <- lm(
+  Vote_home_post ~
+    inc_minus_opp_avg_post +
+    inc_pre +
+    opp_avg_pre +
+    log_crime_gap * Treatment_Group +
+    rank_gap * Treatment_Group +
+    coalition_pre,
+  data = panel_med
+)
 
 set.seed(1)
 n_grid <- 13
