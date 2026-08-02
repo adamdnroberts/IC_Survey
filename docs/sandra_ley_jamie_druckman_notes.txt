@@ -1,0 +1,20 @@
+Notes for Sandra Ley: Surveying in Mexico
+
+Notes:
+- Netquest is very useful, Facebook was a mess
+- Abby Cordoba did a bigger sample through Netquest, she might have done targeted 
+- Natan https://www.natanskigin.com/
+- Netquest more accepted/good experiences, can count on reliable sample
+-- could do stratified sample by levels homicides
+- OPM (Pablo Paradas pp@dataopm.net), in charge of LAPOP, there's also an omnibus survey
+- Marquez (survey company) Javier Marquez javier.marquez@buendiaymarquez.com
+
+
+Jamie:
+
+- randomly draw subset that is geographically proximate
+- only offer municipalities above a certain threshold (because small would only arbitrarily be known) because bigger muns are in the news/get discussed/etc.
+- number within some proximity (X miles)
+- another bucket of just largest municipalities 
+- free add municipalities (could put in the instructions that I will also allow opportunity to add other municipalities)
+- lean away from partisanship (don't do it with a subset)

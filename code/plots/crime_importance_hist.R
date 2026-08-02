@@ -24,7 +24,7 @@ crime_importance <- ggplot(
     labels = c("1\n(Most important)", "2", "3", "4", "5\n(Least important)")
   ) +
   labs(
-    title = "Distribution of Crime Importance",
+    #title = "Distribution of Crime Importance",
     #subtitle = "Rank assigned to 'Seguridad / Delincuencia' among five issues",
     caption = sprintf("N = %d", n_total),
     x = "Rank",
@@ -36,6 +36,6 @@ crime_importance <- ggplot(
 ggsave(
   "latex/images/crime_importance_hist.pdf",
   plot = crime_importance,
-  width = 4,
+  width = 6,
   height = 4
 )

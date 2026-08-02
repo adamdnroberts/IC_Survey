@@ -172,13 +172,13 @@ test$actual_rank <- 1 +
 #   pmax(pmin(x, qs[2]), qs[1])
 # }
 
-test$Robbery_Estimate_wins <- pmin(
+test$Robbery_Estimate_capped <- pmin(
   as.numeric(test$Robbery_Estimate),
   max(test$home_rate, na.rm = TRUE) * 10
 )
 
 test$CG <- as.numeric(test$Robbery_Estimate) - test$home_rate
-test$CG_wins <- test$Robbery_Estimate_wins - test$home_rate
+test$CG_capped <- test$Robbery_Estimate_capped - test$home_rate
 test$RG <- test$rank_prior - test$actual_rank
 
 test$log_CG <- sign(test$CG) * log(abs(test$CG))
@@ -262,7 +262,7 @@ test <- filter(test, Attention_Check == "somewhat_agree")
 
 m1_lm <- lm(
   Home_Crime_Handling_Change ~
-    CG_wins * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
+    CG_capped * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
   data = test
 )
 
@@ -283,7 +283,7 @@ test_no_influential <- test[cooks.distance(m1_lm) <= cooks_thresh, ]
 
 m1 <- lm_robust(
   Home_Crime_Handling_Change ~
-    CG_wins * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
+    CG_capped * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group),
   data = test,
   se_type = "HC2"
 )
@@ -348,7 +348,7 @@ summary(m3)
 
 outcome_sd <- sd(test$Home_Crime_Handling_Change, na.rm = TRUE)
 logCG_sd <- sd(subset(test, abs(CG) < 50000)$log_CG, na.rm = TRUE)
-CG_wins_sd <- sd(test$CG_wins, na.rm = TRUE)
+CG_capped_sd <- sd(test$CG_capped, na.rm = TRUE)
 
 test_exclude_extreme <- subset(
   test,
@@ -385,7 +385,7 @@ extract_coef_plot <- function(model, cg_pattern, model_label, cg_sd, rg_sd) {
 }
 
 coef_plot_both <- bind_rows(
-  extract_coef_plot(m1, "CG_wins", "m1 (wins CG)", CG_wins_sd, RG_sd),
+  extract_coef_plot(m1, "CG_capped", "m1 (wins CG)", CG_capped_sd, RG_sd),
   extract_coef_plot(
     m1_exclude_extreme,
     "CG",
@@ -456,7 +456,7 @@ test$coalition_pre[is.na(test$coalition_pre)] <- "Other"
 
 m_vote <- lm_robust(
   Vote_home_post ~
-    CG_wins *
+    CG_capped *
       as.factor(Treatment_Group) +
       RG * as.factor(Treatment_Group) +
       as.factor(coalition_pre),
@@ -468,14 +468,14 @@ summary(m_vote)
 
 coef_plot_data_vote <- tidy(m_vote, conf.int = TRUE) %>%
   filter(grepl(
-    "CG_wins:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
+    "CG_capped:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
     term,
     perl = TRUE
   )) %>%
-  filter(!grepl("CG_wins:RG:as\\.factor", term)) %>%
+  filter(!grepl("CG_capped:RG:as\\.factor", term)) %>%
   mutate(
     group = case_when(
-      grepl("^CG_wins:as\\.factor", term) ~ "CG × Treatment",
+      grepl("^CG_capped:as\\.factor", term) ~ "CG × Treatment",
       TRUE ~ "RG × Treatment"
     ),
     treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .)
@@ -507,7 +507,7 @@ ggsave(
 
 m_vote <- lm_robust(
   Vote_Switch ~
-    CG_wins *
+    CG_capped *
       as.factor(Treatment_Group) +
       RG * as.factor(Treatment_Group),
   data = subset(test, !is.na(Vote_Switch)),
@@ -518,14 +518,14 @@ summary(m_vote)
 
 coef_plot_data_vote <- tidy(m_vote, conf.int = TRUE) %>%
   filter(grepl(
-    "CG_wins:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
+    "CG_capped:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
     term,
     perl = TRUE
   )) %>%
-  filter(!grepl("CG_wins:RG:as\\.factor", term)) %>%
+  filter(!grepl("CG_capped:RG:as\\.factor", term)) %>%
   mutate(
     group = case_when(
-      grepl("^CG_wins:as\\.factor", term) ~ "CG × Treatment",
+      grepl("^CG_capped:as\\.factor", term) ~ "CG × Treatment",
       TRUE ~ "RG × Treatment"
     ),
     treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .)
@@ -605,7 +605,7 @@ test2 <- test2 %>%
 coalition_interaction_formula <- function(outcome) {
   as.formula(paste0(
     outcome,
-    " ~ CG_wins * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group) + as.factor(coalition_label)"
+    " ~ CG_capped * as.factor(Treatment_Group) + RG * as.factor(Treatment_Group) + as.factor(coalition_label)"
   ))
 }
 
@@ -631,15 +631,15 @@ coef_plot_data_coalitions <- bind_rows(lapply(
   function(nm) {
     tidy(coalition_models[[nm]], conf.int = TRUE) %>%
       filter(grepl(
-        "CG_wins:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
+        "CG_capped:as\\.factor|as\\.factor.*:RG(?!:)|(?<=:)RG:as\\.factor",
         term,
         perl = TRUE
       )) %>%
-      filter(!grepl("CG_wins:RG:as\\.factor", term)) %>%
+      filter(!grepl("CG_capped:RG:as\\.factor", term)) %>%
       mutate(
         coalition = nm,
         group = case_when(
-          grepl("^CG_wins:as\\.factor", term) ~ "CG × Treatment",
+          grepl("^CG_capped:as\\.factor", term) ~ "CG × Treatment",
           TRUE ~ "RG × Treatment"
         ),
         treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .)

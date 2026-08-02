@@ -30,12 +30,12 @@ panel <- filter(
   Attention_Check == "somewhat_agree" & Treatment_Group != "control2"
 )
 
-m_winsorized <- lm_robust(
+m_capped <- lm_robust(
   Home_Crime_Handling_Change ~
-    crime_gap_wins *
+    crime_gap_capped *
     as.factor(Treatment_Group) +
     rank_gap * as.factor(Treatment_Group) +
-    comp_party_known,
+    coalition_pre,
   alpha = ci_alpha,
   data = panel,
   se_type = "HC2"
@@ -52,7 +52,7 @@ m_exclude_extreme <- lm_robust(
     log_crime_gap *
     as.factor(Treatment_Group) +
     rank_gap * as.factor(Treatment_Group) +
-    comp_party_known,
+    coalition_pre,
   alpha = ci_alpha,
   data = panel_exclude_extreme,
   se_type = "HC2"
@@ -63,14 +63,14 @@ m_log <- lm_robust(
     log_crime_gap *
     as.factor(Treatment_Group) +
     rank_gap * as.factor(Treatment_Group) +
-    comp_party_known,
+    coalition_pre,
   alpha = ci_alpha,
   data = panel,
   se_type = "HC2"
 )
 
 log_crime_gap_sd <- sd(panel$log_crime_gap, na.rm = TRUE)
-crime_gap_wins_sd <- sd(panel$crime_gap_wins, na.rm = TRUE)
+crime_gap_capped_sd <- sd(panel$crime_gap_capped, na.rm = TRUE)
 log_crime_gap_exclude_sd <- sd(
   panel_exclude_extreme$log_crime_gap,
   na.rm = TRUE
@@ -103,15 +103,15 @@ extract_coef_plot <- function(model, cg_pattern, model_label, cg_sd, rg_sd) {
       conf.low95 = estimate - qt(0.975, df) * std.error,
       conf.high95 = estimate + qt(0.975, df) * std.error
     ) %>%
-    select(-sd)
+    dplyr::select(-sd)
 }
 
 coef_plot_both <- bind_rows(
   extract_coef_plot(
-    m_winsorized,
-    "crime_gap_wins",
-    "m_winsorized",
-    crime_gap_wins_sd,
+    m_capped,
+    "crime_gap_capped",
+    "m_capped",
+    crime_gap_capped_sd,
     rank_gap_sd
   ),
   extract_coef_plot(
@@ -134,7 +134,7 @@ inc_update_coef_plot <- ggplot(
   subset(
     coef_plot_both,
     model == "m_log" &
-      treatment != "control2"
+      treatment == "T4"
   ),
   aes(
     y = treatment,
@@ -210,9 +210,9 @@ spec_differences <- ggplot(
   facet_wrap(~group, scales = "free_x") +
   scale_color_brewer(
     palette = "Dark2",
-    breaks = c("m_winsorized", "m_log", "m_exclude_extreme"),
+    breaks = c("m_capped", "m_log", "m_exclude_extreme"),
     labels = c(
-      "m_winsorized" = "Winsorized level gap",
+      "m_capped" = "Capped level gap",
       "m_log" = "Log gap (all)",
       "m_exclude_extreme" = "Log gap (extremes dropped)"
     )
@@ -224,7 +224,7 @@ spec_differences <- ggplot(
     color = "Specification",
     caption = paste0(
       "N = ",
-      m_winsorized$nobs,
+      m_capped$nobs,
       ", thick bar 95% CI, thin 99% CI"
     )
   ) +
@@ -241,10 +241,10 @@ ggsave(
 
 m_attn_all <- lm_robust(
   Home_Crime_Handling_Change ~
-    crime_gap_wins *
+    crime_gap_capped *
     as.factor(Treatment_Group) +
     rank_gap * as.factor(Treatment_Group) +
-    comp_party_known,
+    coalition_pre,
   alpha = ci_alpha,
   data = panel_with_failures,
   se_type = "HC2"
@@ -252,17 +252,17 @@ m_attn_all <- lm_robust(
 
 attn_check_compare <- bind_rows(
   extract_coef_plot(
-    m_winsorized,
-    "crime_gap_wins",
+    m_capped,
+    "crime_gap_capped",
     "Excludes attn-check failures",
-    crime_gap_wins_sd,
+    crime_gap_capped_sd,
     rank_gap_sd
   ),
   extract_coef_plot(
     m_attn_all,
-    "crime_gap_wins",
+    "crime_gap_capped",
     "Includes attn-check failures",
-    crime_gap_wins_sd,
+    crime_gap_capped_sd,
     rank_gap_sd
   )
 )
@@ -301,7 +301,7 @@ attn_check_coef_compare <- ggplot(
     color = "Sample",
     caption = paste0(
       "N = ",
-      m_winsorized$nobs,
+      m_capped$nobs,
       " (excl. failures) vs ",
       m_attn_all$nobs,
       " (incl. failures)",
@@ -327,7 +327,7 @@ m_log_pooled <- lm_robust(
     log_crime_gap *
     as.factor(t_pooled_control) +
     rank_gap * as.factor(t_pooled_control) +
-    comp_party_known,
+    coalition_pre,
   alpha = ci_alpha,
   data = panel,
   se_type = "HC2"
@@ -408,7 +408,7 @@ m_rg25 <- lm_robust(
     log_crime_gap *
     as.factor(Treatment_Group) +
     rank_gap_25 * as.factor(Treatment_Group) +
-    comp_party_known,
+    coalition_pre,
   alpha = ci_alpha,
   data = panel,
   se_type = "HC2"

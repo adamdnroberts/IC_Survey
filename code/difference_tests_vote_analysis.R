@@ -33,7 +33,7 @@ panel <- filter(
 
 m_vote <- lm_robust(
   Vote_home_post ~
-    crime_gap_wins *
+    crime_gap_capped *
     as.factor(Treatment_Group) +
     rank_gap * as.factor(Treatment_Group) +
     as.factor(coalition_pre) +

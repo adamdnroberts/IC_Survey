@@ -37,7 +37,7 @@ panel <- filter(
   Attention_Check == "somewhat_agree" & Treatment_Group != "control2"
 )
 
-crime_gap_wins_sd <- sd(panel$crime_gap_wins, na.rm = TRUE)
+crime_gap_capped_sd <- sd(panel$crime_gap_capped, na.rm = TRUE)
 log_crime_gap_sd <- sd(panel$log_crime_gap, na.rm = TRUE)
 rank_gap_sd <- sd(panel$rank_gap, na.rm = TRUE)
 

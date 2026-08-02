@@ -1,4 +1,4 @@
-# Two-limit Tobit version of the m_winsorized coefficient plot in
+# Two-limit Tobit version of the m_capped coefficient plot in
 # belief_update_analysis.R. Outcome: Home_Crime_Handling_Post (0-100 slider,
 # censored at both ends), with the pre-treatment level as a covariate. Plots the
 # standardized CG x Treatment and RG x Treatment interaction coefficients with
@@ -94,7 +94,7 @@ coef_plot_tobit <- data.frame(
     conf.low95 = estimate - qnorm(0.975) * std.error, # 95% (thick bar)
     conf.high95 = estimate + qnorm(0.975) * std.error
   ) %>%
-  select(-sd)
+  dplyr::select(-sd)
 
 inc_update_coef_plot_tobit <- ggplot(
   subset(coef_plot_tobit, treatment != "control2"),
@@ -205,7 +205,7 @@ coef_plot_tobit_party <- data.frame(
     conf.low95 = estimate - qnorm(0.975) * std.error, # 95% (thick bar)
     conf.high95 = estimate + qnorm(0.975) * std.error
   ) %>%
-  select(-sd)
+  dplyr::select(-sd)
 
 party_update_coef_plot_tobit <- ggplot(
   subset(coef_plot_tobit_party, treatment != "control2"),

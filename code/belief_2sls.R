@@ -73,11 +73,11 @@ panel$Vote_home_post <- as.integer(
     panel$home_coalition == panel$coalition_post
 )
 
-# Keep complete cases on the variables the 2SLS uses. crime_gap_wins (winsorized
-# level-gap) and comp_party_known mirror the controls in belief_update_analysis.R.
+# Keep complete cases on the variables the 2SLS uses. crime_gap_capped (top-coded
+# level-gap) and coalition_pre mirror the controls in belief_update_analysis.R.
 model_vars <- c(
   "rank_update", "rank_gap", "comparison",
-  "crime_gap_wins", "comp_party_known", "coalition_pre",
+  "crime_gap_capped", "coalition_pre",
   "Home_Crime_Handling_Change", "Vote_home_post", "T2", "T3", "T4"
 )
 panel <- panel[stats::complete.cases(panel[model_vars]), ]
@@ -95,37 +95,37 @@ first_stage <- lm_robust(
 
 # ── 5. 2SLS — pooled comparison instrument ────────────────────────────────────
 # Endogenous: rank_update. Exogenous controls: rank_gap, comparison, the
-# crime-level-gap channel (crime_gap_wins and its comparison interaction), and
-# comp_party_known. Excluded instrument: rank_gap:comparison. (estimatr:
+# crime-level-gap channel (crime_gap_capped and its comparison interaction), and
+# coalition_pre. Excluded instrument: rank_gap:comparison. (estimatr:
 # regressors | instruments, where the exogenous controls instrument themselves.)
 iv_handling <- iv_robust(
   Home_Crime_Handling_Change ~ rank_update + rank_gap + comparison +
-    crime_gap_wins + crime_gap_wins:comparison + comp_party_known +
+    crime_gap_capped + crime_gap_capped:comparison +
     as.factor(coalition_pre) |
-    rank_gap + comparison + crime_gap_wins + crime_gap_wins:comparison +
-      comp_party_known + as.factor(coalition_pre) + rank_gap:comparison,
+    rank_gap + comparison + crime_gap_capped + crime_gap_capped:comparison +
+      as.factor(coalition_pre) + rank_gap:comparison,
   data = panel, se_type = "HC2", diagnostics = TRUE
 )
 
 iv_vote <- iv_robust(
   Vote_home_post ~ rank_update + rank_gap + comparison +
-    crime_gap_wins + crime_gap_wins:comparison + comp_party_known +
+    crime_gap_capped + crime_gap_capped:comparison +
     as.factor(coalition_pre) |
-    rank_gap + comparison + crime_gap_wins + crime_gap_wins:comparison +
-      comp_party_known + as.factor(coalition_pre) + rank_gap:comparison,
+    rank_gap + comparison + crime_gap_capped + crime_gap_capped:comparison +
+      as.factor(coalition_pre) + rank_gap:comparison,
   data = panel, se_type = "HC2", diagnostics = TRUE
 )
 
 # ── 6. Naive OLS analogue (treats rank_update as exogenous) for contrast ──────
 ols_handling <- lm_robust(
   Home_Crime_Handling_Change ~ rank_update + rank_gap + comparison +
-    crime_gap_wins + crime_gap_wins:comparison + comp_party_known +
+    crime_gap_capped + crime_gap_capped:comparison +
     as.factor(coalition_pre),
   data = panel, se_type = "HC2"
 )
 ols_vote <- lm_robust(
   Vote_home_post ~ rank_update + rank_gap + comparison +
-    crime_gap_wins + crime_gap_wins:comparison + comp_party_known +
+    crime_gap_capped + crime_gap_capped:comparison +
     as.factor(coalition_pre),
   data = panel, se_type = "HC2"
 )
@@ -134,22 +134,22 @@ ols_vote <- lm_robust(
 # Three excluded instruments for one endogenous regressor -> a Sargan over-ID
 # test. NB: over-ID rejection here can reflect heterogeneous arm effects or an
 # exclusion violation (e.g., party cue in T3/T4), not only invalid instruments.
-# crime_gap_wins is interacted per arm to mirror belief_update_analysis.R.
+# crime_gap_capped is interacted per arm to mirror belief_update_analysis.R.
 iv_handling_arms <- iv_robust(
   Home_Crime_Handling_Change ~ rank_update + rank_gap + T2 + T3 + T4 +
-    crime_gap_wins + crime_gap_wins:T2 + crime_gap_wins:T3 +
-    crime_gap_wins:T4 + comp_party_known + as.factor(coalition_pre) |
-    rank_gap + T2 + T3 + T4 + crime_gap_wins + crime_gap_wins:T2 +
-      crime_gap_wins:T3 + crime_gap_wins:T4 + comp_party_known +
+    crime_gap_capped + crime_gap_capped:T2 + crime_gap_capped:T3 +
+    crime_gap_capped:T4 + as.factor(coalition_pre) |
+    rank_gap + T2 + T3 + T4 + crime_gap_capped + crime_gap_capped:T2 +
+      crime_gap_capped:T3 + crime_gap_capped:T4 +
       as.factor(coalition_pre) + rank_gap:T2 + rank_gap:T3 + rank_gap:T4,
   data = panel, se_type = "HC2", diagnostics = TRUE
 )
 iv_vote_arms <- iv_robust(
   Vote_home_post ~ rank_update + rank_gap + T2 + T3 + T4 +
-    crime_gap_wins + crime_gap_wins:T2 + crime_gap_wins:T3 +
-    crime_gap_wins:T4 + comp_party_known + as.factor(coalition_pre) |
-    rank_gap + T2 + T3 + T4 + crime_gap_wins + crime_gap_wins:T2 +
-      crime_gap_wins:T3 + crime_gap_wins:T4 + comp_party_known +
+    crime_gap_capped + crime_gap_capped:T2 + crime_gap_capped:T3 +
+    crime_gap_capped:T4 + as.factor(coalition_pre) |
+    rank_gap + T2 + T3 + T4 + crime_gap_capped + crime_gap_capped:T2 +
+      crime_gap_capped:T3 + crime_gap_capped:T4 +
       as.factor(coalition_pre) + rank_gap:T2 + rank_gap:T3 + rank_gap:T4,
   data = panel, se_type = "HC2", diagnostics = TRUE
 )

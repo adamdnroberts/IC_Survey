@@ -36,7 +36,7 @@ arm_colors <- c(
 panel_with_failures <- filter(panel_full, muni_changed == 0)
 panel <- filter(
   panel_with_failures,
-  Attention_Check == "somewhat_agree" #& Treatment_Group != "control2"
+  Attention_Check == "somewhat_agree" & Treatment_Group != "control2"
 )
 
 m_log <- lm_robust(
@@ -79,7 +79,7 @@ extract_coef_plot <- function(model, cg_pattern, model_label, cg_sd, rg_sd) {
       conf.low95 = estimate - qt(0.975, df) * std.error,
       conf.high95 = estimate + qt(0.975, df) * std.error
     ) %>%
-    select(-sd)
+    dplyr::select(-sd)
 }
 
 coef_plot_data <- extract_coef_plot(
@@ -298,7 +298,7 @@ panel$party_minus_opp_top_post <- panel$party_post - panel$opp_top_post
 
 # Fit the m_log spec on a post-on-post difference outcome, controlling for both
 # pre-treatment levels separately (reference pre + opposition pre).
-fit_ancova <- function(outcome, ref_pre, opp_pre) {
+fit_ancova <- function(outcome, ref_pre, opp_pre, data = panel) {
   fml <- as.formula(paste0(
     outcome,
     " ~ ",
@@ -309,7 +309,7 @@ fit_ancova <- function(outcome, ref_pre, opp_pre) {
     " log_crime_gap * as.factor(Treatment_Group) +",
     " rank_gap * as.factor(Treatment_Group) + coalition_pre"
   ))
-  lm_robust(fml, alpha = ci_alpha, data = panel, se_type = "HC2")
+  lm_robust(fml, alpha = ci_alpha, data = data, se_type = "HC2")
 }
 
 # Build, print, and save the standardized interaction coefficient plot.
@@ -399,6 +399,175 @@ save_coef_plot(
   ),
   "latex/images/incumbent_minus_other_coalitions_update_coef_plot.pdf"
 )
+
+# ── Comparison-arm refit: same model, T1 dropped from the estimation sample ───
+# T1 delivers no cross-municipality comparison, so it carries no information
+# about the other coalitions this outcome is built from. Restricting estimation
+# to the comparison arms follows the specification used for the other
+# coalition-level outcomes; Control remains the omitted arm.
+panel_comparison <- filter(panel, Treatment_Group != "T1")
+
+m_inc_other_comp <- fit_ancova(
+  "inc_minus_opp_avg_post",
+  "inc_pre",
+  "opp_avg_pre",
+  data = panel_comparison
+)
+
+# ── LaTeX table: CG x treatment interactions, comparison arms ────────────────
+# Reports the crime-level-gap x arm interactions (the treatment effects
+# conditional on the content of the information). The RG interactions,
+# pre-treatment levels, arm main effects, and coalition_pre controls are
+# estimated but not shown.
+
+fmt_num <- function(x) {
+  ifelse(is.na(x), "---", sprintf("%.2f", x))
+}
+
+fmt_p <- function(p) {
+  ifelse(is.na(p), "---", ifelse(p < 0.001, "$<$0.001", sprintf("%.3f", p)))
+}
+
+# lm_robust term names -> readable labels, e.g.
+# "log_crime_gap:as.factor(Treatment_Group)T4" -> "CG $\times$ T4".
+clean_term <- function(x) {
+  x <- gsub("as\\.factor\\(Treatment_Group\\)", "", x)
+  x <- gsub("log_crime_gap", "CG", x)
+  x <- gsub("rank_gap", "RG", x)
+  x <- gsub(":", " $\\\\times$ ", x)
+  x <- gsub("_", "\\\\_", x)
+  x
+}
+
+# Keep the CG x arm interactions, in model order (T2 to T4). Rescale to a 1 SD
+# increase in the crime-level gap; scaling the estimate and its standard error
+# by the same constant leaves the t statistic and p-value unchanged.
+td_inc_other <- tidy(m_inc_other_comp) %>%
+  filter(grepl(
+    "^log_crime_gap:as\\.factor\\(Treatment_Group\\)T[234]$",
+    term
+  )) %>%
+  mutate(
+    estimate = estimate * log_crime_gap_sd,
+    std.error = std.error * log_crime_gap_sd
+  )
+
+if (nrow(td_inc_other) != 3) {
+  stop(
+    "Expected 3 CG x comparison-arm interactions, got ",
+    nrow(td_inc_other),
+    " — check the Treatment_Group levels in the estimation sample."
+  )
+}
+
+coef_rows <- paste0(
+  clean_term(td_inc_other$term),
+  " & ",
+  fmt_num(td_inc_other$estimate),
+  " & ",
+  fmt_num(td_inc_other$std.error),
+  " & ",
+  fmt_p(td_inc_other$p.value),
+  " \\\\"
+)
+
+table_tex <- paste0(
+  "\\begin{table}[htpb]\n",
+  "\\centering\n",
+  "\\small\n",
+  "\\caption{Incumbent rating minus the mean rating of the other coalitions\n",
+  "(post-treatment levels), regressed on both pre-treatment levels, the\n",
+  "perception gaps interacted with treatment arm, and pre-treatment coalition\n",
+  "preference; only the crime-level gap ($CG$) $\\times$ arm interactions are\n",
+  "shown. Coefficients are standardized to a 1 SD increase in $CG$. HC2 robust\n",
+  "standard errors. Sample: home municipality unchanged, attention-check\n",
+  "passers, Control2 and T1 excluded (T1 delivers no cross-municipality\n",
+  "comparison); Control is the omitted arm.}\n",
+  "\\begin{tabular}{lrrr}\n",
+  "\\toprule\n",
+  "\\textbf{Term} & \\textbf{Estimate} & \\textbf{Std.\\ Error} & ",
+  "\\textbf{$p$} \\\\\n",
+  "\\midrule\n",
+  paste(coef_rows, collapse = "\n"),
+  "\n",
+  "\\midrule\n",
+  "$N$ & \\multicolumn{3}{l}{",
+  m_inc_other_comp$nobs,
+  "} \\\\\n",
+  "$R^2$ & \\multicolumn{3}{l}{",
+  fmt_num(m_inc_other_comp$r.squared),
+  "} \\\\\n",
+  "\\bottomrule\n",
+  "\\end{tabular}\n",
+  "\\label{tab:inc_vs_other_coalitions}\n",
+  "\\end{table}\n"
+)
+
+dir.create("latex/tables", showWarnings = FALSE, recursive = TRUE)
+writeLines(table_tex, "latex/tables/inc_vs_other_coalitions.tex")
+cat("Wrote latex/tables/inc_vs_other_coalitions.tex\n")
+
+# ── Test: is the CG x T4 interaction different from the other arms? ──────────
+# The table shows T4 alone separated from zero, which is not the same as T4
+# differing from the other arms. These are two-sided tests of that stronger
+# claim: difference = b_T4 - b_Tx, SE from the HC2 variance-covariance matrix
+# (same construction as difference_tests_vote_analysis.R). Reported on the
+# standardized 1 SD CG scale used in the table; scaling the difference and its
+# SE by the same constant leaves t and p unchanged.
+
+cg_term <- function(g) paste0("log_crime_gap:as.factor(Treatment_Group)", g)
+
+cg_contrasts <- function(model, others, base = "T4") {
+  b <- coef(model)
+  V <- vcov(model)
+  base_term <- cg_term(base)
+  stopifnot(all(c(base_term, sapply(others, cg_term)) %in% names(b)))
+  bind_rows(lapply(others, function(g) {
+    tx <- cg_term(g)
+    diff <- b[[base_term]] - b[[tx]]
+    se <- sqrt(V[base_term, base_term] + V[tx, tx] - 2 * V[base_term, tx])
+    tstat <- diff / se
+    data.frame(
+      comparison = paste0(base, " - ", g),
+      base_coef = b[[base_term]] * log_crime_gap_sd,
+      other_coef = b[[tx]] * log_crime_gap_sd,
+      diff = diff * log_crime_gap_sd,
+      std.error = se * log_crime_gap_sd,
+      t = tstat,
+      p_two_sided = 2 * pt(-abs(tstat), model$df.residual)
+    )
+  }))
+}
+
+cat("\nH0: (CG x T4) - (CG x Tx) = 0   vs.  H1: != 0\n")
+cat("Comparison-arm model (matches the table); per 1 SD increase in CG\n")
+print(
+  cg_contrasts(m_inc_other_comp, c("T2", "T3")),
+  row.names = FALSE,
+  digits = 4
+)
+
+# The T4-vs-T1 contrast needs T1 in the sample, so it comes from the
+# full-sample fit rather than the restricted one behind the table.
+cat("\nSame test against T1, from the full-sample model\n")
+print(
+  cg_contrasts(m_inc_other, c("T1", "T2", "T3")),
+  row.names = FALSE,
+  digits = 4
+)
+
+# Joint test that the comparison arms' CG interactions are all equal, i.e. that
+# the content of the information matters no differently across them.
+cg_joint <- car::linearHypothesis(
+  m_inc_other_comp,
+  c(
+    paste(cg_term("T4"), "=", cg_term("T2")),
+    paste(cg_term("T4"), "=", cg_term("T3"))
+  )
+)
+
+cat("\nJoint test (comparison arms): CG x T2 = CG x T3 = CG x T4\n")
+print(cg_joint, digits = 4)
 
 m_inc_highest <- fit_ancova("inc_minus_opp_top_post", "inc_pre", "opp_top_pre")
 save_coef_plot(

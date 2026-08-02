@@ -37,7 +37,7 @@ robo_rate <- readRDS("data/robo_2025.rds") |>
   mutate(
     CVEGEO = formatC(Cve..Municipio, width = 5, flag = "0", format = "d")
   ) |>
-  select(CVEGEO, rate_per_100k)
+  dplyr::select(CVEGEO, rate_per_100k)
 
 # ── 2. Standardize CVEGEOs and join robbery rates ─────────────────────────────
 
@@ -221,6 +221,18 @@ d <- d |>
     T4 = as.integer(Treatment_Group == "T4")
   )
 
+# Crime-rate (level) log-ratio accuracy — mirrors crime_rate_accuracy_update.R
+# so the combined plot below shows identical estimates. Log-ratio compresses the
+# heavy right skew that leaves the raw-level |error| measure underpowered.
+d <- d |>
+  mutate(
+    est_pre = as.numeric(Robbery_Estimate),
+    est_post = as.numeric(Robbery_Estimate_Post),
+    lg_pre = -abs(log10((est_pre + 1) / (home_rate + 1))),
+    lg_post = -abs(log10((est_post + 1) / (home_rate + 1))),
+    d_lg = lg_post - lg_pre
+  )
+
 # ── 7. Fit Equation 1 for each accuracy outcome ───────────────────────────────
 # (Robbery-rate level accuracy lives in crime_rate_accuracy_update.R.)
 
@@ -367,28 +379,64 @@ plot_coef_df <- do.call(
     arm = factor(arm, levels = c("control2", "T1", "T2", "T3", "T4"))
   )
 
+# ── Combined coefficient plot: relative ranking + crime-rate accuracy ─────────
+# The poster split these into two panels; this recombines them into one figure.
+# Left panel = crime-rate accuracy (change in log-ratio accuracy),
+# right panel = relative crime ranking accuracy (change in Kendall tau-b).
+# Plot models exclude control2 — control is the sole baseline (T1-T4 shown).
+
+d_plot <- filter(d, Treatment_Group != "control2")
+
+fit_plot <- function(outcome) {
+  sub <- d_plot[!is.na(d_plot[[outcome]]), ]
+  lm_robust(
+    as.formula(paste0(outcome, " ~ T1 + T2 + T3 + T4")),
+    data = sub,
+    se_type = "HC2"
+  )
+}
+
+coef_row <- function(model, panel_label) {
+  b <- coef(model)[c("T1", "T2", "T3", "T4")]
+  se <- sqrt(diag(vcov(model)))[c("T1", "T2", "T3", "T4")]
+  data.frame(
+    arm = factor(c("T1", "T2", "T3", "T4"), levels = c("T1", "T2", "T3", "T4")),
+    estimate = b,
+    lo95 = b - 1.96 * se,
+    hi95 = b + 1.96 * se,
+    panel = panel_label,
+    row.names = NULL
+  )
+}
+
+combined_coef_df <- bind_rows(
+  coef_row(fit_plot("d_lg"), "Crime rate accuracy"),
+  coef_row(fit_plot("delta_tau"), "Relative crime ranking accuracy")
+) |>
+  mutate(
+    panel = factor(
+      panel,
+      levels = c("Crime rate accuracy", "Relative crime ranking accuracy")
+    )
+  )
+
 manip_coef_plot <- ggplot(
-  filter(
-    plot_coef_df,
-    outcome == "Change in Kendall tau-b (post - pre)" & arm != "control2"
-  ),
+  combined_coef_df,
   aes(x = estimate, y = arm, color = arm)
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_linerange(aes(xmin = lo99, xmax = hi99), linewidth = 0.5) +
-  geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 2, alpha = 0.4) +
+  geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 0.5) +
   geom_point(size = 2.5) +
   scale_color_manual(values = arm_colors, guide = "none") +
-  #facet_wrap(~outcome, scales = "free", ncol = 2) +
+  facet_wrap(~panel, scales = "free_x") +
   labs(
     x = "Change in Accuracy (Post - Pre)",
     y = NULL,
-    title = "Relative crime ranking accuracy",
-    caption = paste0("Thick bar 95% CI, thin 99% CI. n = ", nrow(d))
+    caption = paste0("95% CIs. n = ", nrow(d_plot))
   ) +
   theme_minimal() +
   theme(
-    strip.text = element_text(size = 9),
+    strip.text = element_text(size = 10),
     axis.text.y = element_text(size = 9)
   )
 
@@ -397,7 +445,7 @@ print(manip_coef_plot)
 ggsave(
   "latex/images/manip_check_coef_plot.pdf",
   plot = manip_coef_plot,
-  width = 3.5,
+  width = 7,
   height = 4
 )
 

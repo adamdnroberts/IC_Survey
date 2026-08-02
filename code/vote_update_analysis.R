@@ -1,7 +1,7 @@
 library(estimatr)
 library(dplyr)
 library(ggplot2)
-
+#TO DO: add robustness check using asinh_crime_gap instead of log_crime_gap
 load("~/IC_Survey/data/survey_panel_dataset.Rdata")
 
 if (!exists("ci_alpha")) {
@@ -37,13 +37,13 @@ panel <- filter(
   Attention_Check == "somewhat_agree" & Treatment_Group != "control2"
 )
 
-crime_gap_wins_sd <- sd(panel$crime_gap_wins, na.rm = TRUE)
+crime_gap_capped_sd <- sd(panel$crime_gap_capped, na.rm = TRUE)
 log_crime_gap_sd <- sd(panel$log_crime_gap, na.rm = TRUE)
 rank_gap_sd <- sd(panel$rank_gap, na.rm = TRUE)
 
 m_vote <- lm_robust(
   Vote_home_post ~
-    crime_gap_wins *
+    crime_gap_capped *
     as.factor(Treatment_Group) +
     rank_gap * as.factor(Treatment_Group) +
     as.factor(coalition_pre) +
@@ -60,17 +60,17 @@ coef_plot_data_vote <- tidy(m_vote, conf.int = TRUE) %>%
   filter(grepl("Treatment_Group", term) & grepl(":", term)) %>%
   mutate(
     group = case_when(
-      grepl("^crime_gap_wins:", term) ~ "CG × Treatment",
+      grepl("^crime_gap_capped:", term) ~ "CG × Treatment",
       TRUE ~ "RG × Treatment"
     ),
     treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .),
-    sd = if_else(group == "CG × Treatment", crime_gap_wins_sd, rank_gap_sd),
+    sd = if_else(group == "CG × Treatment", crime_gap_capped_sd, rank_gap_sd),
     across(c(estimate, conf.low, conf.high, std.error), ~ . * sd),
     conf.low95 = estimate - qt(0.975, df) * std.error,
     conf.high95 = estimate + qt(0.975, df) * std.error
   ) %>%
   #filter(treatment != "control2") %>%
-  select(-sd)
+  dplyr::select(-sd)
 
 vote_coef_update <- ggplot(
   subset(coef_plot_data_vote),
@@ -78,18 +78,10 @@ vote_coef_update <- ggplot(
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
   geom_errorbar(
-    aes(xmin = conf.low, xmax = conf.high),
-    orientation = "y",
-    width = 0,
-    linewidth = 0.5,
-    position = position_dodge(width = 0.5)
-  ) +
-  geom_errorbar(
     aes(xmin = conf.low95, xmax = conf.high95),
     orientation = "y",
     width = 0,
-    linewidth = 2,
-    alpha = 0.4,
+    linewidth = 0.5,
     position = position_dodge(width = 0.5)
   ) +
   geom_point(position = position_dodge(width = 0.5)) +
@@ -99,14 +91,14 @@ vote_coef_update <- ggplot(
     y = "Treatment group",
     x = "Standardized coefficient (1 SD increase in predictor)",
     #title = "Incumbent vote post: interaction coefficients",
-    caption = paste0("N = ", m_vote$nobs, ", thick bar 95% CI, thin 99% CI")
+    caption = paste0("N = ", m_vote$nobs, ", bars 95% CI")
   ) +
   theme_minimal()
 
 print(vote_coef_update)
 
 ggsave(
-  "C:/Users/adamd/Dropbox/Apps/Overleaf/PolMeth 2026 Poster/figures/vote_coef_update.pdf",
+  "C:/Users/adamd/Documents/IC_Survey/latex/images/vote_coef_update.pdf",
   plot = vote_coef_update,
   width = 7,
   height = 4.5
@@ -116,10 +108,12 @@ m_log <- lm_robust(
     log_crime_gap *
     as.factor(Treatment_Group) +
     rank_gap * as.factor(Treatment_Group) +
+    # home_rate +
+    # actual_rank +
     # as.numeric(MORENA_Crime_Rating_Pre) +
     # as.numeric(MC_Crime_Rating_Pre) +
     # as.numeric(Coalition_PAN_PRI_PRD_Crime_Rating_Pre) +
-    #as.factor(coalition_pre) +
+    as.factor(coalition_pre) +
     inc_vote,
   alpha = ci_alpha,
   data = panel,
@@ -140,7 +134,7 @@ coef_plot_data_log <- tidy(m_log, conf.int = TRUE) %>%
     conf.high95 = estimate + qt(0.975, df) * std.error
   ) %>%
   filter(treatment != "control2") %>%
-  select(-sd)
+  dplyr::select(-sd)
 
 vote_coef_update_log <- ggplot(
   subset(coef_plot_data_log),
@@ -148,18 +142,10 @@ vote_coef_update_log <- ggplot(
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
   geom_errorbar(
-    aes(xmin = conf.low, xmax = conf.high),
-    orientation = "y",
-    width = 0,
-    linewidth = 0.5,
-    position = position_dodge(width = 0.5)
-  ) +
-  geom_errorbar(
     aes(xmin = conf.low95, xmax = conf.high95),
     orientation = "y",
     width = 0,
-    linewidth = 2,
-    alpha = 0.4,
+    linewidth = 0.5,
     position = position_dodge(width = 0.5)
   ) +
   geom_point(position = position_dodge(width = 0.5)) +
@@ -169,28 +155,123 @@ vote_coef_update_log <- ggplot(
     y = "Treatment group",
     x = "Standardized coefficient (1 SD increase in predictor)",
     #title = "Incumbent vote post: interaction coefficients",
-    caption = paste0("N = ", m_log$nobs, ", thick bar 95% CI, thin 99% CI")
+    caption = paste0("N = ", m_log$nobs, ", bars 95% CI")
   ) +
   theme_minimal()
 
 print(vote_coef_update_log)
 
+# Doubling interpretation: scale CG coefficients by log(2) instead of SD
+coef_plot_data_log_doubling <- tidy(m_log, conf.int = TRUE) %>%
+  filter(grepl("Treatment_Group", term) & grepl(":", term)) %>%
+  mutate(
+    group = case_when(
+      grepl("^log_crime_gap:", term) ~ "CG × Treatment",
+      TRUE ~ "RG × Treatment"
+    ),
+    treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .),
+    scale_factor = if_else(group == "CG × Treatment", log(2), rank_gap_sd),
+    across(c(estimate, conf.low, conf.high, std.error), ~ . * scale_factor),
+    conf.low95 = estimate - qt(0.975, df) * std.error,
+    conf.high95 = estimate + qt(0.975, df) * std.error
+  ) %>%
+  filter(treatment != "control2") %>%
+  dplyr::select(-scale_factor)
+
+vote_coef_update_log_doubling <- ggplot(
+  coef_plot_data_log_doubling,
+  aes(y = treatment, x = estimate, color = treatment)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_errorbar(
+    aes(xmin = conf.low95, xmax = conf.high95),
+    orientation = "y",
+    width = 0,
+    linewidth = 0.5,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  scale_color_manual(values = arm_colors, guide = "none") +
+  facet_wrap(~group, scales = "free_x") +
+  labs(
+    y = "Treatment group",
+    x = "Effect of doubling perception gap (CG) / 1 SD increase (RG)",
+    caption = paste0("N = ", m_log$nobs, ", bars 95% CI")
+  ) +
+  theme_minimal()
+
+print(vote_coef_update_log_doubling)
+
 ggsave(
-  "latex/images/vote_coef_update_log.pdf",
-  plot = vote_coef_update_log,
+  "latex/images/vote_coef_update_log_doubling.pdf",
+  plot = vote_coef_update_log_doubling,
   width = 7,
   height = 4.5
 )
 
+# Same coefficients as vote_coef_update_log, but one standalone plot per gap
+# measure instead of a two-panel facet.
+build_log_gap_plot <- function(group_label, x_label) {
+  ggplot(
+    subset(coef_plot_data_log, group == group_label),
+    aes(y = treatment, x = estimate, color = treatment)
+  ) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+    geom_errorbar(
+      aes(xmin = conf.low95, xmax = conf.high95),
+      orientation = "y",
+      width = 0,
+      linewidth = 0.5,
+      position = position_dodge(width = 0.5)
+    ) +
+    geom_point(position = position_dodge(width = 0.5)) +
+    scale_color_manual(values = arm_colors, guide = "none") +
+    labs(
+      y = "Treatment group",
+      x = x_label,
+      title = group_label,
+      caption = paste0("N = ", m_log$nobs, ", bars 95% CI")
+    ) +
+    theme_minimal()
+}
+
+vote_coef_update_log_cg <- build_log_gap_plot(
+  "CG × Treatment",
+  "Standardized coefficient (1 SD increase in crime gap)"
+)
+
+vote_coef_update_log_rg <- build_log_gap_plot(
+  "RG × Treatment",
+  "Standardized coefficient (1 SD increase in rank gap)"
+)
+
+print(vote_coef_update_log_cg)
+print(vote_coef_update_log_rg)
+
 # Also write to the Dropbox poster project so the poster picks up the updated
 # figure directly (matches the vote_coef_update.pdf save above).
 poster_fig_dir <- "C:/Users/adamd/Dropbox/Apps/Overleaf/PolMeth 2026 Poster/figures"
-ggsave(
-  file.path(poster_fig_dir, "vote_coef_update_log.pdf"),
-  plot = vote_coef_update_log,
-  width = 7,
-  height = 4.5
-)
+
+for (dir in c("latex/images", poster_fig_dir)) {
+  ggsave(
+    file.path(dir, "vote_coef_update_log.pdf"),
+    plot = vote_coef_update_log,
+    width = 7,
+    height = 4.5
+  )
+  ggsave(
+    file.path(dir, "vote_coef_update_log_cg.pdf"),
+    plot = vote_coef_update_log_cg,
+    width = 4.5,
+    height = 4.5
+  )
+  ggsave(
+    file.path(dir, "vote_coef_update_log_rg.pdf"),
+    plot = vote_coef_update_log_rg,
+    width = 4.5,
+    height = 4.5
+  )
+}
 
 #updating curve
 panel$comparison_treat <- ifelse(
@@ -201,7 +282,7 @@ panel$comparison_treat <- ifelse(
 
 m_vote_pooled_comparisons <- lm_robust(
   Vote_home_post ~
-    crime_gap_wins *
+    crime_gap_capped *
     as.factor(Treatment_Group) +
     rank_gap * comparison_treat +
     as.factor(coalition_pre),
@@ -255,14 +336,14 @@ build_interaction_coefs <- function(model, rg_sd, model_label) {
         "RG × Treatment"
       ),
       treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .),
-      sd = if_else(group == "CG × Treatment", crime_gap_wins_sd, rg_sd),
+      sd = if_else(group == "CG × Treatment", crime_gap_capped_sd, rg_sd),
       across(c(estimate, conf.low, conf.high, std.error), ~ . * sd),
       conf.low95 = estimate - qt(0.975, df) * std.error,
       conf.high95 = estimate + qt(0.975, df) * std.error,
       model = model_label
     ) %>%
     filter(treatment != "control2") %>%
-    select(-sd)
+    dplyr::select(-sd)
 }
 
 coef_compare_25 <- bind_rows(
@@ -279,18 +360,10 @@ vote_coef_compare_25 <- ggplot(
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
   geom_errorbar(
-    aes(xmin = conf.low, xmax = conf.high),
-    orientation = "y",
-    width = 0,
-    linewidth = 0.5,
-    position = position_dodge(width = 0.5)
-  ) +
-  geom_errorbar(
     aes(xmin = conf.low95, xmax = conf.high95),
     orientation = "y",
     width = 0,
-    linewidth = 2,
-    alpha = 0.4,
+    linewidth = 0.5,
     position = position_dodge(width = 0.5)
   ) +
   geom_point(position = position_dodge(width = 0.5)) +
@@ -308,7 +381,7 @@ vote_coef_compare_25 <- ggplot(
       " (original) / ",
       m_vote_25$nobs,
       " (25%)",
-      ", thick bar 95% CI, thin 99% CI"
+      ", bars 95% CI"
     )
   ) +
   theme_minimal()

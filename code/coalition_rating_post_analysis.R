@@ -1,6 +1,6 @@
 # Replicates the main analysis (m_log) in belief_update_analysis.R —
 # Home_Crime_Handling_Change ~ log_crime_gap * Treatment + rank_gap * Treatment
-# + comp_party_known, HC2 robust, sample = home muni unchanged, attention pass,
+# + coalition_pre, HC2 robust, sample = home muni unchanged, attention pass,
 # control2 excluded — but with three post-treatment COALITION crime-rating levels
 # as the outcomes:
 #   Coalition_PAN_PRI_PRD_Crime_Rating_Post, MORENA_Crime_Rating_Post,

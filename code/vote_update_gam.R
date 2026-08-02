@@ -1,7 +1,8 @@
-# GAM updating curves for incumbent vote over the rank gap.
+# GAM updating curves for incumbent vote over the (log) crime gap.
 # Split out from vote_update_analysis.R. Self-contained: builds the same panel,
-# outcome, and controls, then fits logit GAMs with a by-arm smooth on rank_gap
-# and plots fitted incumbent-vote curves.
+# outcome, and controls, then fits logit GAMs with by-arm smooths on rank_gap and
+# log_crime_gap and plots fitted incumbent-vote curves over log_crime_gap (with
+# rank_gap held at its mean).
 
 library(dplyr)
 library(ggplot2)
@@ -34,11 +35,11 @@ panel$inc_vote <- as.numeric(panel$coalition_pre == panel$home_coalition)
 # ── Update curve relative to control: pooled comparison arms (T2–T4) ───────────
 # Logit GAM of incumbent-vote probability over rank_gap for three groups:
 # control (weather placebo, home-only), T1 (plain info), and Comparison
-# (T2/T3/T4 pooled), with a by-group smooth on rank_gap plus s(crime_gap_wins)
+# (T2/T3/T4 pooled), with a by-group smooth on rank_gap plus s(crime_gap_capped)
 # and coalition_pre. T1 is kept as its own arm in the fit but not plotted (its
 # updating is essentially identical to control). We plot the Comparison group's
 # *difference* in predicted probability from control, P(group) - P(control), as
-# rank_gap varies (control is the zero line). crime_gap_wins is held at its mean
+# rank_gap varies (control is the zero line). crime_gap_capped is held at its mean
 # and coalition_pre at its mode. rank_gap is discrete (integers -4..4), so k = 5.
 curve_arms <- c("control", "T1", "T2", "T3", "T4")
 arm_group_levels <- c("control", "T1", "Comparison")
@@ -63,7 +64,7 @@ m_vote_gam <- gam(
   Vote_home_post ~
     arm_group +
     s(rank_gap, by = arm_group, k = 5) +
-    s(crime_gap_wins, by = arm_group, k = 5) +
+    s(log_crime_gap, by = arm_group, k = 5) +
     coalition_pre +
     inc_vote,
   family = binomial(),
@@ -73,8 +74,8 @@ m_vote_gam <- gam(
 
 summary(m_vote_gam)
 
-# Fitted incumbent-vote probability for the Comparison group over rank_gap, with
-# crime_gap_wins at its mean and coalition_pre at its mode. 95% and 99% CIs from
+# Fitted incumbent-vote probability for the Comparison group over log_crime_gap,
+# with rank_gap at its mean and coalition_pre at its mode. 95% and 99% CIs from
 # the link scale, back-transformed through the logit link.
 crit95 <- qnorm(0.975)
 crit99 <- qnorm(0.995)
@@ -84,18 +85,18 @@ crit99 <- qnorm(0.995)
 inc_vals <- c(0, 1)
 fit_curve <- bind_rows(lapply(diff_groups, function(g) {
   # Predict only across the range where this arm actually has data, so the curve
-  # isn't extrapolated into rank_gap values the arm never took.
-  g_rank <- gam_data$rank_gap[gam_data$arm_group == g]
-  rank_seq <- seq(
-    min(g_rank, na.rm = TRUE),
-    max(g_rank, na.rm = TRUE),
+  # isn't extrapolated into log_crime_gap values the arm never took.
+  g_cg <- gam_data$log_crime_gap[gam_data$arm_group == g]
+  cg_seq <- seq(
+    min(g_cg, na.rm = TRUE),
+    max(g_cg, na.rm = TRUE),
     length.out = 100
   )
   bind_rows(lapply(inc_vals, function(iv) {
     nd <- data.frame(
-      rank_gap = rank_seq,
+      log_crime_gap = cg_seq,
+      rank_gap = mean(gam_data$rank_gap, na.rm = TRUE),
       arm_group = factor(g, levels = arm_group_levels),
-      crime_gap_wins = mean(gam_data$crime_gap_wins, na.rm = TRUE),
       coalition_pre = factor(
         coalition_pre_mode,
         levels = levels(gam_data$coalition_pre)
@@ -104,7 +105,7 @@ fit_curve <- bind_rows(lapply(diff_groups, function(g) {
     )
     pr <- predict(m_vote_gam, newdata = nd, type = "link", se.fit = TRUE)
     data.frame(
-      rank_gap = rank_seq,
+      log_crime_gap = cg_seq,
       arm_group = factor(g, levels = diff_groups),
       inc_vote = factor(iv, levels = inc_vals),
       fit = plogis(pr$fit),
@@ -119,11 +120,16 @@ fit_curve <- bind_rows(lapply(diff_groups, function(g) {
 inc_colors <- c("0" = "grey55", "1" = "black")
 inc_linetypes <- c("0" = "dashed", "1" = "solid")
 
-# Marginal histogram of the Comparison group's rank_gap values, drawn as a thin
-# strip just below the curve (rank_gap is discrete, so one bar per integer).
-rug_counts <- gam_data %>%
-  filter(arm_group == "Comparison") %>%
-  count(rank_gap)
+# Marginal histogram of the Comparison group's log_crime_gap values, drawn as a
+# thin strip just below the curve (log_crime_gap is continuous, so bin it).
+cg_vals <- gam_data$log_crime_gap[gam_data$arm_group == "Comparison"]
+cg_vals <- cg_vals[!is.na(cg_vals)]
+h_cg <- hist(cg_vals, breaks = 30, plot = FALSE)
+rug_counts <- data.frame(
+  xmin = h_cg$breaks[-length(h_cg$breaks)],
+  xmax = h_cg$breaks[-1],
+  n = h_cg$counts
+)
 
 y_lo <- min(fit_curve$lwr95)
 y_hi <- max(fit_curve$upr95)
@@ -138,14 +144,14 @@ rug_counts <- rug_counts %>%
 # In-plot labels for each curve (placed at the left end), in lieu of a legend.
 inc_curve_labels <- fit_curve %>%
   group_by(inc_vote) %>%
-  filter(rank_gap == min(rank_gap)) %>%
+  filter(log_crime_gap == min(log_crime_gap)) %>%
   ungroup() %>%
   mutate(label = paste0("Prior incumbent vote = ", inc_vote))
 
 vote_update_curve_rank <- ggplot(
   fit_curve,
   aes(
-    x = rank_gap,
+    x = log_crime_gap,
     y = fit,
     color = inc_vote,
     fill = inc_vote,
@@ -154,7 +160,7 @@ vote_update_curve_rank <- ggplot(
 ) +
   geom_rect(
     data = rug_counts,
-    aes(xmin = rank_gap - 0.4, xmax = rank_gap + 0.4, ymin = ymin, ymax = ymax),
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
     inherit.aes = FALSE,
     fill = "grey60",
     color = NA
@@ -172,10 +178,9 @@ vote_update_curve_rank <- ggplot(
   scale_color_manual(values = inc_colors, guide = "none") +
   scale_fill_manual(values = inc_colors, guide = "none") +
   scale_linetype_manual(values = inc_linetypes, guide = "none") +
-  scale_x_continuous(breaks = -4:4) +
   labs(
     y = "P(Vote for incumbent)",
-    x = "RG",
+    x = "log(crime gap)",
     caption = "ribbon 95% CI"
   ) +
   theme_minimal()
@@ -208,7 +213,7 @@ m_vote_gam_sep <- gam(
   Vote_home_post ~
     arm_group +
     s(rank_gap, by = arm_group, k = 5) +
-    s(crime_gap_wins, k = 5) +
+    s(log_crime_gap, k = 5) +
     coalition_pre +
     inc_vote,
   family = binomial(),
@@ -219,18 +224,17 @@ m_vote_gam_sep <- gam(
 summary(m_vote_gam_sep)
 
 fit_curve_sep <- bind_rows(lapply(sep_groups, function(g) {
-  # Predict only across the range where this arm actually has data, floored at
-  # rank_gap = -2.
-  g_rank <- gam_data_sep$rank_gap[gam_data_sep$arm_group == g]
-  rank_seq <- seq(
-    max(-2, min(g_rank, na.rm = TRUE)),
-    max(g_rank, na.rm = TRUE),
+  # Predict only across the range where this arm actually has log_crime_gap data.
+  g_cg <- gam_data_sep$log_crime_gap[gam_data_sep$arm_group == g]
+  cg_seq <- seq(
+    min(g_cg, na.rm = TRUE),
+    max(g_cg, na.rm = TRUE),
     length.out = 100
   )
   nd <- data.frame(
-    rank_gap = rank_seq,
+    log_crime_gap = cg_seq,
+    rank_gap = mean(gam_data_sep$rank_gap, na.rm = TRUE),
     arm_group = factor(g, levels = arm_levels_sep),
-    crime_gap_wins = mean(gam_data_sep$crime_gap_wins, na.rm = TRUE),
     coalition_pre = factor(
       coalition_pre_mode,
       levels = levels(gam_data_sep$coalition_pre)
@@ -239,7 +243,7 @@ fit_curve_sep <- bind_rows(lapply(sep_groups, function(g) {
   )
   pr <- predict(m_vote_gam_sep, newdata = nd, type = "link", se.fit = TRUE)
   data.frame(
-    rank_gap = rank_seq,
+    log_crime_gap = cg_seq,
     arm_group = factor(g, levels = sep_groups),
     fit = plogis(pr$fit),
     lwr95 = plogis(pr$fit - crit95 * pr$se.fit),
@@ -249,27 +253,43 @@ fit_curve_sep <- bind_rows(lapply(sep_groups, function(g) {
   )
 }))
 
-# Per-arm rug histogram, on a common floor below the lowest 99% band across arms.
+# Per-arm rug histogram, on a common floor below the lowest 95% band across arms.
 y_lo_sep <- min(fit_curve_sep$lwr95)
 y_hi_sep <- max(fit_curve_sep$upr95)
 strip_h_sep <- 0.15 * (y_hi_sep - y_lo_sep)
 floor_y_sep <- y_lo_sep - 0.02 * (y_hi_sep - y_lo_sep) - strip_h_sep
-# Per-arm rug histogram (one strip per panel).
-rug_counts_sep <- gam_data_sep %>%
-  filter(arm_group %in% sep_groups, rank_gap >= -2) %>%
-  mutate(arm_group = factor(as.character(arm_group), levels = sep_groups)) %>%
-  count(arm_group, rank_gap) %>%
+# Per-arm binned histogram of log_crime_gap (one strip per panel), on a shared
+# set of bin breaks across the plotted arms.
+sep_cg <- gam_data_sep %>%
+  filter(arm_group %in% sep_groups, !is.na(log_crime_gap)) %>%
+  mutate(arm_group = factor(as.character(arm_group), levels = sep_groups))
+cg_breaks_sep <- seq(
+  min(sep_cg$log_crime_gap),
+  max(sep_cg$log_crime_gap),
+  length.out = 31
+)
+bin_w_sep <- diff(cg_breaks_sep)[1]
+rug_counts_sep <- sep_cg %>%
+  mutate(
+    bin = cut(log_crime_gap, cg_breaks_sep, include.lowest = TRUE, labels = FALSE)
+  ) %>%
+  count(arm_group, bin) %>%
   group_by(arm_group) %>%
-  mutate(ymin = floor_y_sep, ymax = floor_y_sep + strip_h_sep * n / max(n)) %>%
+  mutate(
+    xmin = cg_breaks_sep[bin],
+    xmax = cg_breaks_sep[bin] + bin_w_sep,
+    ymin = floor_y_sep,
+    ymax = floor_y_sep + strip_h_sep * n / max(n)
+  ) %>%
   ungroup()
 
 vote_update_curve_rank_sep <- ggplot(
   fit_curve_sep,
-  aes(x = rank_gap, y = fit, color = arm_group, fill = arm_group)
+  aes(x = log_crime_gap, y = fit, color = arm_group, fill = arm_group)
 ) +
   geom_rect(
     data = rug_counts_sep,
-    aes(xmin = rank_gap - 0.4, xmax = rank_gap + 0.4, ymin = ymin, ymax = ymax),
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
     inherit.aes = FALSE,
     fill = "grey60",
     color = NA
@@ -279,10 +299,9 @@ vote_update_curve_rank_sep <- ggplot(
   facet_wrap(~arm_group) +
   scale_color_manual(values = arm_colors[sep_groups], guide = "none") +
   scale_fill_manual(values = arm_colors[sep_groups], guide = "none") +
-  scale_x_continuous(breaks = -4:4) +
   labs(
     y = "Predicted Incumbent Vote",
-    x = "RG",
+    x = "log(crime gap)",
     caption = "ribbon 95% CI"
   ) +
   theme_minimal()
@@ -299,7 +318,7 @@ ggsave(
 # ── Within-arm contrast: accurate (rank_gap = 0) vs very optimistic prior (= 4) ─
 # Evaluates one arm's fitted smooth at rank_gap 0 and 4 and differences them.
 # Because it is the same arm and the same covariate values, everything except
-# the rank_gap smooth (crime_gap_wins, coalition_pre, inc_vote, arm intercept)
+# the rank_gap smooth (crime_gap_capped, coalition_pre, inc_vote, arm intercept)
 # cancels, so the contrast is f_g(4) - f_g(0) with an exact SE from the model
 # covariance. Reported on the logit scale (with odds ratio) and, via the delta
 # method, as a difference in predicted probability.
@@ -314,7 +333,7 @@ contrast_0_vs_4 <- function(model, dat, arm, iv) {
       newdata = data.frame(
         rank_gap = x,
         arm_group = factor(arm, levels = levels(dat$arm_group)),
-        crime_gap_wins = mean(dat$crime_gap_wins, na.rm = TRUE),
+        log_crime_gap = mean(dat$log_crime_gap, na.rm = TRUE),
         coalition_pre = factor(
           coalition_pre_mode,
           levels = levels(dat$coalition_pre)

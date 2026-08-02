@@ -9,10 +9,10 @@
 # Equation 2 (PAP):
 #   dY_i = a + a1 CG_i + a2 RG_i + sum_k d_k T_ik
 #            + sum_k b_k (CG_i x T_ik) + sum_k g_k (RG_i x T_ik) + e_i
-# estimated by OLS per outcome; HC2 robust SEs. CG = crime_gap_wins (winsorized
+# estimated by OLS per outcome; HC2 robust SEs. CG = crime_gap_capped (top-coded
 # level gap), RG = rank_gap. No additional controls are included, matching the
-# registered equation (note: the home-outcome script m_winsorized additionally
-# adds comp_party_known; here we follow Eq. 2 as written for cross-outcome
+# registered equation (note: the home-outcome script m_capped additionally
+# adds coalition_pre; here we follow Eq. 2 as written for cross-outcome
 # comparability).
 #
 # RQ -> test (PAP, Primary Analysis):
@@ -93,7 +93,7 @@ fit_eq2 <- function(spec) {
   d[[spec$y]] <- d[[spec$y]] / sd(d[[spec$y]], na.rm = TRUE)
   fml <- as.formula(paste0(
     spec$y,
-    " ~ crime_gap_wins * Treatment_Group + rank_gap * Treatment_Group"
+    " ~ crime_gap_capped * Treatment_Group + rank_gap * Treatment_Group"
   ))
   lm(fml, data = d)
 }
@@ -101,7 +101,7 @@ fit_eq2 <- function(spec) {
 models <- lapply(outcomes, fit_eq2)
 
 # ── Linear-combination helper (HC2 robust) ────────────────────────────────────
-# Find the interaction coefficient for `var` (crime_gap_wins / rank_gap) x arm,
+# Find the interaction coefficient for `var` (crime_gap_capped / rank_gap) x arm,
 # regardless of which side of the ":" R put it on.
 inter <- function(m, var, arm) {
   cn <- names(coef(m))
@@ -129,7 +129,7 @@ lincom <- function(m, pos, neg = character(0)) {
 # ── RQ statistic per outcome ──────────────────────────────────────────────────
 rq_stat <- function(m, rq) {
   switch(rq,
-    RQ1  = lincom(m, inter(m, "crime_gap_wins", "T1")),
+    RQ1  = lincom(m, inter(m, "crime_gap_capped", "T1")),
     RQ2  = lincom(m, inter(m, "rank_gap", "T2"), inter(m, "rank_gap", "T1")),
     RQ3a = lincom(m, inter(m, "rank_gap", "T3"), inter(m, "rank_gap", "T2")),
     RQ3b = lincom(m, inter(m, "rank_gap", "T4"), inter(m, "rank_gap", "T2")),

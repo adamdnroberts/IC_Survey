@@ -35,7 +35,7 @@ match_ids1 <- match_ids1 %>%
     pid_w2 = wave_2,
     status_w2 = status_wave_2
   ) %>%
-  select(pid_w2, pid_w1) %>%
+  dplyr::select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
 match_ids2 <- match_ids2 %>%
@@ -43,7 +43,7 @@ match_ids2 <- match_ids2 %>%
     pid_w1 = Wave.1,
     pid_w2 = Wave.2
   ) %>%
-  select(pid_w2, pid_w1) %>%
+  dplyr::select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
 match_ids3 <- match_ids3 %>%
@@ -51,7 +51,7 @@ match_ids3 <- match_ids3 %>%
     pid_w1 = wave_1,
     pid_w2 = wave_2
   ) %>%
-  select(pid_w2, pid_w1) %>%
+  dplyr::select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
 match_ids4 <- match_ids4 %>%
@@ -59,7 +59,7 @@ match_ids4 <- match_ids4 %>%
     pid_w1 = wave_1,
     pid_w2 = wave_2
   ) %>%
-  select(pid_w2, pid_w1) %>%
+  dplyr::select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
 match_ids1_2 <- bind_rows(match_ids1, match_ids2) %>%
@@ -97,7 +97,7 @@ match_ids <- match_ids_full %>%
   group_by(pid_w2) %>%
   slice_min(w1_time, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
-  select(pid_w2, pid_w1)
+  dplyr::select(pid_w2, pid_w1)
 
 # A wave-1 respondent matched to multiple wave-2 responses keeps the earliest
 # wave-2 response.
@@ -106,7 +106,7 @@ match_ids <- match_ids %>%
   group_by(pid_w1) %>%
   slice_min(w2_time, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
-  select(pid_w2, pid_w1)
+  dplyr::select(pid_w2, pid_w1)
 
 panel <- wave2 %>%
   inner_join(match_ids, by = c("Netquest_PID" = "pid_w2")) %>%
@@ -115,7 +115,7 @@ panel <- wave2 %>%
     by = c("pid_w1" = "Netquest_PID"),
     suffix = c("_w2", "_w1")
   ) %>%
-  select(-pid_w1) %>%
+  dplyr::select(-pid_w1) %>%
   mutate(
     muni_changed = Found_Municipality_ID_w2 != Found_Municipality_ID_w1,
     Found_Municipality_ID = Found_Municipality_ID_w2,
@@ -144,7 +144,7 @@ panel$rank_prior <- 1 +
 
 robo <- readRDS("data/robo_2025.rds") %>%
   mutate(Cve..Municipio = sprintf("%05d", as.integer(Cve..Municipio))) %>%
-  select(Cve..Municipio, rate_per_100k)
+  dplyr::select(Cve..Municipio, rate_per_100k)
 
 panel <- panel %>%
   left_join(robo, by = c("Found_Municipality_ID" = "Cve..Municipio")) %>%
@@ -168,16 +168,21 @@ panel$actual_rank <- 1 +
     na.rm = TRUE
   )
 
-panel$Robbery_Estimate_wins <- pmin(
+# Top-code (cap) the robbery estimate at a fixed plausibility ceiling of
+# robbery_cap_mult x the maximum observed home rate. This is one-sided capping
+# against an external threshold, not winsorization (which would replace values
+# beyond a percentile of the estimate's own distribution) — hence "_capped".
+panel$Robbery_Estimate_capped <- pmin(
   as.numeric(panel$Robbery_Estimate),
   max(panel$home_rate, na.rm = TRUE) * robbery_cap_mult
 )
 
 panel$crime_gap <- panel$home_rate - as.numeric(panel$Robbery_Estimate)
-panel$crime_gap_wins <- panel$home_rate - panel$Robbery_Estimate_wins
+panel$crime_gap_capped <- panel$home_rate - panel$Robbery_Estimate_capped
 panel$rank_gap <- panel$actual_rank - panel$rank_prior
 
-panel$log_crime_gap <- sign(panel$crime_gap) * log(abs(panel$crime_gap))
+panel$log_crime_gap <- sign(panel$crime_gap) * log(1 + abs(panel$crime_gap))
+panel$asinh_crime_gap <- asinh(panel$crime_gap)
 
 panel$Home_Crime_Handling_Change <- as.numeric(panel$Home_Crime_Handling_Post) -
   as.numeric(panel$Home_Crime_Handling_Pre)
@@ -193,7 +198,7 @@ all_parties_tmp <- magar2024 %>%
       TRUE ~ NA_character_
     )
   ) %>%
-  select(muni_id, home_coalition)
+  dplyr::select(muni_id, home_coalition)
 
 coalition_vec <- setNames(
   all_parties_tmp$home_coalition,
@@ -246,8 +251,13 @@ to_coalition <- function(x) {
       coalitions <- unique(na.omit(party_to_coalition[parties]))
       # No recognized party (e.g. "other" on its own) => its own category.
       # A single coalition resolves; a cross-coalition ticket stays NA.
-      if (length(coalitions) == 0) "Other"
-      else if (length(coalitions) == 1) coalitions else NA_character_
+      if (length(coalitions) == 0) {
+        "Other"
+      } else if (length(coalitions) == 1) {
+        coalitions
+      } else {
+        NA_character_
+      }
     },
     USE.NAMES = FALSE
   )
@@ -270,7 +280,9 @@ panel$home_coalition <- coalition_vec[
 # Home_Crime_Handling_Change (a wave 1 -> wave 2 update). NA home_coalition -> NA.
 pick_home_party_rating <- function(coalition, morena, pan_pri_prd, mc) {
   out <- rep(NA_real_, length(coalition))
-  out[coalition %in% "MORENA/PVEM/PT"] <- morena[coalition %in% "MORENA/PVEM/PT"]
+  out[coalition %in% "MORENA/PVEM/PT"] <- morena[
+    coalition %in% "MORENA/PVEM/PT"
+  ]
   out[coalition %in% "PAN/PRI/PRD"] <- pan_pri_prd[coalition %in% "PAN/PRI/PRD"]
   out[coalition %in% "MC"] <- mc[coalition %in% "MC"]
   out

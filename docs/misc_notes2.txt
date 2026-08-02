@@ -1,0 +1,21 @@
+1. What is electoral accountability?
+2. What does research show about low and middle income countries?
+3. This research doesn't account for the way information is presented
+4. My survey experiment will address this
+
+
+say "other" municipalities
+explicitly state "coalition" (coalition name, then list the parties in the coalition)
+
+Just tell them the "half had more than 79 half had less" on the crime thing;
+
+Get rid of the "sustainable agriculture" part of the attention check
+
+turnout question when voting is mandatory? (make sure that you are aware of this when interpreting)
+
+JMP:
+- MORENA vote post treatment
+- show shares of pools picked by respondents (nearby vs large vs random)
+- categorize treatments by whether they show more nearest vs big cities etc
+-- can tie the two analyses together
+- other ways to model the voting variable

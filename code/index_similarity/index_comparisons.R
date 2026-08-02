@@ -197,7 +197,7 @@ summary(m_vote_gam_ci)
 # importance, with one line per rank_gap value (accurate prior RG = 0, and
 # optimistic / pessimistic priors RG = ±2). Both arms are evaluated at the same
 # rank_gap and importance, so the difference isolates the treatment effect and
-# how it shifts across comparison importance. crime_gap_wins at its mean,
+# how it shifts across comparison importance. crime_gap_capped at its mean,
 # coalition_pre at its mode, inc_vote = 1. Probability-scale SEs via delta method
 # from the model lpmatrix + covariance (as in vote_update_gam.R's contrast).
 crit95 <- qnorm(0.975)
@@ -211,7 +211,7 @@ lp_row <- function(rg, ci, arm, iv = 1) {
       rank_gap = rg,
       comparison_importance_lp = ci,
       arm_group = factor(arm, levels = arm_group_levels),
-      crime_gap_wins = mean(gam_data$crime_gap_wins, na.rm = TRUE),
+      crime_gap_capped = mean(gam_data$crime_gap_capped, na.rm = TRUE),
       coalition_pre = factor(
         coalition_pre_mode,
         levels = levels(gam_data$coalition_pre)
@@ -325,7 +325,7 @@ m_vote_gam_ci_sep <- gam(
   Vote_home_post ~
     arm_group +
     te(rank_gap, comparison_importance_lp, by = arm_group, k = c(5, 5)) +
-    s(crime_gap_wins, k = 5) +
+    s(crime_gap_capped, k = 5) +
     coalition_pre +
     inc_vote,
   family = binomial(),
@@ -345,7 +345,7 @@ lp_row_sep <- function(rg, ci, arm, iv = 1) {
       rank_gap = rg,
       comparison_importance_lp = ci,
       arm_group = factor(arm, levels = arm_levels_sep),
-      crime_gap_wins = mean(gam_data_sep$crime_gap_wins, na.rm = TRUE),
+      crime_gap_capped = mean(gam_data_sep$crime_gap_capped, na.rm = TRUE),
       coalition_pre = factor(
         coalition_pre_mode,
         levels = levels(gam_data_sep$coalition_pre)

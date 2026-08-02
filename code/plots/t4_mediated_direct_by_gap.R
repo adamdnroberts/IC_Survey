@@ -103,7 +103,7 @@ m_outcome <- lm(
 
 set.seed(1)
 n_grid <- 13
-sims <- 500
+sims <- 1000
 
 rg_mean <- mean(panel_med$rank_gap, na.rm = TRUE)
 cg_grid <- seq(
@@ -127,8 +127,12 @@ rows <- lapply(cg_grid, function(g) {
   )
   data.frame(
     log_crime_gap = g,
-    acme = m$d0, acme_lo = m$d0.ci[1], acme_hi = m$d0.ci[2],
-    ade = m$z0, ade_lo = m$z0.ci[1], ade_hi = m$z0.ci[2]
+    acme = m$d0,
+    acme_lo = m$d0.ci[1],
+    acme_hi = m$d0.ci[2],
+    ade = m$z0,
+    ade_lo = m$z0.ci[1],
+    ade_hi = m$z0.ci[2]
   )
 })
 df <- do.call(rbind, rows)
@@ -136,37 +140,150 @@ print(df, row.names = FALSE)
 
 med_lab <- "Mediated (via inc−opp rating)"
 dir_lab <- "Direct (other channels)"
-sel <- function(d, cols) setNames(d[, cols], c("log_crime_gap", "est", "lo", "hi"))
+sel <- function(d, cols) {
+  setNames(d[, cols], c("log_crime_gap", "est", "lo", "hi"))
+}
 plot_df <- rbind(
-  transform(sel(df, c("log_crime_gap", "acme", "acme_lo", "acme_hi")), effect = med_lab),
-  transform(sel(df, c("log_crime_gap", "ade", "ade_lo", "ade_hi")), effect = dir_lab)
+  transform(
+    sel(df, c("log_crime_gap", "acme", "acme_lo", "acme_hi")),
+    effect = med_lab
+  ),
+  transform(
+    sel(df, c("log_crime_gap", "ade", "ade_lo", "ade_hi")),
+    effect = dir_lab
+  )
 )
 plot_df$effect <- factor(plot_df$effect, levels = c(dir_lab, med_lab))
 
 effect_colors <- setNames(c("#D55E00", "#0072B2"), c(dir_lab, med_lab))
 
-p <- ggplot(plot_df, aes(log_crime_gap, est, color = effect, fill = effect)) +
+# y-axis range spanning BOTH curves' ribbons, so the mediated-only plot (p2) can
+# reuse the same y scale as the main plot (p).
+y_full_range <- range(c(plot_df$lo, plot_df$hi), na.rm = TRUE)
+
+# Direct in-plot line labels (used instead of a legend): anchored at the right
+# end of each curve, nudged apart vertically.
+label_df <- plot_df %>%
+  group_by(effect) %>%
+  slice_max(log_crime_gap, n = 1) %>%
+  ungroup() %>%
+  mutate(
+    y_lab = if_else(
+      effect == dir_lab,
+      hi + 0.16 * diff(y_full_range),
+      lo - 0.04 * diff(y_full_range)
+    )
+  )
+
+# Mediated-only plot (p2) label: placed ABOVE the CI near a nominal crime gap of
+# -300 (i.e. log_crime_gap = cg_fwd(-300)), rather than at the right end.
+x_med_lab <- (function(g) sign(g) * log(abs(g)))(-300)
+med_curve <- filter(plot_df, effect == med_lab)
+label_df_p2 <- data.frame(
+  log_crime_gap = x_med_lab,
+  effect = factor(med_lab, levels = levels(plot_df$effect)),
+  y_lab = approx(med_curve$log_crime_gap, med_curve$hi, xout = x_med_lab)$y +
+    0.04 * diff(y_full_range)
+)
+
+# x axis stays on the log_crime_gap scale (that is what the models use) but is
+# labelled with the nominal crime gap, i.e. actual home robbery rate minus the
+# respondent's estimate. log_crime_gap = sign(gap) * log(|gap|), so the inverse
+# is sign(x) * exp(|x|). Breaks are round nominal values inside the grid range.
+cg_fwd <- function(g) sign(g) * log(abs(g))
+nominal_breaks <- c(
+  -c(10000, 3000, 1000, 300, 100, 30, 10, 3),
+  c(3, 10, 30, 100, 300, 1000, 3000, 10000)
+)
+nominal_breaks <- nominal_breaks[
+  cg_fwd(nominal_breaks) >= min(cg_grid) &
+    cg_fwd(nominal_breaks) <= max(cg_grid)
+]
+
+p <- ggplot(
+  filter(plot_df, log_crime_gap > -8),
+  aes(log_crime_gap, est, color = effect, fill = effect)
+) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
   geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, color = NA) +
   geom_line(linewidth = 0.9) +
+  geom_text(
+    data = filter(label_df, effect == dir_lab),
+    aes(y = y_lab, label = effect),
+    hjust = 1,
+    size = 3.5,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    data = label_df_p2,
+    aes(y = y_lab, label = effect),
+    hjust = 0.5,
+    size = 3.5,
+    show.legend = FALSE
+  ) +
   scale_color_manual(values = effect_colors) +
   scale_fill_manual(values = effect_colors) +
+  scale_x_continuous(
+    breaks = cg_fwd(nominal_breaks),
+    labels = format(nominal_breaks, big.mark = ",", trim = TRUE)
+  ) +
   labs(
-    title = "T4 effect on incumbent vote: mediated vs. direct, by crime gap",
-    subtitle = "rank_gap held at its mean; bands are 95% quasi-Bayesian CIs",
-    x = "log_crime_gap (prior surprise about crime level)",
+    #title = "T4 effect on incumbent vote: mediated vs. direct, by crime gap",
+    #subtitle = "rank_gap held at its mean; bands are 95% quasi-Bayesian CIs",
+    x = "Crime gap: actual − estimated robbery rate (log spacing)",
     y = "Effect on P(vote incumbent), T4 − control",
     color = NULL,
     fill = NULL
   ) +
   theme_minimal(base_size = 12) +
-  theme(legend.position = "top")
+  theme(legend.position = "none")
 
 print(p)
 
 ggsave(
-  "latex/images/t4_mediated_direct_by_crimegap.pdf",
+  "latex/images/t4_mediated_direct_by_crimegap_full.pdf",
   plot = p,
-  width = 7,
+  width = 8,
+  height = 4.5
+)
+
+p2 <- ggplot(
+  filter(plot_df, log_crime_gap > -8 & effect != "Direct (other channels)"),
+  aes(log_crime_gap, est, color = effect, fill = effect)
+) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, color = NA) +
+  geom_line(linewidth = 0.9) +
+  geom_text(
+    data = label_df_p2,
+    aes(y = y_lab, label = effect),
+    hjust = 0.5,
+    size = 3.5,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values = effect_colors) +
+  scale_fill_manual(values = effect_colors) +
+  scale_x_continuous(
+    breaks = cg_fwd(nominal_breaks),
+    labels = format(nominal_breaks, big.mark = ",", trim = TRUE)
+  ) +
+  coord_cartesian(ylim = y_full_range) +
+  labs(
+    #title = "T4 effect on incumbent vote: mediated vs. direct, by crime gap",
+    #subtitle = "rank_gap held at its mean; bands are 95% quasi-Bayesian CIs",
+    x = "Crime gap: actual − estimated robbery rate (log spacing)",
+    y = "Effect on P(vote incumbent), T4 − control",
+    color = NULL,
+    fill = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none")
+
+print(p2)
+
+ggsave(
+  "latex/images/t4_mediated_only_by_crimegap.pdf",
+  plot = p2,
+  width = 8,
   height = 4.5
 )

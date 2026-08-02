@@ -1,0 +1,22 @@
+
+need to have comparison without partisan information
+- difference between comparison without partisan info and comparison with partisan info could be thought of as "blame"
+
+ideally survey will show "matched" comparisons
+
+non-matched comparisons could be informative, though
+- if showing "matched" 
+
+potentially issues with the map because prompts people to think spatially
+
+some kind of "factual" info that isn't directly given (national average)?
+
+GRAD SEMINAR:
+- incumbent competence or state of the world?
+--- could add geographic comparison for this
+- is the relative ranking too confusing?
+- should I ask about
+- are positions on crime between parties very distinct? at local level?
+- could ask about attribution of crime to local vs state
+- might people have "outdated" beliefs about crime (could be using info from 2024 instead of 2025)
+
