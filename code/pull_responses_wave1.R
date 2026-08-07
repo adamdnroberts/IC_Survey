@@ -1,7 +1,7 @@
 library(paws.storage)
 library(dplyr)
 
-readRenviron("C:/Users/adamd/Documents/IC_Survey/.Renviron")
+readRenviron(".Renviron")
 
 s3_client <- paws.storage::s3()
 
@@ -37,7 +37,7 @@ all_responses <- filter(all_responses, !is.na(Netquest_PID))
 # matches that the filter below removes). This is the filter's input.
 saveRDS(
   all_responses,
-  "C:/Users/adamd/Documents/IC_Survey/data/wave1_responses_w_duplicates.rds"
+  "data/wave1_responses_w_duplicates.rds"
 )
 
 # Remove implausible-timing and duplicate cross-wave matches. Reads the full set
@@ -48,5 +48,5 @@ source("code/filter_wave1_bad_links.R")
 # wave1_responses.rds is the canonical (filtered) wave-1 dataset.
 saveRDS(
   wave1_filtered,
-  "C:/Users/adamd/Documents/IC_Survey/data/wave1_responses.rds"
+  "data/wave1_responses.rds"
 )

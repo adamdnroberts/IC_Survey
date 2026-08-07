@@ -23,7 +23,7 @@ library(dplyr)
 library(ggplot2)
 library(broom)
 
-load("~/IC_Survey/data/survey_panel_dataset.Rdata")
+load("data/survey_panel_dataset.Rdata")
 
 panel_full <- panel
 

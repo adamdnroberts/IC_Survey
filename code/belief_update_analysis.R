@@ -5,7 +5,7 @@ library(ggplot2)
 library(broom)
 library(readxl)
 
-load("~/IC_Survey/data/survey_panel_dataset.Rdata")
+load("data/survey_panel_dataset.Rdata")
 
 panel_full <- panel
 

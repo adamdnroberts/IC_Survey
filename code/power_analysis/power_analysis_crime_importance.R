@@ -186,7 +186,7 @@ power_line_graph <- ggplot(
 print(power_line_graph)
 
 ggsave(
-  "C:/Users/adamd/Documents/IC_Survey/latex/68f2c388f14090ff511a63c6/images/power_graph_crime_importance.pdf",
+  "latex/images/power_graph_crime_importance.pdf",
   plot = power_line_graph,
   width = 6,
   height = 4

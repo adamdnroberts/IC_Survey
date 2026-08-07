@@ -2,7 +2,7 @@ library(estimatr)
 library(dplyr)
 library(ggplot2)
 #TO DO: add robustness check using asinh_crime_gap instead of log_crime_gap
-load("~/IC_Survey/data/survey_panel_dataset.Rdata")
+load("data/survey_panel_dataset.Rdata")
 
 if (!exists("ci_alpha")) {
   ci_alpha <- 0.01
@@ -98,7 +98,7 @@ vote_coef_update <- ggplot(
 print(vote_coef_update)
 
 ggsave(
-  "C:/Users/adamd/Documents/IC_Survey/latex/images/vote_coef_update.pdf",
+  "latex/images/vote_coef_update.pdf",
   plot = vote_coef_update,
   width = 7,
   height = 4.5
@@ -248,11 +248,16 @@ vote_coef_update_log_rg <- build_log_gap_plot(
 print(vote_coef_update_log_cg)
 print(vote_coef_update_log_rg)
 
-# Also write to the Dropbox poster project so the poster picks up the updated
-# figure directly (matches the vote_coef_update.pdf save above).
-poster_fig_dir <- "C:/Users/adamd/Dropbox/Apps/Overleaf/PolMeth 2026 Poster/figures"
+# Also write to the poster project so the poster picks up the updated figure
+# directly (matches the vote_coef_update.pdf save above). Set POSTER_FIG_DIR in
+# .Renviron to enable; skipped silently on machines where it is unset.
+poster_fig_dir <- Sys.getenv("POSTER_FIG_DIR")
+fig_dirs <- c(
+  "latex/images",
+  if (nzchar(poster_fig_dir) && dir.exists(poster_fig_dir)) poster_fig_dir
+)
 
-for (dir in c("latex/images", poster_fig_dir)) {
+for (dir in fig_dirs) {
   ggsave(
     file.path(dir, "vote_coef_update_log.pdf"),
     plot = vote_coef_update_log,

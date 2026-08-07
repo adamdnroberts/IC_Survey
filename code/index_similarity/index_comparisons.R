@@ -2,7 +2,7 @@ library(dplyr)
 library(data.table)
 library(sf)
 
-load("~/IC_Survey/data/survey_panel_dataset.Rdata")
+load("data/survey_panel_dataset.Rdata")
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 haversine_km <- function(lon1, lat1, lon2, lat2) {
@@ -92,15 +92,21 @@ for (i in 1:4) {
 
 # ── Model-importance index for the shown comparisons ──────────────────────────
 # Score each comparison with the fitted benchmark-selection model
-# (descriptive_analysis.R). The linear predictor is the model's log-odds that a
+# (benchmark_analysis.R). The linear predictor is the model's log-odds that a
 # respondent *would pick* that municipality as a benchmark, i.e. how salient /
 # "important" a comparison it is. We convert to a selection probability and
 # average across the comparisons a respondent was actually shown.
+# Posterior means from latex/tables/benchmark_model.tex (tab:benchmark_model).
+# The candidate- and home-coalition dummies and the pool fixed effects are
+# deliberately omitted: pool has no wave 2 analogue, and home coalition is
+# constant within respondent.
 benchmark_coef <- c(
   #Intercept = -7.76,
   log_dist_km = -0.23,
   log_pop_ratio = 0.75,
-  same_state = 1.02
+  same_state = 1.02,
+  same_coalition = 0.13,
+  vote_match = 0.07
 )
 
 for (i in 1:4) {
@@ -108,7 +114,10 @@ for (i in 1:4) {
   eta <- benchmark_coef["log_dist_km"] *
     log(panel[[paste0("comp_dist_km_", i)]]) +
     benchmark_coef["log_pop_ratio"] * log((comp_pop + 1) / (home_pop + 1)) +
-    benchmark_coef["same_state"] * panel[[paste0("comp_same_state_", i)]]
+    benchmark_coef["same_state"] * panel[[paste0("comp_same_state_", i)]] +
+    benchmark_coef["same_coalition"] *
+      panel[[paste0("comp_same_coalition_", i)]] +
+    benchmark_coef["vote_match"] * panel[[paste0("comp_vote_match_", i)]]
 
   panel[[paste0("comp_importance_lp_", i)]] <- as.numeric(eta)
   panel[[paste0("comp_importance_prob_", i)]] <- plogis(as.numeric(eta))
@@ -125,6 +134,41 @@ panel$comparison_importance_prob <- rowMeans(panel[prob_cols], na.rm = TRUE)
 # rowMeans of an all-NA row returns NaN (no comparison IDs at all) -> NA
 panel$comparison_importance_lp[is.nan(panel$comparison_importance_lp)] <- NA
 panel$comparison_importance_prob[is.nan(panel$comparison_importance_prob)] <- NA
+
+# ── Mean similarity score by treatment arm ────────────────────────────────────
+# Comparison municipalities are drawn at random within arm, so these means
+# should be close to equal across arms. A systematic difference would mean the
+# arms were shown differently salient comparisons, which would confound the
+# importance interaction estimated in the GAM below. Reported on the analysis
+# sample (muni unchanged, attention check passed) so it describes the
+# respondents the models actually use.
+similarity_sample <- panel %>%
+  filter(
+    muni_changed == 0,
+    Attention_Check == "somewhat_agree",
+    !is.na(comparison_importance_lp)
+  )
+
+similarity_stats <- function(df) {
+  summarise(
+    df,
+    n = n(),
+    mean_lp = mean(comparison_importance_lp),
+    sd_lp = sd(comparison_importance_lp),
+    mean_prob = mean(comparison_importance_prob),
+    .groups = "drop"
+  )
+}
+
+similarity_by_arm <- bind_rows(
+  similarity_stats(group_by(similarity_sample, Arm = Treatment_Group)),
+  mutate(similarity_stats(similarity_sample), Arm = "All", .before = 1)
+)
+
+cat("\n=== Mean comparison-similarity score by treatment arm ===\n")
+cat("(comparison_importance_lp: benchmark-model log-odds, averaged over the\n")
+cat(" comparisons each respondent was shown; mean_prob is the probability scale)\n\n")
+print(as.data.frame(similarity_by_arm), row.names = FALSE, digits = 3)
 
 # ── GAM: does the RG × treatment effect vary with comparison importance? ───────
 # Mirrors vote_update_gam.R (same outcome, sample restrictions, and nuisance

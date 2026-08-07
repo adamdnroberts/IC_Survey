@@ -36,7 +36,7 @@ library(sandwich)
 library(ashr)
 library(mashr)
 
-load("~/IC_Survey/data/survey_panel_dataset.Rdata")
+load("data/survey_panel_dataset.Rdata")
 
 # ── Sample: home municipality unchanged across waves, attention-check pass ────
 panel <- panel %>%

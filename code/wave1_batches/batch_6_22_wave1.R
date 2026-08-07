@@ -13,7 +13,7 @@ excluded_pids <- c(
   read.csv("data/final_batch_5_29_wave1_pids.csv")$Netquest_PID
 )
 
-w2 <- readRDS("C:/Users/adamd/Documents/IC_Survey/data/wave2_responses.rds")
+w2 <- readRDS("data/wave2_responses.rds")
 
 print(paste0(
   "prop. recontacts achieved: ",

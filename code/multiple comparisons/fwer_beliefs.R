@@ -2,7 +2,7 @@
 # skipped when `panel` exists and already has the expected number of rows.
 if (!exists("panel") || nrow(panel) != 1735) {
   source(
-    "C:/Users/adamd/Documents/IC_Survey/code/home_party_update_analysis.R",
+    "code/home_party_update_analysis.R",
     echo = FALSE
   )
 }

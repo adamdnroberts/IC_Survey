@@ -73,7 +73,7 @@ if (nrow(cross_coalition) > 0) {
 
 ############################################################################################
 mp_incumbents <- read.csv(
-  "C:/Users/adamd/Documents/IC_Survey/data/aymu1989-on.incumbents.csv"
+  "data/aymu1989-on.incumbents.csv"
 )
 
 # Pre-compute incumbent MC data: correct name, runner-up, pre-filtered distractor pool

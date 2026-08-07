@@ -24,7 +24,7 @@ match_ids3 <- read_excel("data/match IDs 29 Jun.xlsx")
 match_ids3 <- janitor::clean_names(match_ids3)
 
 match_ids4 <- read_excel(
-  "C:/Users/adamd/Documents/IC_Survey/data/Match IDs final.xlsx"
+  "data/Match IDs final.xlsx"
 )
 match_ids4 <- janitor::clean_names(match_ids4)
 

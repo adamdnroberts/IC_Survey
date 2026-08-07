@@ -1,7 +1,7 @@
 library(paws.storage)
 library(dplyr)
 
-readRenviron("C:/Users/adamd/Documents/IC_Survey/.Renviron")
+readRenviron(".Renviron")
 
 s3_client <- paws.storage::s3()
 
@@ -74,5 +74,5 @@ print(
 
 saveRDS(
   all_responses2,
-  "C:/Users/adamd/Documents/IC_Survey/data/wave2_responses.rds"
+  "data/wave2_responses.rds"
 )

@@ -32,7 +32,7 @@ timing_summary <- function(responses, pages) {
 
 # Wave 1: timing columns exist for pages 0, 1, 3, 4, 6, 9
 survey_responses_wave1 <- readRDS(
-  "C:/Users/adamd/Documents/IC_Survey/data/wave1_responses.rds"
+  "data/wave1_responses.rds"
 ) %>%
   filter(!is.na(Netquest_PID), Netquest_PID != "")
 
@@ -45,7 +45,7 @@ print(
 # Wave 2: pages 1, 7, 9, 11 (page 8 doesn't exist; page 13 is the final page
 # and its time is never accumulated into page_durations, so both are excluded)
 survey_responses_wave2 <- readRDS(
-  "C:/Users/adamd/Documents/IC_Survey/data/wave2_responses.rds"
+  "data/wave2_responses.rds"
 ) %>%
   filter(!is.na(Netquest_PID), Netquest_PID != "")
 

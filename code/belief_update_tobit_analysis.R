@@ -10,7 +10,7 @@ library(lmtest)
 library(dplyr)
 library(ggplot2)
 
-load("~/IC_Survey/data/survey_panel_dataset.Rdata")
+load("data/survey_panel_dataset.Rdata")
 
 if (!exists("ci_alpha")) {
   ci_alpha <- 0.01

@@ -1,7 +1,7 @@
 library(paws.storage)
 library(dplyr)
 
-readRenviron("C:/Users/adamd/Documents/IC_Survey/.Renviron")
+readRenviron(".Renviron")
 
 s3_client <- paws.storage::s3()
 objects <- s3_client$list_objects_v2(
@@ -36,7 +36,7 @@ print(reason_tbl)
 
 first_screenout_date <- as.Date(min(screenouts$Timestamp))
 
-responses_path <- "C:/Users/adamd/Documents/IC_Survey/data/wave1_responses.rds"
+responses_path <- "data/wave1_responses.rds"
 if (file.exists(responses_path)) {
   completions <- readRDS(responses_path) %>%
     filter(as.Date(Timestamp) >= first_screenout_date)
@@ -56,6 +56,6 @@ if (file.exists(responses_path)) {
 
 saveRDS(
   screenouts,
-  "C:/Users/adamd/Documents/IC_Survey/data/wave1_screenouts.rds"
+  "data/wave1_screenouts.rds"
 )
 cat("\nSaved to data/wave1_screenouts.rds\n")

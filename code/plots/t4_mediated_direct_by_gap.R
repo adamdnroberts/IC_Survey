@@ -19,7 +19,7 @@ library(dplyr)
 library(ggplot2)
 library(mediation)
 
-load("~/IC_Survey/data/survey_panel_dataset.Rdata")
+load("data/survey_panel_dataset.Rdata")
 
 # Sample: drop muni movers + failed attention check (as in mediation_analysis.R).
 panel <- panel %>%
@@ -105,7 +105,7 @@ set.seed(1)
 n_grid <- 13
 sims <- 1000
 
-rg_mean <- mean(panel_med$rank_gap, na.rm = TRUE)
+rg_hold <- mean(panel_med$rank_gap, na.rm = TRUE)
 cg_grid <- seq(
   quantile(panel_med$log_crime_gap, 0.05, na.rm = TRUE),
   quantile(panel_med$log_crime_gap, 0.95, na.rm = TRUE),
@@ -121,7 +121,7 @@ rows <- lapply(cg_grid, function(g) {
     mediator = "inc_minus_opp_avg_post",
     control.value = "control",
     treat.value = "T4",
-    covariates = list(log_crime_gap = g, rank_gap = rg_mean),
+    covariates = list(log_crime_gap = g, rank_gap = rg_hold),
     robustSE = TRUE,
     sims = sims
   )

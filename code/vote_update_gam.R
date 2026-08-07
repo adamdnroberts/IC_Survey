@@ -8,7 +8,15 @@ library(dplyr)
 library(ggplot2)
 library(mgcv)
 
-load("~/IC_Survey/data/survey_panel_dataset.Rdata")
+load("data/survey_panel_dataset.Rdata")
+
+# These curves are poster figures. They always land in latex/images; set
+# POSTER_FIG_DIR in .Renviron to also copy them into the poster project.
+poster_fig_dir <- Sys.getenv("POSTER_FIG_DIR")
+fig_dirs <- c(
+  "latex/images",
+  if (nzchar(poster_fig_dir) && dir.exists(poster_fig_dir)) poster_fig_dir
+)
 
 # Colorblind-friendly (Okabe-Ito) palette, matching crime_rate_accuracy_update.R
 arm_colors <- c(
@@ -187,12 +195,14 @@ vote_update_curve_rank <- ggplot(
 
 print(vote_update_curve_rank)
 
-ggsave(
-  "C:/Users/adamd/Dropbox/Apps/Overleaf/PolMeth 2026 Poster/figures/vote_update_curve_rank.pdf",
-  plot = vote_update_curve_rank,
-  width = 7,
-  height = 4.5
-)
+for (dir in fig_dirs) {
+  ggsave(
+    file.path(dir, "vote_update_curve_rank.pdf"),
+    plot = vote_update_curve_rank,
+    width = 7,
+    height = 4.5
+  )
+}
 
 # ── Same fitted curves, but T2, T3, T4 each fit and plotted separately ─────────
 # Re-fit the GAM with a by-arm smooth at the full Treatment_Group level (control
@@ -308,12 +318,14 @@ vote_update_curve_rank_sep <- ggplot(
 
 print(vote_update_curve_rank_sep)
 
-ggsave(
-  "C:/Users/adamd/Dropbox/Apps/Overleaf/PolMeth 2026 Poster/figures/vote_update_curve_rank_byarm.pdf",
-  plot = vote_update_curve_rank_sep,
-  width = 9,
-  height = 4.5
-)
+for (dir in fig_dirs) {
+  ggsave(
+    file.path(dir, "vote_update_curve_rank_byarm.pdf"),
+    plot = vote_update_curve_rank_sep,
+    width = 9,
+    height = 4.5
+  )
+}
 
 # ── Within-arm contrast: accurate (rank_gap = 0) vs very optimistic prior (= 4) ─
 # Evaluates one arm's fitted smooth at rank_gap 0 and 4 and differences them.
