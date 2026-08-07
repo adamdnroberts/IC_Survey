@@ -1,6 +1,6 @@
 library(dplyr)
 
-responses <- readRDS("data/wave1_responses.rds")
+responses <- readRDS("data/derived/wave1_responses.rds")
 
 first200 <- responses %>%
   arrange(as.numeric(Netquest_PID)) %>%
@@ -9,7 +9,7 @@ first200 <- responses %>%
 out <- first200 %>%
   select(Netquest_PID, Timestamp)
 
-write.csv(out, "data/first200_wave1.csv", row.names = FALSE)
+write.csv(out, "data/temp/first200_wave1.csv", row.names = FALSE)
 
 cat(sprintf("Saved %d respondents → data/first200_wave1.csv\n", nrow(out)))
 cat(sprintf(
@@ -32,7 +32,7 @@ if (length(overlap) > 0) {
   cat("No overlap between first200 and batch2.\n")
 }
 
-write.csv(batch2, "data/batch2_wave1.csv", row.names = FALSE)
+write.csv(batch2, "data/temp/batch2_wave1.csv", row.names = FALSE)
 
 cat(sprintf(
   "Saved %d respondents (on/before Apr 15, excl. first200) → data/batch2_wave1.csv\n",

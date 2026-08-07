@@ -2,7 +2,7 @@ library(dplyr)
 library(sf)
 library(ggplot2)
 
-d <- readRDS("data/wave1_responses.rds")
+d <- readRDS("data/derived/wave1_responses.rds")
 
 # Build coalition lookup (mirrors app.R startup code)
 load("data/magar2024_coalitions.Rdata")

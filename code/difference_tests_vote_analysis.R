@@ -7,7 +7,7 @@
 library(estimatr)
 library(dplyr)
 
-load("data/survey_panel_dataset.Rdata")
+load("data/derived/survey_panel_dataset.Rdata")
 
 if (!exists("ci_alpha")) {
   ci_alpha <- 0.01

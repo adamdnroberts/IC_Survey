@@ -3,12 +3,12 @@ library(tidyr)
 library(ggplot2)
 library(fixest)
 
-responses_all <- readRDS("data/wave2_responses.rds")
+responses_all <- readRDS("data/derived/wave2_responses.rds")
 load("data/magar2024_coalitions.Rdata")
 
 # muni_changed is only defined for respondents matched across waves, so this
 # drops the known movers and leaves wave-2-only respondents in the sample.
-load("data/survey_panel_dataset.Rdata")
+load("data/derived/survey_panel_dataset.Rdata")
 movers <- panel$Netquest_PID[panel$muni_changed %in% TRUE]
 
 # Sample restriction: attention-check failures, control2, and movers
@@ -382,7 +382,7 @@ print(summary(m_coalition))
 # Check if respondents who received one of their W1 benchmark selections as a
 # W2 comparison municipality correctly identified the governing coalition.
 
-load("data/survey_panel_dataset.Rdata") # loads 'panel'
+load("data/derived/survey_panel_dataset.Rdata") # loads 'panel'
 
 # Identify which comparison munis were W1 benchmark selections
 benchmark_matches <- panel %>%

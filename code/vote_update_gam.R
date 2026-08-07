@@ -8,7 +8,7 @@ library(dplyr)
 library(ggplot2)
 library(mgcv)
 
-load("data/survey_panel_dataset.Rdata")
+load("data/derived/survey_panel_dataset.Rdata")
 
 # These curves are poster figures. They always land in latex/images; set
 # POSTER_FIG_DIR in .Renviron to also copy them into the poster project.

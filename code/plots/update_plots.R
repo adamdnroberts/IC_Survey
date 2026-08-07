@@ -3,20 +3,20 @@ library(ggplot2)
 library(readxl)
 library(scales)
 
-wave1 <- readRDS("data/wave1_responses.rds")
-wave2 <- readRDS("data/wave2_responses.rds")
+wave1 <- readRDS("data/derived/wave1_responses.rds")
+wave2 <- readRDS("data/derived/wave2_responses.rds")
 
 # Drop within-wave duplicate respondents (same Netquest_PID submitted more than
 # once) so the cross-wave join is strictly one-to-one. Keeps the first row.
 wave1 <- distinct(wave1, Netquest_PID, .keep_all = TRUE)
 wave2 <- distinct(wave2, Netquest_PID, .keep_all = TRUE)
 
-match_ids <- read_excel("data/Match ID.xlsx")
+match_ids <- read_excel("data/raw/Match ID.xlsx")
 match_ids <- janitor::clean_names(match_ids)
 # Columns are now snake_case: wave_1, wave_2, status_wave_2
 
 match_ids2 <- read.csv(
-  "data/wave_match_ids.csv",
+  "data/raw/wave_match_ids.csv",
   stringsAsFactors = FALSE,
   fileEncoding = "UTF-8-BOM"
 )

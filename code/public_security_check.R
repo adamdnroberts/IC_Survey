@@ -2,7 +2,7 @@ library(dplyr)
 library(readr)
 
 ps <- read_csv(
-  "data/public_security_funds_mun.csv",
+  "data/raw/public_security_funds_mun.csv",
   col_names = c("cve_ent", "estado", "cve_mun", "municipio", "y2021", "y2022"),
   skip = 1,
   col_types = cols(.default = "c")

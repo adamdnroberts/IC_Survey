@@ -36,7 +36,7 @@ print(reason_tbl)
 
 first_screenout_date <- as.Date(min(screenouts$Timestamp))
 
-responses_path <- "data/wave1_responses.rds"
+responses_path <- "data/derived/wave1_responses.rds"
 if (file.exists(responses_path)) {
   completions <- readRDS(responses_path) %>%
     filter(as.Date(Timestamp) >= first_screenout_date)
@@ -56,6 +56,6 @@ if (file.exists(responses_path)) {
 
 saveRDS(
   screenouts,
-  "data/wave1_screenouts.rds"
+  "data/derived/wave1_screenouts.rds"
 )
 cat("\nSaved to data/wave1_screenouts.rds\n")

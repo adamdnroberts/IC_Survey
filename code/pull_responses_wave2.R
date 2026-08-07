@@ -74,5 +74,5 @@ print(
 
 saveRDS(
   all_responses2,
-  "data/wave2_responses.rds"
+  "data/derived/wave2_responses.rds"
 )

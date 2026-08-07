@@ -40,7 +40,7 @@ SEL_LABELS <- c(
 )
 
 # ── Counts (from saved wave 2 dataset) ──────────────────────────────────────────
-wave2 <- readRDS("data/wave2_responses.rds") %>%
+wave2 <- readRDS("data/derived/wave2_responses.rds") %>%
   distinct(Netquest_PID, .keep_all = TRUE)
 
 age_bracket <- cut(
@@ -123,17 +123,17 @@ cat(sprintf(
 # Crosswalk logic mirrors code/create_panel_dataset.R: combined crosswalk from
 # all three match files, ambiguity resolved by restricting to the surviving
 # (filtered) wave-1 PIDs rather than dropping ambiguous wave-2 PIDs.
-wave1 <- readRDS("data/wave1_responses.rds") %>%
+wave1 <- readRDS("data/derived/wave1_responses.rds") %>%
   distinct(Netquest_PID, .keep_all = TRUE)
 
-match_ids1 <- read_excel("data/Match ID.xlsx") %>%
+match_ids1 <- read_excel("data/raw/Match ID.xlsx") %>%
   janitor::clean_names() %>%
   rename(pid_w1 = wave_1, pid_w2 = wave_2) %>%
   select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
 match_ids2 <- read.csv(
-  "data/wave_match_ids.csv",
+  "data/raw/wave_match_ids.csv",
   stringsAsFactors = FALSE,
   fileEncoding = "UTF-8-BOM"
 ) %>%
@@ -141,7 +141,7 @@ match_ids2 <- read.csv(
   select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
-match_ids3 <- read_excel("data/match IDs 29 Jun.xlsx") %>%
+match_ids3 <- read_excel("data/raw/match IDs 29 Jun.xlsx") %>%
   janitor::clean_names() %>%
   rename(pid_w1 = wave_1, pid_w2 = wave_2) %>%
   select(pid_w2, pid_w1) %>%

@@ -2,7 +2,7 @@ library(dplyr)
 library(ggplot2)
 
 mp_incumbents <- read.csv(
-  "data/aymu1989-on.incumbents.csv"
+  "data/raw/aymu1989-on.incumbents.csv"
 )
 
 # Pre-compute incumbent MC data: correct name, runner-up, pre-filtered distractor pool
@@ -49,7 +49,7 @@ mp_mc_data <- setNames(
   mp_latest$CVEGEO
 )
 
-saveRDS(mp_mc_data, file = "data/mp_mc_data.rds")
+saveRDS(mp_mc_data, file = "data/derived/mp_mc_data.rds")
 
 test <- filter(mp_incumbents, yr == 2022)
 

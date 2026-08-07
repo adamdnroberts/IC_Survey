@@ -21,13 +21,13 @@ library(estimatr)
 
 # ── 1. Load data ──────────────────────────────────────────────────────────────
 
-if (!file.exists("data/survey_panel_dataset.Rdata")) {
+if (!file.exists("data/derived/survey_panel_dataset.Rdata")) {
   stop(
     "data/survey_panel_dataset.Rdata not found. Run create_panel_dataset.R first."
   )
 }
 
-load("data/survey_panel_dataset.Rdata")
+load("data/derived/survey_panel_dataset.Rdata")
 
 # Same sample restrictions as crime_rate_accuracy_update.R / vote_update_analysis.R.
 d <- filter(panel, muni_changed == 0)

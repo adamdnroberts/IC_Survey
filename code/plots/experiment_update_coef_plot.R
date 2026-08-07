@@ -6,8 +6,8 @@ library(broom)
 library(car)
 library(mgcv)
 
-wave1 <- readRDS("data/wave1_responses.rds")
-wave2 <- readRDS("data/wave2_responses.rds")
+wave1 <- readRDS("data/derived/wave1_responses.rds")
+wave2 <- readRDS("data/derived/wave2_responses.rds")
 
 match_keys <- c(
   "NQ_Sex",

@@ -10,7 +10,7 @@
 
 library(dplyr)
 
-load("data/survey_panel_dataset.Rdata")  # loads 'panel'
+load("data/derived/survey_panel_dataset.Rdata")  # loads 'panel'
 
 panel_full <- panel
 

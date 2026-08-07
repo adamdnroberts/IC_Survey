@@ -7,7 +7,7 @@ library(tidyr)
 library(brms)
 library(ggplot2)
 
-long_df <- readRDS("data/benchmark_panel.rds")
+long_df <- readRDS("data/derived/benchmark_panel.rds")
 n_respondents <- n_distinct(long_df$Respondent_ID)
 
 priors <- c(
@@ -40,7 +40,7 @@ fit_benchmark <- brm(
   iter = 2000,
   warmup = 1000,
   seed = 42,
-  file = "data/fit_benchmark"
+  file = "data/derived/fit_benchmark"
 )
 
 summary(fit_benchmark)

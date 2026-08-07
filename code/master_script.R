@@ -102,7 +102,7 @@ BUILD_OUTPUTS <- c(
   "data/precip_data.rds",
   "data/nearest10.rds"
 )
-PULL_OUTPUTS <- c("data/wave1_responses.rds", "data/wave2_responses.rds")
+PULL_OUTPUTS <- c("data/derived/wave1_responses.rds", "data/derived/wave2_responses.rds")
 
 # Packages the pipeline loads. Checked up front so a missing one fails in the
 # first second rather than forty minutes in.

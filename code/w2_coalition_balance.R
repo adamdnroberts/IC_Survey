@@ -2,7 +2,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-responses <- readRDS("data/wave2_responses.rds")
+responses <- readRDS("data/derived/wave2_responses.rds")
 load("data/magar2024_coalitions.Rdata")
 
 coalition_lookup <- magar2024 %>%

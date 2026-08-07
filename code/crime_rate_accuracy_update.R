@@ -3,7 +3,7 @@ library(ggplot2)
 library(readxl)
 library(estimatr)
 
-load("data/survey_panel_dataset.Rdata")
+load("data/derived/survey_panel_dataset.Rdata")
 
 panel$Vote_home_post <- as.integer(
   !is.na(panel$coalition_post) &

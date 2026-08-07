@@ -14,6 +14,22 @@ data/*.mbtiles
 data/*.csv
 data/*.rds
 
+# data/ is split by provenance: raw/ holds inputs no script ever writes,
+# derived/ holds everything the pipeline can rebuild, temp/ holds fielding
+# scratch, archive/ holds files no script references any more. Only raw/
+# is irreplaceable; the rest is regenerable or historical.
+data/derived/
+data/temp/
+data/archive/
+data/raw/*.csv
+data/raw/*.rds
+data/raw/*.shp
+data/raw/*.shx
+data/raw/*.dbf
+data/raw/*.prj
+data/raw/*.cpg
+data/raw/*.geojson
+
 raw/
 
 # Large PDFs

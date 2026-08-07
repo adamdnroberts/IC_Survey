@@ -1,7 +1,7 @@
 library(dplyr)
 library(ggplot2)
 
-d <- readRDS("data/wave1_responses.rds")
+d <- readRDS("data/derived/wave1_responses.rds")
 
 crime_imp <- d %>%
   filter(!is.na(Importance_Crime)) %>%

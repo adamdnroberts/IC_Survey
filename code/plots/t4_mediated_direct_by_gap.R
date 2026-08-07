@@ -19,7 +19,7 @@ library(dplyr)
 library(ggplot2)
 library(mediation)
 
-load("data/survey_panel_dataset.Rdata")
+load("data/derived/survey_panel_dataset.Rdata")
 
 # Sample: drop muni movers + failed attention check (as in mediation_analysis.R).
 panel <- panel %>%

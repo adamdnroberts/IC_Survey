@@ -4,7 +4,7 @@ library(dplyr)
 library(ggplot2)
 library(broom)
 
-load("data/survey_panel_dataset.Rdata")
+load("data/derived/survey_panel_dataset.Rdata")
 
 panel_full <- panel
 

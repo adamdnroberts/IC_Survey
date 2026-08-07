@@ -2,7 +2,7 @@ library(estimatr)
 library(dplyr)
 library(ggplot2)
 #TO DO: add robustness check using asinh_crime_gap instead of log_crime_gap
-load("data/survey_panel_dataset.Rdata")
+load("data/derived/survey_panel_dataset.Rdata")
 
 if (!exists("ci_alpha")) {
   ci_alpha <- 0.01

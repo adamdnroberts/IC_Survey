@@ -2,7 +2,7 @@ library(dplyr)
 library(data.table)
 library(sf)
 
-load("data/survey_panel_dataset.Rdata")
+load("data/derived/survey_panel_dataset.Rdata")
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 haversine_km <- function(lon1, lat1, lon2, lat2) {

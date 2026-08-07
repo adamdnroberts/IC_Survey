@@ -16,7 +16,7 @@ haversine_km <- function(lon1, lat1, lon2, lat2) {
   2 * R * atan2(sqrt(a), sqrt(1 - a))
 }
 
-survey_responses_wave1 <- readRDS("data/wave1_responses.rds")
+survey_responses_wave1 <- readRDS("data/derived/wave1_responses.rds")
 
 party_to_coalition <- c(
   morena = "MORENA/PVEM/PT",
@@ -268,5 +268,5 @@ cat(sprintf(
 cat(sprintf("Selection rate: %.1f%%\n", 100 * mean(long_df$Selected)))
 print(table(long_df$pool))
 
-saveRDS(long_df, "data/benchmark_panel.rds")
+saveRDS(long_df, "data/derived/benchmark_panel.rds")
 cat("Wrote data/benchmark_panel.rds\n")

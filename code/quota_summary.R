@@ -134,7 +134,7 @@ cat(sprintf(
 
 # Pull fresh responses from S3 (writes data/wave1_responses.rds)
 source("code/pull_responses_wave1.R")
-responses <- readRDS("data/wave1_responses.rds")
+responses <- readRDS("data/derived/wave1_responses.rds")
 
 n_raw <- nrow(responses)
 responses <- responses |>

@@ -1,14 +1,14 @@
 library(dplyr)
 
-responses <- readRDS("data/wave1_responses.rds")
+responses <- readRDS("data/derived/wave1_responses.rds")
 
 excluded_pids <- c(
-  read.csv("data/first200_wave1.csv")$Netquest_PID,
-  read.csv("data/batch2_wave1_sent.csv")$Netquest_PID,
-  read.csv("data/batch3_wave1.csv")$Netquest_PID
+  read.csv("data/temp/first200_wave1.csv")$Netquest_PID,
+  read.csv("data/raw/batch2_wave1_sent.csv")$Netquest_PID,
+  read.csv("data/temp/batch3_wave1.csv")$Netquest_PID
 )
 
-w2 <- readRDS("data/wave2_responses.rds")
+w2 <- readRDS("data/derived/wave2_responses.rds")
 
 print(paste0(
   "prop. recontacts achieved: ",
@@ -30,4 +30,4 @@ if (length(overlap) > 0) {
   cat("No overlap with previous batches.\n")
 }
 
-write.csv(batch4, "data/batch4_wave1_pids.csv", row.names = FALSE)
+write.csv(batch4, "data/temp/batch4_wave1_pids.csv", row.names = FALSE)

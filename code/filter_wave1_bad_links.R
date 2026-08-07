@@ -8,21 +8,21 @@ library(readxl)
 
 # ── 1. Load data ──────────────────────────────────────────────────────────────
 
-wave1 <- readRDS("data/wave1_responses_w_duplicates.rds")
-wave2 <- readRDS("data/wave2_responses.rds")
+wave1 <- readRDS("data/derived/wave1_responses_w_duplicates.rds")
+wave2 <- readRDS("data/derived/wave2_responses.rds")
 
 wave1 <- distinct(wave1, Netquest_PID, .keep_all = TRUE)
 wave2 <- distinct(wave2, Netquest_PID, .keep_all = TRUE)
 
 # ── 2. Build combined crosswalk (all three match files) ───────────────────────
 
-match_ids1 <- janitor::clean_names(read_excel("data/Match ID.xlsx")) %>%
+match_ids1 <- janitor::clean_names(read_excel("data/raw/Match ID.xlsx")) %>%
   rename(pid_w1 = wave_1, pid_w2 = wave_2) %>%
   select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
 match_ids2 <- read.csv(
-  "data/wave_match_ids.csv",
+  "data/raw/wave_match_ids.csv",
   stringsAsFactors = FALSE,
   fileEncoding = "UTF-8-BOM"
 ) %>%
@@ -30,7 +30,7 @@ match_ids2 <- read.csv(
   select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
 
-match_ids3 <- janitor::clean_names(read_excel("data/match IDs 29 Jun.xlsx")) %>%
+match_ids3 <- janitor::clean_names(read_excel("data/raw/match IDs 29 Jun.xlsx")) %>%
   rename(pid_w1 = wave_1, pid_w2 = wave_2) %>%
   select(pid_w2, pid_w1) %>%
   mutate(across(c(pid_w2, pid_w1), as.character))
@@ -73,7 +73,7 @@ bad_w1_pids <- linked %>%
 
 write.csv(
   data.frame(pid_w1 = bad_w1_pids),
-  "data/w1_pids_after_w2.csv",
+  "data/derived/w1_pids_after_w2.csv",
   row.names = FALSE
 )
 
@@ -99,7 +99,7 @@ dup_w1_pids <- dup_sets %>%
 
 write.csv(
   data.frame(pid_w1 = dup_w1_pids),
-  "data/dup_respondents_w1_pids.csv",
+  "data/derived/dup_respondents_w1_pids.csv",
   row.names = FALSE
 )
 
@@ -136,7 +136,7 @@ dropped_w1_ids <- data.frame(pid_w1 = drop_w1_pids, stringsAsFactors = FALSE) %>
 
 write.csv(
   dropped_w1_ids,
-  "data/dropped_wave1_ids.csv",
+  "data/derived/dropped_wave1_ids.csv",
   row.names = FALSE
 )
 

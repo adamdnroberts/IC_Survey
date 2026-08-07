@@ -11,7 +11,7 @@
 library(TOSTER)
 library(dplyr)
 
-load("data/survey_panel_dataset.Rdata") # -> `panel`
+load("data/derived/survey_panel_dataset.Rdata") # -> `panel`
 
 # Restrict to the same estimation sample as the update analyses
 # (belief_update_analysis.R / vote_update_analysis.R): respondents whose home
@@ -133,7 +133,7 @@ cat(sprintf(
 
 write.csv(
   balance_equ,
-  "data/balance_equivalence_tests.csv",
+  "data/derived/balance_equivalence_tests.csv",
   row.names = FALSE
 )
 

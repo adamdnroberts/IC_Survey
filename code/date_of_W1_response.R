@@ -2,7 +2,7 @@ library(dplyr)
 library(ggplot2)
 library(lubridate)
 
-responses <- readRDS("data/wave1_responses.rds")
+responses <- readRDS("data/derived/wave1_responses.rds")
 
 responses <- responses %>%
   mutate(date = as.Date(as.POSIXct(Timestamp)))

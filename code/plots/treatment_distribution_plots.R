@@ -6,7 +6,7 @@
 library(dplyr)
 library(ggplot2)
 
-load("data/survey_panel_dataset.Rdata") # -> `panel`
+load("data/derived/survey_panel_dataset.Rdata") # -> `panel`
 
 # ── Actual rank distribution by treatment arm ─────────────────────────────────
 #

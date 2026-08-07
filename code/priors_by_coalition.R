@@ -5,7 +5,7 @@ library(ggridges)
 library(emmeans)
 library(fixest)
 
-survey_responses_wave1 <- readRDS("data/wave1_responses.rds")
+survey_responses_wave1 <- readRDS("data/derived/wave1_responses.rds")
 
 coalition_colors <- c(
   "Home municipality" = "#0072B2",

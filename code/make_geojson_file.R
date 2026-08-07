@@ -1,7 +1,7 @@
 library(dplyr)
 library(sf)
 
-shapefile_path <- "data/00mun.shp"
+shapefile_path <- "data/raw/00mun.shp"
 d_geo <- st_read(shapefile_path, quiet = TRUE)
 
 # Fix invalid geometries (very important)
