@@ -1,0 +1,7 @@
+library(haven)
+d <- read_dta("C:/Users/adamd/Downloads/ANALYSISedited.dta")
+cat("Dimensions:", nrow(d), "x", ncol(d), "\n\n")
+attrs <- lapply(d, function(x) attr(x, "label"))
+labels <- sapply(attrs, function(x) if(is.null(x)) NA_character_ else as.character(x))
+df <- data.frame(var = names(d), label = labels, stringsAsFactors = FALSE)
+print(df, row.names = FALSE)
