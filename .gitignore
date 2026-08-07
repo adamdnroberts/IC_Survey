@@ -36,8 +36,8 @@ google-service-account.json
 .claude/
 CLAUDE.md
 
-#latex folder (because it has its own git repository)
-latex/
+# latex/ is a git submodule pointing at the Overleaf project, so this repo
+# records which paper revision each code state produced output for.
 
 #misc scripts
 laer_replication/
