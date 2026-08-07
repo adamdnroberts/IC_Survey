@@ -122,7 +122,7 @@ cat(sprintf(
 print(
   balance_equ %>%
     mutate(across(where(is.numeric), ~ round(.x, 4))) %>%
-    select(covariate, type, n, pes, eqbound, F.value, p.equ, equivalent)
+    dplyr::select(covariate, type, n, pes, eqbound, F.value, p.equ, equivalent)
 )
 
 cat(sprintf(

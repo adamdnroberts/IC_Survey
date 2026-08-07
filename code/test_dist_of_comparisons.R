@@ -24,7 +24,7 @@ all_parties <- magar2024 %>%
       TRUE ~ NA_character_
     )
   ) %>%
-  select(CVEGEO, governing_party, coalition_label)
+  dplyr::select(CVEGEO, governing_party, coalition_label)
 
 d_geo <- d_geo %>%
   left_join(all_parties, by = c("muni_id" = "CVEGEO")) %>%
@@ -133,7 +133,7 @@ rank_results <- lapply(seq_along(rank_munis), function(i) {
   base_candidates <- d_geo %>%
     st_drop_geometry() %>%
     filter(muni_id != home_id, !is.na(POB_TOTAL), POB_TOTAL >= 22000, !is.na(area_km2)) %>%
-    select(
+    dplyr::select(
       muni_id,
       NOMGEO,
       NOM_ENT,

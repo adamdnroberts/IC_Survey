@@ -30,7 +30,7 @@ all_parties <- magar2024 %>%
       TRUE ~ NA_character_
     )
   ) %>%
-  select(CVEGEO, governing_party, coalition_label)
+  dplyr::select(CVEGEO, governing_party, coalition_label)
 
 excluded_states <- c(
   "Ciudad de México",
@@ -66,7 +66,7 @@ test <- d %>%
   left_join(
     magar2024 %>%
       mutate(CVEGEO = sprintf("%05d", inegi)) %>%
-      select(CVEGEO, l01),
+      dplyr::select(CVEGEO, l01),
     by = c("muni_id" = "CVEGEO")
   )
 
@@ -228,10 +228,10 @@ morena_mc <- magar2024 %>%
   filter(grepl("morena", l01) & grepl("mc", l01)) %>%
   mutate(CVEGEO = sprintf("%05d", inegi)) %>%
   left_join(
-    d_geo %>% st_drop_geometry() %>% select(muni_id, NOMGEO, NOM_ENT),
+    d_geo %>% st_drop_geometry() %>% dplyr::select(muni_id, NOMGEO, NOM_ENT),
     by = c("CVEGEO" = "muni_id")
   ) %>%
-  select(CVEGEO, NOMGEO, NOM_ENT, l01)
+  dplyr::select(CVEGEO, NOMGEO, NOM_ENT, l01)
 
 cat("Count:", nrow(morena_mc), "\n\n")
 print(morena_mc, n = Inf)
@@ -242,7 +242,7 @@ robo_data <- readRDS("data/robo_2025.rds") %>%
   mutate(muni_id = sprintf("%05d", Cve..Municipio))
 
 reg_data <- d %>%
-  left_join(robo_data %>% select(muni_id, robos), by = "muni_id") %>%
+  left_join(robo_data %>% dplyr::select(muni_id, robos), by = "muni_id") %>%
   filter(
     !is.na(robos),
     !is.na(coalition_label),

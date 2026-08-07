@@ -78,6 +78,8 @@ source("code/priors_by_coalition.R")       # priors_ridge_plot.pdf, priors_qq_pl
                                            # mean_crime_priors.pdf
 source("code/plots/t4_belief_updates_comparison.R") # t4_belief_updates_comparison_cg.pdf
 source("code/plots/t4_mediated_direct_by_gap.R")    # t4_mediated_direct_by_crimegap_full.pdf
+# NB: the line above attaches MASS (via mediation), which masks dplyr::select
+# for everything sourced after it. Scripts below qualify their select() calls.
 source("code/equivalence_tests.R")         # balance_equivalence.tex
 source("code/w2_party_knowledge.R")        # party_knowledge.tex
 source("code/descriptive_coalitions.R")    # network_plot.pdf
