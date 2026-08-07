@@ -13,14 +13,12 @@
 
 library(estimatr)
 
-# Build panel + the inc_minus_opp_avg_post / inc_pre / opp_avg_pre columns if not
-# already loaded (source is skipped when panel already has the expected rows).
-if (!exists("panel") || nrow(panel) != 1735) {
-  source(
-    "code/home_party_update_analysis.R",
-    echo = FALSE
-  )
-}
+# Builds panel plus the inc_minus_opp_avg_post / inc_pre / opp_avg_pre columns.
+# Sourced unconditionally: the previous guard skipped this when a `panel` with
+# exactly 1735 rows was already in the environment, which silently took the
+# wrong branch as soon as one more response arrived, and depended on whatever a
+# previously sourced script happened to leave behind.
+source("code/home_party_update_analysis.R", echo = FALSE)
 
 if (!exists("ci_alpha")) {
   ci_alpha <- 0.01

@@ -40,7 +40,11 @@ fit_benchmark <- brm(
   iter = 2000,
   warmup = 1000,
   seed = 42,
-  file = "data/derived/fit_benchmark"
+  file = "data/derived/fit_benchmark",
+  # Without this brms defaults to file_refit = "never": edit the formula,
+  # priors or upstream panel and it silently reloads the stale fit, so
+  # benchmark_model.tex would report a model that no longer exists in the code.
+  file_refit = "on_change"
 )
 
 summary(fit_benchmark)

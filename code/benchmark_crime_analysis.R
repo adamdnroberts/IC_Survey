@@ -43,7 +43,10 @@ fit_benchmark_crime <- brm(
   iter = 2000,
   warmup = 1000,
   seed = 42,
-  file = "data/derived/fit_benchmark_crime"
+  file = "data/derived/fit_benchmark_crime",
+  # See benchmark_analysis.R: brms defaults to file_refit = "never", which
+  # silently reloads a stale fit after the model or its data changes.
+  file_refit = "on_change"
 )
 
 summary(fit_benchmark_crime)

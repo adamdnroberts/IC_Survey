@@ -1,11 +1,8 @@
-# Only (re)build the models/panel if they aren't already loaded. Sourcing is
-# skipped when `panel` exists and already has the expected number of rows.
-if (!exists("panel") || nrow(panel) != 1735) {
-  source(
-    "code/home_party_update_analysis.R",
-    echo = FALSE
-  )
-}
+# Builds the panel and models. Sourced unconditionally: the previous guard
+# skipped this when a `panel` with exactly 1735 rows was already in the
+# environment, which silently took the wrong branch as soon as one more response
+# arrived, and depended on whatever a previously sourced script left behind.
+source("code/home_party_update_analysis.R", echo = FALSE)
 
 # Wrappers that take an explicit data frame, so the permuted data is actually
 # used (fit_ancova() in the sourced script hardcodes data = panel). The outcome
