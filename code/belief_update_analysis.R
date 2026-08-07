@@ -3,7 +3,6 @@ library(modelsummary)
 library(dplyr)
 library(ggplot2)
 library(broom)
-library(readxl)
 
 load("data/survey_panel_dataset.Rdata")
 

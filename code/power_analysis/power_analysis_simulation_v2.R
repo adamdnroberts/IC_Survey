@@ -1,5 +1,4 @@
 library(dplyr)
-library(purrr)
 library(ggplot2)
 library(ggrepel)
 
