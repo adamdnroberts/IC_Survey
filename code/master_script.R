@@ -60,7 +60,6 @@ source("code/manipulation_check.R")
 
 # ── 4. Main experimental analysis ─────────────────────────────────────────────
 
-source("code/experimental_analysis.R")
 source("code/belief_update_analysis.R")
 source("code/vote_update_analysis.R")      # vote_coef_update_log.pdf
 
