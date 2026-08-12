@@ -116,13 +116,12 @@ test$actual_rank <- 1 +
     na.rm = TRUE
   )
 
-# Drop implausible robbery estimates (> 100,000) before computing gaps and
-# updates, matching crime_rate_accuracy_update.R and manipulation_check.R.
-est_cap <- 100000
+# Implausible robbery estimates (> robbery_implausible_max) are already NA in
+# the panel — create_panel_dataset.R applies the rule once, before any gap is
+# computed. Do not re-apply it here; a second local copy is how the threshold
+# drifted out of sync across scripts in the first place.
 test$est_pre <- as.numeric(test$Robbery_Estimate)
 test$est_post <- as.numeric(test$Robbery_Estimate_Post)
-test$est_pre[!is.na(test$est_pre) & test$est_pre > est_cap] <- NA_real_
-test$est_post[!is.na(test$est_post) & test$est_post > est_cap] <- NA_real_
 
 test$CG <- test$est_pre - test$home_rate
 test$RG <- test$rank_prior - test$actual_rank

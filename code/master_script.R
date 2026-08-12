@@ -52,43 +52,47 @@ STAGES <- list(
   data = list(
     label = "Stage 1 -- build the analysis panels",
     scripts = c(
-      "code/create_panel_dataset.R",   # -> data/survey_panel_dataset.Rdata
-      "code/build_benchmark_panel.R"   # -> data/benchmark_panel.rds
+      "code/create_panel_dataset.R", # -> data/survey_panel_dataset.Rdata
+      "code/build_benchmark_panel.R" # -> data/benchmark_panel.rds
     )
   ),
 
   analysis = list(
     label = "Stage 2 -- main results",
     scripts = c(
-      "code/benchmark_analysis.R",          # comparison_coef_plot.pdf,
-                                            # benchmark_model.tex
+      "code/benchmark_analysis.R", # comparison_coef_plot.pdf,
+      # benchmark_model.tex
       "code/benchmark_crime_analysis.R",
       "code/manipulation_check.R",
       "code/belief_update_analysis.R",
-      "code/vote_update_analysis.R",        # vote_coef_update_log.pdf
+      "code/vote_update_analysis.R", # vote_coef_update_log.pdf
+      "code/vote_update_capped.R", # vote_coef_update_capped.pdf
+      "code/vote_update_spec_differences.R", # vote_update_spec_differences_plot.pdf
       "code/belief_update_tobit_analysis.R",
       "code/belief_2sls.R",
-      "code/triple_interaction_vote.R",     # vote_treatment_by_importance*.pdf
-      "code/home_party_update_analysis.R"   # inc_vs_other_coalitions.tex
+      "code/triple_interaction_vote.R", # vote_treatment_by_importance*.pdf
+      "code/home_party_update_analysis.R" # inc_vs_other_coalitions.tex
     )
   ),
 
   figures = list(
     label = "Stage 3 -- remaining paper figures and tables",
     scripts = c(
-      "code/priors_by_coalition.R",         # priors_ridge_plot.pdf,
-                                            # priors_qq_plot.pdf,
-                                            # mean_crime_priors.pdf
+      "code/priors_by_coalition.R", # priors_ridge_plot.pdf,
+      # priors_qq_plot.pdf,
+      # mean_crime_priors.pdf
       "code/plots/t4_belief_updates_comparison.R", # t4_belief_updates_comparison_cg.pdf
-      "code/plots/t4_mediated_direct_by_gap.R",    # t4_mediated_direct_by_crimegap_full.pdf
-      "code/equivalence_tests.R",           # balance_equivalence.tex
-      "code/w2_party_knowledge.R",          # party_knowledge.tex
-      "code/descriptive_coalitions.R",      # network_plot.pdf
-      "code/test_dist_of_comparisons.R",    # rank_dist_plot.pdf
-      # Design-stage power analysis. Uses no response data, but the appendix
-      # reports its two figures.
-      "code/power_analysis/power_analysis_simulation_v2.R" # power_graph_t2_rw.pdf,
-                                                           # power_graph_t1_cw.pdf
+      "code/plots/t4_mediated_direct_by_gap.R", # t4_mediated_direct_by_crimegap_full.pdf
+      "code/equivalence_tests.R", # balance_equivalence.tex
+      "code/w2_party_knowledge.R", # party_knowledge.tex
+      "code/descriptive_coalitions.R", # network_plot.pdf
+      "code/test_dist_of_comparisons.R" # rank_dist_plot.pdf
+      # Design-stage power analysis, currently DISABLED. Uses no response data,
+      # but the appendix reports its two figures (power_graph_t2_rw.pdf,
+      # power_graph_t1_cw.pdf), so they are no longer reproducible from
+      # master_script.R — re-enable this line before building a replication
+      # package, and restore the trailing comma on the line above when you do.
+      # "code/power_analysis/power_analysis_simulation_v2.R"
     )
   )
 )
@@ -102,15 +106,38 @@ BUILD_OUTPUTS <- c(
   "data/precip_data.rds",
   "data/nearest10.rds"
 )
-PULL_OUTPUTS <- c("data/derived/wave1_responses.rds", "data/derived/wave2_responses.rds")
+PULL_OUTPUTS <- c(
+  "data/derived/wave1_responses.rds",
+  "data/derived/wave2_responses.rds"
+)
 
 # Packages the pipeline loads. Checked up front so a missing one fails in the
 # first second rather than forty minutes in.
 REQUIRED_PACKAGES <- c(
-  "AER", "TOSTER", "brms", "broom", "data.table", "dplyr", "emmeans",
-  "estimatr", "fixest", "geodata", "ggplot2", "ggraph", "ggrepel", "ggridges",
-  "igraph", "lmtest", "mediation", "modelsummary", "paws.storage", "readxl",
-  "sandwich", "sf", "terra", "tidyr"
+  "AER",
+  "TOSTER",
+  "brms",
+  "broom",
+  "data.table",
+  "dplyr",
+  "emmeans",
+  "estimatr",
+  "fixest",
+  "geodata",
+  "ggplot2",
+  "ggraph",
+  "ggrepel",
+  "ggridges",
+  "igraph",
+  "lmtest",
+  "mediation",
+  "modelsummary",
+  "paws.storage",
+  "readxl",
+  "sandwich",
+  "sf",
+  "terra",
+  "tidyr"
 )
 
 # ---- Environment checks ----------------------------------------------------
@@ -122,8 +149,12 @@ check_root <- function() {
   if (length(missing) > 0) {
     stop(
       "\n  The working directory does not look like the project root.\n",
-      "    working directory : ", root, "\n",
-      "    not found here    : ", paste(missing, collapse = ", "), "\n\n",
+      "    working directory : ",
+      root,
+      "\n",
+      "    not found here    : ",
+      paste(missing, collapse = ", "),
+      "\n\n",
       "  cd into the folder containing code/ and try again.\n",
       "  (A missing latex/ usually means: git submodule update --init)\n",
       call. = FALSE
@@ -138,8 +169,12 @@ check_packages <- function() {
   ]
   if (length(missing) > 0) {
     stop(
-      "\n  Missing packages: ", paste(missing, collapse = ", "), "\n",
-      '  install.packages(c("', paste(missing, collapse = '", "'), '"))\n',
+      "\n  Missing packages: ",
+      paste(missing, collapse = ", "),
+      "\n",
+      '  install.packages(c("',
+      paste(missing, collapse = '", "'),
+      '"))\n',
       call. = FALSE
     )
   }
@@ -182,7 +217,9 @@ run_script <- function(rel_path, root) {
       readLines(log_file, warn = FALSE),
       error = function(e) character()
     )
-    for (l in utils::tail(tail_lines, 8)) message("       | ", l)
+    for (l in utils::tail(tail_lines, 8)) {
+      message("       | ", l)
+    }
   }
 
   list(script = rel_path, ok = ok, seconds = elapsed, log = log_file)
@@ -204,7 +241,10 @@ resolve_stages <- function(requested) {
   if (!"build" %in% requested && !all(file.exists(BUILD_OUTPUTS))) {
     message(
       "Derived data missing (",
-      paste(basename(BUILD_OUTPUTS[!file.exists(BUILD_OUTPUTS)]), collapse = ", "),
+      paste(
+        basename(BUILD_OUTPUTS[!file.exists(BUILD_OUTPUTS)]),
+        collapse = ", "
+      ),
       ") -- adding the build stage"
     )
     auto <- c(auto, "build")
@@ -223,8 +263,10 @@ main <- function(stage_names) {
   unknown <- setdiff(stage_names, names(STAGES))
   if (length(unknown) > 0) {
     stop(
-      "unknown stage(s): ", paste(unknown, collapse = ", "),
-      "\n  valid stages: ", paste(names(STAGES), collapse = ", "),
+      "unknown stage(s): ",
+      paste(unknown, collapse = ", "),
+      "\n  valid stages: ",
+      paste(names(STAGES), collapse = ", "),
       call. = FALSE
     )
   }
@@ -251,12 +293,16 @@ main <- function(stage_names) {
   message(strrep("=", 72))
   message(sprintf(
     "%d of %d scripts succeeded in %.1f minutes",
-    length(results) - length(failed), length(results), total
+    length(results) - length(failed),
+    length(results),
+    total
   ))
   if (length(failed) > 0) {
     message("")
     message("Failed:")
-    for (f in failed) message("  ", f$script, "\n    log: ", f$log)
+    for (f in failed) {
+      message("  ", f$script, "\n    log: ", f$log)
+    }
     message(strrep("=", 72))
     if (!interactive()) quit(status = 1, save = "no")
   }

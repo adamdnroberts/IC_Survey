@@ -103,14 +103,15 @@ test$Home_Crime_Handling_Change <- as.numeric(test$Home_Crime_Handling_Post) -
 
 test$CI <- 6 - as.numeric(test$Importance_Crime)
 
-test_all <- filter(test, abs(CG) < 100000)
+# The former `abs(CG) < 100000` row filter is gone: create_panel_dataset.R now
+# NAs implausible estimates before crime_gap exists, so CG is already bounded.
+# Note the old local rule differed from the project rule in two ways — it was
+# two-sided and applied to the GAP, and it DROPPED rows rather than NA-ing the
+# estimate, so it silently changed N here relative to every other script.
+test_all <- test
 test_all$CG_wins <- winsorize(test_all$CG)
 
-test <- filter(
-  test,
-  Attention_Check == "somewhat_agree" &
-    abs(CG) < 100000
-)
+test <- filter(test, Attention_Check == "somewhat_agree")
 
 m <- lm_robust(
   Home_Crime_Handling_Change ~

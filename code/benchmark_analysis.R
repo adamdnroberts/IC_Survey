@@ -93,8 +93,6 @@ plot_df <- draws %>%
     mean = mean(pp_change),
     lo95 = quantile(pp_change, 0.025),
     hi95 = quantile(pp_change, 0.975),
-    lo50 = quantile(pp_change, 0.25),
-    hi50 = quantile(pp_change, 0.75),
     .groups = "drop"
   ) %>%
   mutate(
@@ -110,15 +108,14 @@ benchmark_coef_plot <- ggplot(
   aes(x = mean, y = label)
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 0.6) +
-  geom_linerange(aes(xmin = lo50, xmax = hi50), linewidth = 1.6) +
+  geom_linerange(aes(xmin = lo95, xmax = hi95), linewidth = 0.9) +
   geom_point(size = 2.5, shape = 21, fill = "white", stroke = 1) +
   labs(
     x = "Posterior mean percentage-point change (from 50% baseline)",
     y = NULL,
     title = "Predictors of comparison municipality selection",
     caption = sprintf(
-      "N = %d respondents. Thick lines: 50%% CI. Thin lines: 95%% CI.",
+      "N = %d respondents. Lines: 95%% credible intervals.",
       n_respondents
     )
   ) +

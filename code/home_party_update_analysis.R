@@ -400,6 +400,57 @@ save_coef_plot(
   "latex/images/incumbent_minus_other_coalitions_update_coef_plot.pdf"
 )
 
+# Slide-styled variant of save_coef_plot: one gap measure only (no facet), 95%
+# CIs only, square aspect — matches build_log_gap_plot() in
+# vote_update_analysis.R so the figure sits alongside vote_coef_update_log_cg.pdf
+# in slides.tex without restyling.
+save_cg_slide_plot <- function(
+  model,
+  model_label,
+  x_label,
+  outfile,
+  group_label = "CG × Treatment"
+) {
+  cp <- extract_coef_plot(
+    model,
+    "log_crime_gap",
+    model_label,
+    log_crime_gap_sd,
+    rank_gap_sd
+  )
+  p <- ggplot(
+    subset(cp, treatment != "control2" & group == group_label),
+    aes(y = treatment, x = estimate, color = treatment)
+  ) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+    geom_errorbar(
+      aes(xmin = conf.low95, xmax = conf.high95),
+      orientation = "y",
+      width = 0,
+      linewidth = 0.5,
+      position = position_dodge(width = 0.5)
+    ) +
+    geom_point(position = position_dodge(width = 0.5)) +
+    scale_color_manual(values = arm_colors, guide = "none") +
+    labs(
+      y = "Treatment group",
+      x = x_label,
+      title = group_label,
+      caption = paste0("N = ", model$nobs, ", bars 95% CI")
+    ) +
+    theme_minimal()
+  print(p)
+  ggsave(outfile, plot = p, width = 4.5, height = 4.5)
+  invisible(p)
+}
+
+save_cg_slide_plot(
+  m_inc_other,
+  "m_inc_other",
+  "Standardized coefficient (1 SD increase in crime gap)",
+  "latex/images/incumbent_minus_other_coalitions_coef_cg.pdf"
+)
+
 # ── Comparison-arm refit: same model, T1 dropped from the estimation sample ───
 # T1 delivers no cross-municipality comparison, so it carries no information
 # about the other coalitions this outcome is built from. Restricting estimation

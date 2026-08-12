@@ -5,6 +5,15 @@ robbery_cap_mult <- 2
 min_days_between <- 4
 ci_alpha <- 0.01
 
+# Implausibility ceiling for self-reported robbery counts. Estimates strictly
+# above this are treated as non-responses (set to NA), not as data. For scale,
+# the maximum ACTUAL home robbery rate in the panel is ~1,990, so this is ~50x
+# anything real; the values it removes are 1e18, 1e16, 6.6e8, 5.9e7 and similar.
+# This is the single definition of the rule — downstream scripts must read
+# Robbery_Estimate / Robbery_Estimate_Post from the panel and NOT re-apply their
+# own cap. Costs 45 of 2,344 panel rows' estimates (1.9%), balanced across arms.
+robbery_implausible_max <- 100000
+
 wave1 <- readRDS("data/derived/wave1_responses.rds")
 wave2 <- readRDS("data/derived/wave2_responses.rds")
 
@@ -168,6 +177,23 @@ panel$actual_rank <- 1 +
     na.rm = TRUE
   )
 
+# ── Implausible robbery estimates -> NA, BEFORE any gap is computed ───────────
+# Must precede the capping and crime_gap lines below: crime_gap and hence
+# log_crime_gap were previously built from the raw estimate, so a single 1e18
+# entry produced log_crime_gap ~ -41 against a plausible range of about +-8 and
+# carried extreme leverage into every interaction it appears in. Setting the
+# character column to NA (rather than dropping the respondent) keeps the row
+# available to analyses that do not use the crime estimate, and propagates
+# correctly through the as.numeric() calls downstream scripts already make.
+for (v in c("Robbery_Estimate", "Robbery_Estimate_Post")) {
+  num <- suppressWarnings(as.numeric(panel[[v]]))
+  bad <- !is.na(num) & num > robbery_implausible_max
+  cat(sprintf("%s: %d of %d set to NA as implausible (> %s)\n",
+              v, sum(bad), nrow(panel), format(robbery_implausible_max,
+                                               big.mark = ",", scientific = FALSE)))
+  panel[[v]][bad] <- NA
+}
+
 # Top-code (cap) the robbery estimate at a fixed plausibility ceiling of
 # robbery_cap_mult x the maximum observed home rate. This is one-sided capping
 # against an external threshold, not winsorization (which would replace values
@@ -183,6 +209,10 @@ panel$rank_gap <- panel$actual_rank - panel$rank_prior
 
 panel$log_crime_gap <- sign(panel$crime_gap) * log(1 + abs(panel$crime_gap))
 panel$asinh_crime_gap <- asinh(panel$crime_gap)
+
+# With the implausibility rule applied above, log_crime_gap spans roughly
+# -11.5 to 7.3. A value beyond +-15 means the NA-ing was skipped or reordered.
+stopifnot(all(abs(panel$log_crime_gap) < 15 | is.na(panel$log_crime_gap)))
 
 panel$Home_Crime_Handling_Change <- as.numeric(panel$Home_Crime_Handling_Post) -
   as.numeric(panel$Home_Crime_Handling_Pre)
