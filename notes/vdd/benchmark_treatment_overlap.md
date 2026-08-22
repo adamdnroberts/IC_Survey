@@ -1,6 +1,6 @@
 # VDD Tracker: benchmark_treatment_overlap.R
 
-**Target**: `code/benchmark_treatment_overlap.R`
+**Target**: `code/exploratory/benchmark_treatment_overlap.R`
 
 **Termination condition**: 2 rounds with no surviving crash-or-wrong-number finding
 

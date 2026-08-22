@@ -1223,7 +1223,7 @@ ui <- fluidPage(
 #           Veracruz).
 # Base total N = 2,180, scaled by larger_sample. Marginal (per-variable) quotas only.
 
-# Scale-up factor for the enlarged sample (keep in sync with code/quota_summary.R)
+# Scale-up factor for the enlarged sample (keep in sync with code/fielding/quota_summary.R)
 larger_sample <- 1.4
 
 # Age bracket helper — maps raw Netquest age value to bracket label
@@ -1279,7 +1279,7 @@ QUOTA_SEL <- ceiling(
     larger_sample
 )
 
-# Region targets: loaded from pre-computed RDS (run code/census_quotas.R to generate)
+# Region targets: loaded from pre-computed RDS (run code/fielding/census_quotas.R to generate)
 # Source: INEGI Censo de Población y Vivienda 2020, state totals,
 #         proportional within eligible states (excl. CDMX, Durango, Oaxaca, Veracruz)
 QUOTA_REGION <- ceiling(readRDS("data/region_quotas_wave1.rds") * larger_sample)
