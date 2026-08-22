@@ -29,7 +29,7 @@ arm_colors <- c(
   control2 = "#999999",
   T1 = "#56B4E9",
   T2 = "#009E73",
-  T3 = "#E69F00",
+  T3 = "#D55E00",
   T4 = "#0072B2"
 )
 
@@ -465,7 +465,7 @@ m_inc_other_comp <- fit_ancova(
   data = panel_comparison
 )
 
-# ── LaTeX table: CG x treatment interactions, comparison arms ────────────────
+# ── LaTeX table: CG x treatment interactions, all arms ───────────────────────
 # Reports the crime-level-gap x arm interactions (the treatment effects
 # conditional on the content of the information). The RG interactions,
 # pre-treatment levels, arm main effects, and coalition_pre controls are
@@ -490,12 +490,12 @@ clean_term <- function(x) {
   x
 }
 
-# Keep the CG x arm interactions, in model order (T2 to T4). Rescale to a 1 SD
+# Keep the CG x arm interactions, in model order (T1 to T4). Rescale to a 1 SD
 # increase in the crime-level gap; scaling the estimate and its standard error
 # by the same constant leaves the t statistic and p-value unchanged.
-td_inc_other <- tidy(m_inc_other_comp) %>%
+td_inc_other <- tidy(m_inc_other) %>%
   filter(grepl(
-    "^log_crime_gap:as\\.factor\\(Treatment_Group\\)T[234]$",
+    "^log_crime_gap:as\\.factor\\(Treatment_Group\\)T[1234]$",
     term
   )) %>%
   mutate(
@@ -503,9 +503,9 @@ td_inc_other <- tidy(m_inc_other_comp) %>%
     std.error = std.error * log_crime_gap_sd
   )
 
-if (nrow(td_inc_other) != 3) {
+if (nrow(td_inc_other) != 4) {
   stop(
-    "Expected 3 CG x comparison-arm interactions, got ",
+    "Expected 4 CG x arm interactions, got ",
     nrow(td_inc_other),
     " — check the Treatment_Group levels in the estimation sample."
   )
@@ -532,8 +532,7 @@ table_tex <- paste0(
   "preference; only the crime-level gap ($CG$) $\\times$ arm interactions are\n",
   "shown. Coefficients are standardized to a 1 SD increase in $CG$. HC2 robust\n",
   "standard errors. Sample: home municipality unchanged, attention-check\n",
-  "passers, Control2 and T1 excluded (T1 delivers no cross-municipality\n",
-  "comparison); Control is the omitted arm.}\n",
+  "passers, Control2 excluded; Control is the omitted arm.}\n",
   "\\begin{tabular}{lrrr}\n",
   "\\toprule\n",
   "\\textbf{Term} & \\textbf{Estimate} & \\textbf{Std.\\ Error} & ",
@@ -543,10 +542,10 @@ table_tex <- paste0(
   "\n",
   "\\midrule\n",
   "$N$ & \\multicolumn{3}{l}{",
-  m_inc_other_comp$nobs,
+  m_inc_other$nobs,
   "} \\\\\n",
   "$R^2$ & \\multicolumn{3}{l}{",
-  fmt_num(m_inc_other_comp$r.squared),
+  fmt_num(m_inc_other$r.squared),
   "} \\\\\n",
   "\\bottomrule\n",
   "\\end{tabular}\n",

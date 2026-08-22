@@ -13,7 +13,7 @@ arm_colors <- c(
   control2 = "#999999",
   T1 = "#56B4E9",
   T2 = "#009E73",
-  T3 = "#E69F00",
+  T3 = "#D55E00",
   T4 = "#0072B2"
 )
 
@@ -21,6 +21,12 @@ panel$Vote_home_post <- as.integer(
   !is.na(panel$coalition_post) &
     !is.na(panel$home_coalition) &
     panel$home_coalition == panel$coalition_post
+)
+
+panel$Vote_home_pre <- as.integer(
+  !is.na(panel$coalition_post) &
+    !is.na(panel$home_coalition) &
+    panel$home_coalition == panel$coalition_pre
 )
 
 panel_full <- panel
@@ -107,16 +113,21 @@ m_log <- lm_robust(
   Vote_home_post ~
     log_crime_gap *
     as.factor(Treatment_Group) +
-    rank_gap * as.factor(Treatment_Group) +
-    # home_rate +
-    # actual_rank +
+    rank_gap *
+      as.factor(Treatment_Group) +
     # as.numeric(MORENA_Crime_Rating_Pre) +
     # as.numeric(MC_Crime_Rating_Pre) +
     # as.numeric(Coalition_PAN_PRI_PRD_Crime_Rating_Pre) +
-    as.factor(coalition_pre) +
+    #as.factor(coalition_pre) +
+    #as.factor(home_party_knowledge) +
     inc_vote,
   alpha = ci_alpha,
+  #subset(
+  #subset(
   data = panel,
+  #home_party_knowledge == "Correct"
+  #Importance_Crime == "1" | Importance_Crime == "2" | Importance_Crime == "3"
+  #),
   se_type = "HC2"
 )
 
@@ -297,7 +308,7 @@ m_vote_pooled_comparisons <- lm_robust(
 )
 summary(m_vote)
 
-# GAM updating curves moved to code/vote_update_gam.R
+# GAM updating curves moved to code/exploratory/vote_update_gam.R
 
 # ── 25% threshold robustness: refit m_vote with rank_gap_25 and compare ────────
 # Alternative rank-gap measure (matches belief_update_analysis.R): a comparison
@@ -396,6 +407,141 @@ print(vote_coef_compare_25)
 ggsave(
   "latex/images/vote_coef_compare_rg25.pdf",
   plot = vote_coef_compare_25,
+  width = 7,
+  height = 4.5
+)
+
+# ── Subgroup: respondents who correctly named their home governing coalition ──
+# Same specification and plot as m_log / vote_coef_update_log, refit on the
+# subset with home_party_knowledge == "Correct". Coefficients are scaled by the
+# full-sample SDs (log_crime_gap_sd, rank_gap_sd) so the estimates are directly
+# comparable to the main figure.
+panel_correct <- filter(panel, home_party_knowledge == "Correct")
+
+m_log_correct <- lm_robust(
+  Vote_home_post ~
+    log_crime_gap *
+    as.factor(Treatment_Group) +
+    rank_gap * as.factor(Treatment_Group) +
+    inc_vote,
+  alpha = ci_alpha,
+  data = panel_correct,
+  se_type = "HC2"
+)
+
+summary(m_log_correct)
+
+coef_plot_data_log_correct <- tidy(m_log_correct, conf.int = TRUE) %>%
+  filter(grepl("Treatment_Group", term) & grepl(":", term)) %>%
+  mutate(
+    group = case_when(
+      grepl("^log_crime_gap:", term) ~ "CG × Treatment",
+      TRUE ~ "RG × Treatment"
+    ),
+    treatment = sub(".*Treatment_Group\\)", "", term) %>% sub(":.*$", "", .),
+    sd = if_else(group == "CG × Treatment", log_crime_gap_sd, rank_gap_sd),
+    across(c(estimate, conf.low, conf.high, std.error), ~ . * sd),
+    conf.low95 = estimate - qt(0.975, df) * std.error,
+    conf.high95 = estimate + qt(0.975, df) * std.error
+  ) %>%
+  filter(treatment != "control2") %>%
+  dplyr::select(-sd)
+
+vote_coef_update_log_correct <- ggplot(
+  coef_plot_data_log_correct,
+  aes(y = treatment, x = estimate, color = treatment)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_errorbar(
+    aes(xmin = conf.low95, xmax = conf.high95),
+    orientation = "y",
+    width = 0,
+    linewidth = 0.5,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  scale_color_manual(values = arm_colors, guide = "none") +
+  facet_wrap(~group, scales = "free_x") +
+  labs(
+    y = "Treatment group",
+    x = "Standardized coefficient (1 SD increase in predictor)",
+    title = "Knows home governing coalition",
+    caption = paste0("N = ", m_log_correct$nobs, ", bars 95% CI")
+  ) +
+  theme_minimal()
+
+print(vote_coef_update_log_correct)
+
+ggsave(
+  "latex/images/vote_coef_update_log_correct.pdf",
+  plot = vote_coef_update_log_correct,
+  width = 7,
+  height = 4.5
+)
+
+# ── Full sample vs. correct-knowledge subgroup on one plot ────────────────────
+# Overlays the m_log and m_log_correct interaction coefficients. Both frames are
+# already scaled by the full-sample SDs, so the two sets are comparable.
+coef_compare_correct <- bind_rows(
+  mutate(coef_plot_data_log, sample = "All respondents"),
+  mutate(coef_plot_data_log_correct, sample = "Knows home coalition")
+) %>%
+  mutate(
+    sample = factor(
+      sample,
+      levels = c("All respondents", "Knows home coalition")
+    )
+  )
+
+# Treatment arms keep the arm_colors scheme used by vote_coef_update_log; the
+# two samples are separated by shape and line type instead of by color.
+vote_coef_compare_correct <- ggplot(
+  coef_compare_correct,
+  aes(y = treatment, x = estimate, color = treatment, shape = sample)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_errorbar(
+    aes(xmin = conf.low95, xmax = conf.high95, linetype = sample),
+    orientation = "y",
+    width = 0,
+    linewidth = 0.5,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_point(size = 2, position = position_dodge(width = 0.5)) +
+  scale_color_manual(values = arm_colors, guide = "none") +
+  scale_shape_manual(
+    values = c("All respondents" = 16, "Knows home coalition" = 1),
+    name = "Sample"
+  ) +
+  scale_linetype_manual(
+    values = c("All respondents" = "solid", "Knows home coalition" = "22"),
+    name = "Sample"
+  ) +
+  guides(
+    shape = guide_legend(override.aes = list(color = "black")),
+    linetype = guide_legend(override.aes = list(color = "black"))
+  ) +
+  facet_wrap(~group, scales = "free_x") +
+  labs(
+    y = "Treatment group",
+    x = "Standardized coefficient (1 SD increase in predictor)",
+    caption = paste0(
+      "N = ",
+      m_log$nobs,
+      " (all) / ",
+      m_log_correct$nobs,
+      " (knows coalition)",
+      ", bars 95% CI"
+    )
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+print(vote_coef_compare_correct)
+
+ggsave(
+  "latex/images/vote_coef_compare_correct.pdf",
+  plot = vote_coef_compare_correct,
   width = 7,
   height = 4.5
 )

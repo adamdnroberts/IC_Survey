@@ -224,9 +224,10 @@ ggsave(
 
 # Same coefficients, but one standalone plot per gap measure instead of a
 # two-panel facet.
-build_t4_gap_plot <- function(group_label, x_label) {
+build_t4_gap_plot <- function(group_label, x_label, outcomes = outcome_levels,
+                              title = group_label) {
   ggplot(
-    subset(t4_coefs, group == group_label),
+    subset(t4_coefs, group == group_label & model %in% outcomes),
     aes(y = model, x = estimate)
   ) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
@@ -241,7 +242,7 @@ build_t4_gap_plot <- function(group_label, x_label) {
     labs(
       y = NULL,
       x = x_label,
-      title = group_label,
+      title = title,
       caption = "Bars show 95% CIs"
     ) +
     theme_minimal()
@@ -249,7 +250,9 @@ build_t4_gap_plot <- function(group_label, x_label) {
 
 t4_updates_comparison_cg <- build_t4_gap_plot(
   "CG × Treatment",
-  "Standardized coefficient (1 SD increase in crime gap)"
+  "Standardized coefficient (1 SD increase in crime gap)",
+  outcomes = c("Incumbent update", "Incumbent vs. other coalitions"),
+  title = "CG × Same-coalition Comparison"
 )
 
 t4_updates_comparison_rg <- build_t4_gap_plot(

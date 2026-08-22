@@ -300,6 +300,27 @@ panel$home_coalition <- coalition_vec[
   sprintf("%05d", as.integer(panel$Found_Municipality_ID))
 ]
 
+# Did the respondent correctly name the coalition governing their own
+# municipality? Same three-way rule as comp_party_known above: MC is its own
+# category, not folded into PAN/PRI/PRD. "dont_know", "other" and "" all map to
+# NA through belief_to_coalition and so count as not known. NA home_coalition
+# (home municipality absent from magar2024) -> NA rather than 0.
+home_guess <- belief_to_coalition[panel$Home_Governing_Party_Belief_w2]
+
+panel$home_party_known <- ifelse(
+  is.na(panel$home_coalition),
+  NA_integer_,
+  as.integer(!is.na(home_guess) & home_guess == panel$home_coalition)
+)
+
+# Three-level version, keeping "don't know" distinct from a wrong guess.
+panel$home_party_knowledge <- case_when(
+  is.na(panel$home_coalition) ~ NA_character_,
+  panel$Home_Governing_Party_Belief_w2 == "dont_know" ~ "Don't know",
+  !is.na(home_guess) & home_guess == panel$home_coalition ~ "Correct",
+  TRUE ~ "Incorrect"
+)
+
 # ── Home-party crime-handling rating ─────────────────────────────────────────
 # For each respondent, select the coalition-specific crime-handling rating that
 # corresponds to the coalition governing their home municipality (home_coalition):
