@@ -29,7 +29,7 @@ if (!exists("ci_alpha")) {
 arm_colors <- c(
   T1 = "#56B4E9",
   T2 = "#009E73",
-  T3 = "#E69F00",
+  T3 = "#D55E00",
   T4 = "#0072B2"
 )
 
