@@ -67,6 +67,8 @@ STAGES <- list(
       "code/belief_update_analysis.R",
       "code/vote_update_analysis.R", # vote_coef_update_log.pdf
       "code/vote_update_capped.R", # vote_coef_update_capped.pdf
+      "code/vote_update_rank_gap_25.R", # vote_coef_compare_rg25.pdf
+      "code/vote_update_knowledge_subgroup.R", # vote_coef_compare_correct.pdf
       "code/vote_update_spec_differences.R", # vote_update_spec_differences_plot.pdf
       "code/vote_update_weighted.R", # vote_coef_weighted.pdf
       "code/belief_update_tobit_analysis.R",

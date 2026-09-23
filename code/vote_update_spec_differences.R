@@ -33,7 +33,7 @@ if (!exists("ci_alpha")) {
 # vote_exclude_mult * max(home_rate) falls below that. The count printed below
 # reports how many respondents it actually removes -- if that is 0, this spec is
 # identical to m_log and the third series is redundant.
-vote_exclude_mult <- 2000
+vote_exclude_mult <- 10
 
 # Colorblind-friendly (Okabe-Ito) palette, matching vote_update_analysis.R
 arm_colors <- c(
@@ -125,8 +125,9 @@ log_crime_gap_exclude_sd <- sd(
 rank_gap_sd <- sd(panel$rank_gap, na.rm = TRUE)
 
 # Same extraction as belief_update_analysis.R: keep the CG x arm and RG x arm
-# interactions, rescale each to a 1 SD increase in its own predictor, and add
-# 95% bounds alongside the model's ci_alpha (99%) bounds.
+# interactions, rescale each to a 1 SD increase in its own predictor, and compute
+# 95% bounds from the SEs. tidy()'s own conf.low/conf.high follow ci_alpha (99%
+# by default here) and are left in the frame but not plotted.
 extract_coef_plot <- function(model, cg_pattern, model_label, cg_sd, rg_sd) {
   tidy(model, conf.int = TRUE) %>%
     filter(grepl(
@@ -191,18 +192,10 @@ vote_spec_differences <- ggplot(
 ) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
   geom_errorbar(
-    aes(xmin = conf.low, xmax = conf.high),
-    orientation = "y",
-    width = 0,
-    linewidth = 0.5,
-    position = position_dodge(width = 0.5)
-  ) +
-  geom_errorbar(
     aes(xmin = conf.low95, xmax = conf.high95),
     orientation = "y",
     width = 0,
-    linewidth = 2,
-    alpha = 0.4,
+    linewidth = 0.5,
     position = position_dodge(width = 0.5)
   ) +
   geom_point(position = position_dodge(width = 0.5)) +
@@ -224,7 +217,7 @@ vote_spec_differences <- ggplot(
     caption = paste0(
       "N = ",
       m_log$nobs,
-      ", thick bar 95% CI, thin 99% CI"
+      ", bars 95% CI"
     )
   ) +
   theme_minimal()

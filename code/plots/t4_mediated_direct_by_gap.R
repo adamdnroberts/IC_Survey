@@ -9,10 +9,12 @@
 # always positive and several times larger, so most of T4's (crime-gap
 # contingent) vote effect runs through channels other than this rating.
 #
+# The outcome model interacts the mediator with arm; see the comment on
+# m_outcome for why the additive form cannot be used here.
+#
 # Self-contained: rebuilds panel_med and the pooled mediator/outcome models
-# (m_mediator, m_outcome) inline, mirroring code/mediation_analysis.R, so this
-# script no longer sources it (and skips that script's slow mediate() diagnostics).
-# Keep this setup block in sync with mediation_analysis.R if the models change.
+# (m_mediator, m_outcome) inline. (An earlier comment here pointed at
+# code/mediation_analysis.R as the model of record; no such file exists.)
 # Output: latex/images/t4_mediated_direct_by_crimegap.pdf
 
 library(dplyr)
@@ -90,9 +92,18 @@ m_mediator <- lm(
   data = panel_med
 )
 
+# The mediator is interacted with arm. Without that term the outcome model
+# imposes a single mediator coefficient tau for every arm, which forces
+# ACME(g) = tau * (delta_4 + beta_4 * g) -- the mediated curve is then the
+# mediator equation's T4 coefficient rescaled by a constant, so its slope and
+# its zero crossing are algebraic consequences of the specification rather than
+# findings. It is also substantively wrong here: the paper's theory is precisely
+# that the belief-to-vote mapping differs by benchmark type, which the additive
+# form assumes away. With the interaction present, mediate() detects it and
+# returns separate ACMEs under control (d0) and treatment (d1).
 m_outcome <- lm(
   Vote_home_post ~
-    inc_minus_opp_avg_post +
+    inc_minus_opp_avg_post * Treatment_Group +
     inc_pre +
     opp_avg_pre +
     log_crime_gap * Treatment_Group +
@@ -125,14 +136,22 @@ rows <- lapply(cg_grid, function(g) {
     robustSE = TRUE,
     sims = sims
   )
+  # With the treat x mediator interaction the ACME differs by condition, so d0
+  # (under control) and d1 (under T4) are no longer equal. The plotted curve is
+  # the average of the two; d0 and d1 are kept so the console output shows how
+  # far apart they are -- if they diverge sharply, the additive model the paper
+  # currently reports was hiding real moderation.
   data.frame(
     log_crime_gap = g,
-    acme = m$d0,
-    acme_lo = m$d0.ci[1],
-    acme_hi = m$d0.ci[2],
-    ade = m$z0,
-    ade_lo = m$z0.ci[1],
-    ade_hi = m$z0.ci[2]
+    acme = m$d.avg,
+    acme_lo = m$d.avg.ci[1],
+    acme_hi = m$d.avg.ci[2],
+    ade = m$z.avg,
+    ade_lo = m$z.avg.ci[1],
+    ade_hi = m$z.avg.ci[2],
+    acme_d0 = m$d0,
+    acme_d1 = m$d1,
+    acme_p = m$d.avg.p
   )
 })
 df <- do.call(rbind, rows)

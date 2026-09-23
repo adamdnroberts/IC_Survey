@@ -1,8 +1,10 @@
-# Two-limit Tobit version of the m_capped coefficient plot in
+# Two-limit Tobit version of the m_log coefficient plot in
 # belief_update_analysis.R. Outcome: Home_Crime_Handling_Post (0-100 slider,
-# censored at both ends), with the pre-treatment level as a covariate. Plots the
-# standardized CG x Treatment and RG x Treatment interaction coefficients with
-# robust (Huber-White sandwich) SEs — the Tobit analog of lm_robust's HC2.
+# censored at both ends), with the pre-treatment level as a covariate — the
+# same ANCOVA right-hand side that belief_update_analysis.R and
+# code/plots/t4_belief_updates_comparison.R now use. Plots the standardized
+# CG x Treatment and RG x Treatment interaction coefficients with robust
+# (Huber-White sandwich) SEs — the Tobit analog of lm_robust's HC2.
 
 library(AER) # tobit() — wraps survival::survreg
 library(sandwich)
@@ -11,10 +13,6 @@ library(dplyr)
 library(ggplot2)
 
 load("data/derived/survey_panel_dataset.Rdata")
-
-if (!exists("ci_alpha")) {
-  ci_alpha <- 0.01
-}
 
 # Colorblind-friendly (Okabe-Ito) palette, matching belief_update_analysis.R
 arm_colors <- c(
@@ -89,10 +87,10 @@ coef_plot_tobit <- data.frame(
       sub(":.*$", "", .),
     sd = if_else(group == "CG × Treatment", log_crime_gap_sd, rank_gap_sd),
     across(c(estimate, std.error), ~ . * sd),
-    conf.low = estimate - qnorm(0.995) * std.error, # 99% (thin bar)
-    conf.high = estimate + qnorm(0.995) * std.error,
-    conf.low95 = estimate - qnorm(0.975) * std.error, # 95% (thick bar)
-    conf.high95 = estimate + qnorm(0.975) * std.error
+    conf.low = estimate - qnorm(0.975) * std.error, # 95% (thin bar)
+    conf.high = estimate + qnorm(0.975) * std.error,
+    conf.low90 = estimate - qnorm(0.95) * std.error, # 90% (thick bar)
+    conf.high90 = estimate + qnorm(0.95) * std.error
   ) %>%
   dplyr::select(-sd)
 
@@ -109,7 +107,7 @@ inc_update_coef_plot_tobit <- ggplot(
     position = position_dodge(width = 0.5)
   ) +
   geom_errorbar(
-    aes(xmin = conf.low95, xmax = conf.high95),
+    aes(xmin = conf.low90, xmax = conf.high90),
     orientation = "y",
     width = 0,
     linewidth = 2,
@@ -126,7 +124,7 @@ inc_update_coef_plot_tobit <- ggplot(
     caption = paste0(
       "Two-limit Tobit (0-100), robust SEs, N = ",
       length(m_tobit$linear.predictors),
-      ", thick bar 95% CI, thin 99% CI"
+      ", thick bar 90% CI, thin 95% CI"
     )
   ) +
   theme_minimal()
@@ -168,7 +166,8 @@ m_tobit_party <- tobit(
   Home_Party_Crime_Handling_Post ~
     Home_Party_Crime_Handling_Pre +
     log_crime_gap * as.factor(Treatment_Group) +
-    rank_gap * as.factor(Treatment_Group),
+    rank_gap * as.factor(Treatment_Group) +
+    coalition_pre,
   left = 0,
   right = 100,
   data = panel
@@ -200,10 +199,10 @@ coef_plot_tobit_party <- data.frame(
       sub(":.*$", "", .),
     sd = if_else(group == "CG × Treatment", log_crime_gap_sd, rank_gap_sd),
     across(c(estimate, std.error), ~ . * sd),
-    conf.low = estimate - qnorm(0.995) * std.error, # 99% (thin bar)
-    conf.high = estimate + qnorm(0.995) * std.error,
-    conf.low95 = estimate - qnorm(0.975) * std.error, # 95% (thick bar)
-    conf.high95 = estimate + qnorm(0.975) * std.error
+    conf.low = estimate - qnorm(0.975) * std.error, # 95% (thin bar)
+    conf.high = estimate + qnorm(0.975) * std.error,
+    conf.low90 = estimate - qnorm(0.95) * std.error, # 90% (thick bar)
+    conf.high90 = estimate + qnorm(0.95) * std.error
   ) %>%
   dplyr::select(-sd)
 
@@ -220,7 +219,7 @@ party_update_coef_plot_tobit <- ggplot(
     position = position_dodge(width = 0.5)
   ) +
   geom_errorbar(
-    aes(xmin = conf.low95, xmax = conf.high95),
+    aes(xmin = conf.low90, xmax = conf.high90),
     orientation = "y",
     width = 0,
     linewidth = 2,
@@ -237,7 +236,7 @@ party_update_coef_plot_tobit <- ggplot(
     caption = paste0(
       "Two-limit Tobit (0-100), robust SEs, N = ",
       length(m_tobit_party$linear.predictors),
-      ", thick bar 95% CI, thin 99% CI"
+      ", thick bar 90% CI, thin 95% CI"
     )
   ) +
   theme_minimal()

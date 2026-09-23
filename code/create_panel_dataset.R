@@ -12,7 +12,7 @@ ci_alpha <- 0.01
 # This is the single definition of the rule — downstream scripts must read
 # Robbery_Estimate / Robbery_Estimate_Post from the panel and NOT re-apply their
 # own cap. Costs 45 of 2,344 panel rows' estimates (1.9%), balanced across arms.
-robbery_implausible_max <- 100000
+robbery_implausible_max <- 1000000
 
 wave1 <- readRDS("data/derived/wave1_responses.rds")
 wave2 <- readRDS("data/derived/wave2_responses.rds")

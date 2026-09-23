@@ -1,6 +1,8 @@
-# Compares the T4 interaction coefficients across belief-update outcomes, fit on
-# a SINGLE common sample with an IDENTICAL right-hand side so the T4 estimates
-# are directly comparable (apples-to-apples):
+# All-arms companion to code/plots/t4_belief_updates_comparison.R.
+#
+# Identical common sample, models and standardization as that script; the only
+# difference is that the plots keep all four treatment arms (T1-T4) instead of
+# filtering to T4, with one plot per gap measure:
 #
 #   1. Incumbent update:
 #        outcome inc_post (Home_Crime_Handling_Post).
@@ -21,15 +23,14 @@
 #     beta(inc vs. other) = beta(incumbent) - beta(other coalitions)
 #
 # but ONLY when all three models share the same regressors and sample. Earlier
-# versions of this script broke that: m_inc additionally controlled for
-# opp_avg_post, which (a) is a post-treatment variable, and (b) made the
-# "incumbent alone" outcome a partly-relative quantity, since regressing
-# inc_post on opp_avg_post with a free coefficient nests the difference model
-# (which pins that coefficient to 1). The two models then differed in form, not
-# just in outcome, and the identity did not hold. With the RHS harmonized, any
-# gap between the incumbent and difference estimates is exactly the treatment's
-# effect on the opposition rating, and whatever remains is a difference in
-# precision alone.
+# versions controlled for the corresponding pre level(s) only, so m_inc used
+# inc_pre, m_opp used opp_avg_pre, and m_inc_other used both: the models
+# differed in form, not just in outcome, and the identity held only
+# approximately. With the RHS harmonized, any gap between the incumbent and the
+# difference estimate is EXACTLY the treatment's effect on the opposition
+# rating, and whatever remains is a difference in precision alone. The check at
+# the end of this script is a regression guard against future edits, not
+# evidence: once the RHS and sample match, the identity holds by construction.
 #
 # Harmonized spec (differs from the source scripts, which each use their own
 # sample/controls and change-score outcomes):
@@ -52,6 +53,15 @@ panel_full <- panel
 if (!exists("ci_alpha")) {
   ci_alpha <- 0.01
 }
+
+# Colorblind-friendly (Okabe-Ito) palette, matching vote_update_analysis.R
+arm_colors <- c(
+  control2 = "#999999",
+  T1 = "#56B4E9",
+  T2 = "#009E73",
+  T3 = "#D55E00",
+  T4 = "#0072B2"
+)
 
 # Shared coefficient extractor (identical to the source scripts): pulls the
 # CG × Treatment and RG × Treatment interaction rows, standardizes by the given
@@ -230,61 +240,35 @@ cp_opp <- extract_coef_plot(
   rank_gap_sd
 )
 
-# ── Combine T4 rows and plot side by side ────────────────────────────────────
+# ── Combine all four arms and plot ───────────────────────────────────────────
 outcome_levels <- c(
   "Incumbent update",
   "Home-party update",
   "Incumbent vs. other coalitions"
 )
 
-t4_coefs <- bind_rows(cp_inc, cp_party, cp_inc_other) %>%
-  filter(treatment == "T4") %>%
-  mutate(model = factor(model, levels = rev(outcome_levels)))
+arm_levels <- c("T1", "T2", "T3", "T4")
 
-t4_updates_comparison_plot <- ggplot(
-  t4_coefs,
-  aes(y = model, x = estimate)
-) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_errorbar(
-    aes(xmin = conf.low95, xmax = conf.high95),
-    orientation = "y",
-    width = 0,
-    linewidth = 0.5,
-    color = "#0072B2"
-  ) +
-  geom_point(color = "#0072B2") +
-  facet_wrap(~group, scales = "free_x") +
-  labs(
-    #title = "T4 (same-coalition comparison) belief-update coefficients",
-    y = NULL,
-    x = "Standardized coefficient (1 SD increase in predictor)",
-    caption = paste0(
-      "Bars show 95% CIs"
-    )
-  ) +
-  theme_minimal()
+all_arm_coefs <- bind_rows(cp_inc, cp_party, cp_inc_other) %>%
+  filter(treatment %in% arm_levels) %>%
+  mutate(
+    model = factor(model, levels = rev(outcome_levels)),
+    # Reversed so T1 sits at the top of each outcome's dodged cluster, which
+    # matches the top-to-bottom reading order of the legend.
+    treatment = factor(treatment, levels = rev(arm_levels))
+  )
 
-print(t4_updates_comparison_plot)
-
-ggsave(
-  "latex/images/t4_belief_updates_comparison.pdf",
-  plot = t4_updates_comparison_plot,
-  width = 8,
-  height = 4
-)
-
-# Same coefficients, but one standalone plot per gap measure instead of a
-# two-panel facet.
-build_t4_gap_plot <- function(
+# One plot per gap measure: outcomes on the y axis, the four arms dodged within
+# each outcome.
+build_arm_gap_plot <- function(
   group_label,
   x_label,
   outcomes = outcome_levels,
   title = group_label
 ) {
   ggplot(
-    subset(t4_coefs, group == group_label & model %in% outcomes),
-    aes(y = model, x = estimate)
+    subset(all_arm_coefs, group == group_label & model %in% outcomes),
+    aes(y = model, x = estimate, color = treatment)
   ) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
     geom_errorbar(
@@ -292,9 +276,14 @@ build_t4_gap_plot <- function(
       orientation = "y",
       width = 0,
       linewidth = 0.5,
-      color = "#0072B2"
+      position = position_dodge(width = 0.6)
     ) +
-    geom_point(color = "#0072B2") +
+    geom_point(position = position_dodge(width = 0.6)) +
+    scale_color_manual(
+      values = arm_colors,
+      breaks = arm_levels,
+      name = "Arm"
+    ) +
     labs(
       y = NULL,
       x = x_label,
@@ -304,33 +293,34 @@ build_t4_gap_plot <- function(
     theme_minimal()
 }
 
-t4_updates_comparison_cg <- build_t4_gap_plot(
+all_arms_updates_comparison_cg <- build_arm_gap_plot(
   "CG × Treatment",
   "Standardized coefficient (1 SD increase in crime gap)",
+  # Same outcome restriction as the T4 CG plot.
   outcomes = c("Incumbent update", "Incumbent vs. other coalitions"),
-  title = "CG × Same-coalition Comparison"
+  title = "CG × Treatment"
 )
 
-t4_updates_comparison_rg <- build_t4_gap_plot(
+all_arms_updates_comparison_rg <- build_arm_gap_plot(
   "RG × Treatment",
   "Standardized coefficient (1 SD increase in rank gap)"
 )
 
-print(t4_updates_comparison_cg)
-print(t4_updates_comparison_rg)
+print(all_arms_updates_comparison_cg)
+print(all_arms_updates_comparison_rg)
 
 ggsave(
-  "latex/images/t4_belief_updates_comparison_cg.pdf",
-  plot = t4_updates_comparison_cg,
-  width = 5.5,
+  "latex/images/all_arms_belief_updates_comparison_cg.pdf",
+  plot = all_arms_updates_comparison_cg,
+  width = 6.5,
   height = 4
 )
 
 ggsave(
-  "latex/images/t4_belief_updates_comparison_rg.pdf",
-  plot = t4_updates_comparison_rg,
-  width = 5.5,
-  height = 4
+  "latex/images/all_arms_belief_updates_comparison_rg.pdf",
+  plot = all_arms_updates_comparison_rg,
+  width = 6.5,
+  height = 4.5
 )
 
 # ── Verify the decomposition ─────────────────────────────────────────────────
@@ -340,19 +330,20 @@ ggsave(
 # residual can only be non-zero if a future edit breaks the shared RHS or the
 # common sample. Running it confirms nothing about the data.
 #
-# Reading the table: `opp` is how much of T4's effect on the difference comes
-# from the OPPOSITION rating moving rather than the incumbent rating. Near zero
-# means the difference measure is just a less noisy way of measuring the same
-# incumbent update -- in which case compare `se_inc` with `se_inc_other` to see
-# whether the difference buys precision instead.
+# Reading the table: `opp` is how much of each arm's effect on the difference
+# comes from the OPPOSITION rating moving rather than the incumbent rating.
+# Near zero means the difference measure is just a less noisy way of measuring
+# the same incumbent update -- in which case compare `se_inc` with
+# `se_inc_other` to see whether the difference buys precision instead.
 decomposition <- bind_rows(cp_inc, cp_opp, cp_inc_other) %>%
-  filter(group == "CG × Treatment") %>%
-  dplyr::select(model, treatment, estimate, std.error) %>%
+  # Both gap measures: the RG interactions decompose exactly as the CG ones do.
+  dplyr::select(group, model, treatment, estimate, std.error) %>%
   tidyr::pivot_wider(
     names_from = model,
     values_from = c(estimate, std.error)
   ) %>%
   transmute(
+    gap = sub(" .*", "", group),
     arm = treatment,
     inc = `estimate_Incumbent update`,
     opp = `estimate_Other-coalitions update`,
@@ -361,15 +352,16 @@ decomposition <- bind_rows(cp_inc, cp_opp, cp_inc_other) %>%
     se_inc = `std.error_Incumbent update`,
     se_opp = `std.error_Other-coalitions update`,
     se_inc_other = `std.error_Incumbent vs. other coalitions`,
-    # t_opp is the number that decides whether the opposition rating genuinely
-    # moves, or whether `opp` is only a decomposition residual. Without it, a
-    # large `opp` cannot be reported as an effect.
+    t_inc = inc / se_inc,
     t_opp = opp / se_opp,
+    t_inc_other = inc_other / se_inc_other,
     se_ratio = se_inc_other / se_inc
   ) %>%
-  arrange(arm)
+  arrange(gap, arm)
 
-cat("\nCG x Treatment decomposition (standardized, 1 SD of crime gap):\n")
+cat("
+Decomposition (standardized, 1 SD of the relevant gap):
+")
 print(as.data.frame(decomposition), digits = 3, row.names = FALSE)
 
 stopifnot(max(abs(decomposition$residual)) < 1e-8)

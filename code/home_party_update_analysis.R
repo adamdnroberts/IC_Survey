@@ -20,9 +20,9 @@ load("data/derived/survey_panel_dataset.Rdata")
 
 panel_full <- panel
 
-if (!exists("ci_alpha")) {
-  ci_alpha <- 0.01
-}
+# Outer (thin) interval on the plots; the thick bar is the 90% interval built
+# from the same standard errors below.
+ci_alpha <- 0.05
 
 # Colorblind-friendly (Okabe-Ito) palette, matching vote_update_analysis.R
 arm_colors <- c(
@@ -76,8 +76,8 @@ extract_coef_plot <- function(model, cg_pattern, model_label, cg_sd, rg_sd) {
     mutate(
       sd = if_else(group == "CG × Treatment", cg_sd, rg_sd),
       across(c(estimate, conf.low, conf.high, std.error), ~ . * sd),
-      conf.low95 = estimate - qt(0.975, df) * std.error,
-      conf.high95 = estimate + qt(0.975, df) * std.error
+      conf.low90 = estimate - qt(0.95, df) * std.error,
+      conf.high90 = estimate + qt(0.95, df) * std.error
     ) %>%
     dplyr::select(-sd)
 }
@@ -107,7 +107,7 @@ party_update_coef_plot <- ggplot(
     position = position_dodge(width = 0.5)
   ) +
   geom_errorbar(
-    aes(xmin = conf.low95, xmax = conf.high95),
+    aes(xmin = conf.low90, xmax = conf.high90),
     orientation = "y",
     width = 0,
     linewidth = 2,
@@ -124,7 +124,7 @@ party_update_coef_plot <- ggplot(
     caption = paste0(
       "N = ",
       m_log$nobs,
-      ", thick bar 95% CI, thin 99% CI"
+      ", thick bar 90% CI, thin 95% CI"
     )
   ) +
   theme_minimal()
@@ -184,7 +184,7 @@ diff_update_coef_plot <- ggplot(
     position = position_dodge(width = 0.5)
   ) +
   geom_errorbar(
-    aes(xmin = conf.low95, xmax = conf.high95),
+    aes(xmin = conf.low90, xmax = conf.high90),
     orientation = "y",
     width = 0,
     linewidth = 2,
@@ -201,7 +201,7 @@ diff_update_coef_plot <- ggplot(
     caption = paste0(
       "Outcome: home-party minus incumbent crime-handling change. N = ",
       m_diff$nobs,
-      ", thick bar 95% CI, thin 99% CI"
+      ", thick bar 90% CI, thin 95% CI"
     )
   ) +
   theme_minimal()
@@ -334,7 +334,7 @@ save_coef_plot <- function(model, model_label, title, caption, outfile) {
       position = position_dodge(width = 0.5)
     ) +
     geom_errorbar(
-      aes(xmin = conf.low95, xmax = conf.high95),
+      aes(xmin = conf.low90, xmax = conf.high90),
       orientation = "y",
       width = 0,
       linewidth = 2,
@@ -366,7 +366,7 @@ save_coef_plot(
     "Outcome: home-party minus mean(other coalitions), post levels;",
     " controls for both pre levels. N = ",
     m_other$nobs,
-    ", thick bar 95% CI, thin 99% CI"
+    ", thick bar 90% CI, thin 95% CI"
   ),
   "latex/images/home_party_minus_other_coalitions_update_coef_plot.pdf"
 )
@@ -380,7 +380,7 @@ save_coef_plot(
     "Outcome: home-party minus top baseline-rated other coalition, post levels;",
     " controls for both pre levels. N = ",
     m_highest$nobs,
-    ", thick bar 95% CI, thin 99% CI"
+    ", thick bar 90% CI, thin 95% CI"
   ),
   "latex/images/home_party_minus_highest_other_coalition_update_coef_plot.pdf"
 )
@@ -395,7 +395,7 @@ save_coef_plot(
     "Outcome: incumbent minus mean(other coalitions), post levels;",
     " controls for both pre levels. N = ",
     m_inc_other$nobs,
-    ", thick bar 95% CI, thin 99% CI"
+    ", thick bar 90% CI, thin 95% CI"
   ),
   "latex/images/incumbent_minus_other_coalitions_update_coef_plot.pdf"
 )
@@ -403,7 +403,7 @@ save_coef_plot(
 # Slide-styled variant of save_coef_plot: one gap measure only (no facet), 95%
 # CIs only, square aspect — matches build_log_gap_plot() in
 # vote_update_analysis.R so the figure sits alongside vote_coef_update_log_cg.pdf
-# in slides.tex without restyling.
+# in jobtalk.tex without restyling.
 save_cg_slide_plot <- function(
   model,
   model_label,
@@ -424,7 +424,7 @@ save_cg_slide_plot <- function(
   ) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
     geom_errorbar(
-      aes(xmin = conf.low95, xmax = conf.high95),
+      aes(xmin = conf.low, xmax = conf.high),
       orientation = "y",
       width = 0,
       linewidth = 0.5,
@@ -628,7 +628,7 @@ save_coef_plot(
     "Outcome: incumbent minus top baseline-rated other coalition, post levels;",
     " controls for both pre levels. N = ",
     m_inc_highest$nobs,
-    ", thick bar 95% CI, thin 99% CI"
+    ", thick bar 90% CI, thin 95% CI"
   ),
   "latex/images/incumbent_minus_highest_other_coalition_update_coef_plot.pdf"
 )

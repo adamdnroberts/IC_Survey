@@ -40,15 +40,29 @@ panel$coalition_pre[is.na(panel$coalition_pre)] <- "Other"
 
 panel$inc_vote <- as.numeric(panel$coalition_pre == panel$home_coalition)
 
-# ── Update curve relative to control: pooled comparison arms (T2–T4) ───────────
-# Logit GAM of incumbent-vote probability over rank_gap for three groups:
-# control (weather placebo, home-only), T1 (plain info), and Comparison
-# (T2/T3/T4 pooled), with a by-group smooth on rank_gap plus s(crime_gap_capped)
-# and coalition_pre. T1 is kept as its own arm in the fit but not plotted (its
-# updating is essentially identical to control). We plot the Comparison group's
-# *difference* in predicted probability from control, P(group) - P(control), as
-# rank_gap varies (control is the zero line). crime_gap_capped is held at its mean
-# and coalition_pre at its mode. rank_gap is discrete (integers -4..4), so k = 5.
+# ── Update curves: pooled comparison arms (T2–T4) ─────────────────────────
+# Logit GAM of incumbent-vote probability for three groups: control (weather
+# placebo, home-only), T1 (plain info), and Comparison (T2/T3/T4 pooled), with a
+# by-group smooth on rank_gap, a by-group smooth on log_crime_gap, coalition_pre
+# and inc_vote. T1 and control are kept as their own arms in the fit but are not
+# plotted (T1's updating is essentially identical to control's).
+#
+# NOTE ON WHAT IS PLOTTED: the figure shows the Comparison group's *level*,
+# P(incumbent vote | Comparison), over log_crime_gap — not a difference from
+# control. Because log_crime_gap is a function of the respondent's own prior and
+# is therefore NOT randomized, the level curve mixes the treatment response with
+# selection into optimistic vs pessimistic priors. Reading a slope here as a
+# causal dose-response requires the arm-minus-control difference at each gap
+# value, which this script does not yet compute.
+#
+# rank_gap is held at its mean and coalition_pre at its mode. rank_gap is
+# discrete (integers -4..4), so k = 5.
+#
+# SIGN CONVENTION (see code/create_panel_dataset.R):
+#   crime_gap = home_rate - Robbery_Estimate, and
+#   rank_gap  = actual_rank - rank_prior, where rank 1 = lowest-crime.
+# Both are POSITIVE when reality is worse than the respondent believed, i.e.
+# positive = negative news, negative = positive news.
 curve_arms <- c("control", "T1", "T2", "T3", "T4")
 arm_group_levels <- c("control", "T1", "Comparison")
 diff_groups <- c("Comparison")
@@ -327,58 +341,102 @@ for (dir in fig_dirs) {
   )
 }
 
-# ── Within-arm contrast: accurate (rank_gap = 0) vs very optimistic prior (= 4) ─
-# Evaluates one arm's fitted smooth at rank_gap 0 and 4 and differences them.
-# Because it is the same arm and the same covariate values, everything except
-# the rank_gap smooth (crime_gap_capped, coalition_pre, inc_vote, arm intercept)
-# cancels, so the contrast is f_g(4) - f_g(0) with an exact SE from the model
-# covariance. Reported on the logit scale (with odds ratio) and, via the delta
-# method, as a difference in predicted probability.
-# The logit-scale contrast (diff_logit, odds ratio) does not depend on inc_vote:
-# inc_vote enters linearly, so it cancels in f(4) - f(0). The probability-scale
-# difference does depend on it, because the baseline P differs. We therefore
-# report the probability contrast at both inc_vote = 0 and inc_vote = 1.
-contrast_0_vs_4 <- function(model, dat, arm, iv) {
+# ── Per-arm crime-gap model (contrasts only; no figure depends on it) ────
+# m_vote_gam_sep above fits s(log_crime_gap) WITHOUT by = arm_group, so T3 and T4
+# share a single crime-gap smooth. That is fine for the arm intercepts it was
+# built for, but it makes per-arm crime-gap contrasts impossible: the smooth is
+# common by construction, so any "difference" between arms would be identically
+# zero. Refit with a by-arm crime-gap smooth for the contrast tables below. This
+# is a separate object on purpose — m_vote_gam_sep still backs the existing
+# byarm figure, so re-specifying it here would silently change that figure.
+m_vote_gam_sep_cg <- gam(
+  Vote_home_post ~
+    arm_group +
+    s(rank_gap, by = arm_group, k = 5) +
+    s(log_crime_gap, by = arm_group, k = 5) +
+    coalition_pre +
+    inc_vote,
+  family = binomial(),
+  data = gam_data_sep,
+  method = "REML"
+)
+
+summary(m_vote_gam_sep_cg)
+
+# ── Symmetric contrasts on either gap measure ────────────────────────────
+# Evaluates one arm's fitted smooth in `var` at a pair of values and differences
+# them, holding the OTHER gap measure at its mean, coalition_pre at its mode and
+# inc_vote at the supplied value. Because it is the same arm and the same
+# covariates, everything except the `var` smooth cancels, so the contrast is
+# f_g(v1) - f_g(v0) with an exact SE from the model covariance. Reported on the
+# logit scale (with odds ratio) and, via the delta method, as a difference in
+# predicted probability.
+#
+# The logit-scale contrast does not depend on inc_vote (it enters linearly, so it
+# cancels); the probability-scale one does, because the baseline P differs.
+#
+# SIGN CONVENTION for both measures (see code/create_panel_dataset.R):
+#   rank_gap      = actual_rank - rank_prior      (rank 1 = lowest crime)
+#   crime_gap     = home_rate - Robbery_Estimate  (both per 100,000)
+#   log_crime_gap = sign(crime_gap) * log(1 + |crime_gap|)
+# POSITIVE = reality is worse than the respondent believed = negative news.
+# NOTE the two measures need not agree in sign for a given respondent: someone
+# can overestimate the absolute robbery rate (positive news on crime_gap) while
+# underestimating their municipality's rank among the five shown (negative news
+# on rank_gap). Which measure is used therefore defines what "news" means here.
+gap_vars <- c("rank_gap", "log_crime_gap")
+
+make_nd <- function(dat, arm, iv, var, x) {
+  other <- setdiff(gap_vars, var)
+  nd <- data.frame(
+    arm_group = factor(arm, levels = levels(dat$arm_group)),
+    coalition_pre = factor(
+      coalition_pre_mode,
+      levels = levels(dat$coalition_pre)
+    ),
+    inc_vote = iv
+  )
+  nd[[var]] <- x
+  nd[[other]] <- mean(dat[[other]], na.rm = TRUE)
+  nd
+}
+
+# Raw per-100k robbery gap behind a log_crime_gap value, for interpretation.
+unlog_gap <- function(x) sign(x) * (exp(abs(x)) - 1)
+
+contrast_smooth <- function(model, dat, arm, iv, var, v0, v1) {
   lp_row <- function(x) {
-    predict(
-      model,
-      newdata = data.frame(
-        rank_gap = x,
-        arm_group = factor(arm, levels = levels(dat$arm_group)),
-        log_crime_gap = mean(dat$log_crime_gap, na.rm = TRUE),
-        coalition_pre = factor(
-          coalition_pre_mode,
-          levels = levels(dat$coalition_pre)
-        ),
-        inc_vote = iv
-      ),
-      type = "lpmatrix"
-    )
+    predict(model, newdata = make_nd(dat, arm, iv, var, x), type = "lpmatrix")
   }
   b <- coef(model)
   V <- vcov(model)
-  X0 <- lp_row(0)
-  X4 <- lp_row(4)
+  X0 <- lp_row(v0)
+  X1 <- lp_row(v1)
 
-  # Logit-scale difference f(4) - f(0) (identical across inc_vote).
-  Xd <- X4 - X0
+  # Logit-scale difference f(v1) - f(v0) (identical across inc_vote).
+  Xd <- X1 - X0
   d_logit <- as.vector(Xd %*% b)
   se_logit <- sqrt(as.vector(Xd %*% V %*% t(Xd)))
 
-  # Probability-scale difference P(4) - P(0), delta method (depends on inc_vote).
+  # Probability-scale difference P(v1) - P(v0), delta method (depends on inc_vote).
   p0 <- plogis(as.vector(X0 %*% b))
-  p4 <- plogis(as.vector(X4 %*% b))
-  grad <- (p4 * (1 - p4)) * X4 - (p0 * (1 - p0)) * X0
+  p1 <- plogis(as.vector(X1 %*% b))
+  grad <- (p1 * (1 - p1)) * X1 - (p0 * (1 - p0)) * X0
   se_p <- sqrt(as.vector(grad %*% V %*% t(grad)))
 
   data.frame(
     arm = arm,
+    var = var,
     inc_vote = iv,
-    p_rank0 = p0,
-    p_rank4 = p4,
-    diff_prob = p4 - p0,
+    v_from = v0,
+    v_to = v1,
+    raw_to = if (var == "log_crime_gap") unlog_gap(v1) else v1,
+    news = if (v1 > v0) "negative" else "positive",
+    p_from = p0,
+    p_to = p1,
+    diff_prob = p1 - p0,
     se_prob = se_p,
-    p_value_prob = 2 * pnorm(-abs((p4 - p0) / se_p)),
+    p_value_prob = 2 * pnorm(-abs((p1 - p0) / se_p)),
     diff_logit = d_logit,
     odds_ratio = exp(d_logit),
     or_lwr = exp(d_logit - qnorm(0.975) * se_logit),
@@ -387,19 +445,206 @@ contrast_0_vs_4 <- function(model, dat, arm, iv) {
   )
 }
 
+# ── Asymmetry test: does bad news move votes more than good news? ────────
+# Under a symmetric response (in particular a smooth that is linear through 0, as
+# the linear gap x Treatment interactions in vote_update_analysis.R assume):
+#
+#   [f(r) - f(0)]  =  -[f(-r) - f(0)]   <=>   f(r) + f(-r) - 2 f(0) = 0
+#
+# so the SUM of the two symmetric contrasts is the asymmetry statistic, zero
+# under symmetry. It is a second difference: the arm intercept and every term
+# linear in the held-fixed covariates cancel exactly.
+#   sum < 0  bad news costs the incumbent more than good news gains
+#   sum > 0  good news helps more than bad news hurts
+#   sum ~ 0  symmetric response
+# IMPORTANT: this has power only if the fitted smooth has edf > 1. When REML
+# shrinks a smooth to edf = 1 the fit is a straight line, f(r) + f(-r) - 2f(0) is
+# zero by algebra, and the test returns ~0 with p ~ 1 regardless of the data.
+# Always read the edf column of summary() alongside this table: an edf of exactly
+# 1.000 means "no curvature was identified", NOT "the response is symmetric".
+asymmetry_smooth <- function(model, dat, arm, iv, var, r) {
+  lp_row <- function(x) {
+    predict(model, newdata = make_nd(dat, arm, iv, var, x), type = "lpmatrix")
+  }
+  b <- coef(model)
+  V <- vcov(model)
+  Xm <- lp_row(-r)
+  X0 <- lp_row(0)
+  Xp <- lp_row(r)
+
+  # Logit scale: f(r) + f(-r) - 2 f(0).
+  Xd <- Xp + Xm - 2 * X0
+  d_logit <- as.vector(Xd %*% b)
+  se_logit <- sqrt(as.vector(Xd %*% V %*% t(Xd)))
+
+  # Probability scale: P(r) + P(-r) - 2 P(0), delta method.
+  pm <- plogis(as.vector(Xm %*% b))
+  p0 <- plogis(as.vector(X0 %*% b))
+  pp <- plogis(as.vector(Xp %*% b))
+  grad <- (pp * (1 - pp)) * Xp +
+    (pm * (1 - pm)) * Xm -
+    2 * (p0 * (1 - p0)) * X0
+  se_p <- sqrt(as.vector(grad %*% V %*% t(grad)))
+
+  d_prob <- pp + pm - 2 * p0
+  data.frame(
+    arm = arm,
+    var = var,
+    inc_vote = iv,
+    r = r,
+    raw_r = if (var == "log_crime_gap") unlog_gap(r) else r,
+    bad_news_prob = pp - p0,
+    good_news_prob = pm - p0,
+    asym_prob = d_prob,
+    se_prob = se_p,
+    p_value_prob = 2 * pnorm(-abs(d_prob / se_p)),
+    asym_logit = d_logit,
+    se_logit = se_logit,
+    p_value_logit = 2 * pnorm(-abs(d_logit / se_logit))
+  )
+}
+
+# control is included alongside the treated arms so the treated-arm contrasts can
+# be read against the placebo arm's own gap slope: respondents with optimistic
+# priors may differ from pessimistic ones whether or not they were shown any
+# crime information. The pooled model supplies control/Comparison; the by-arm
+# crime-gap model supplies T2/T3/T4. T2 matters here because it is the only
+# arm whose crime-gap smooth kept any curvature (edf ~1.9); every other arm was
+# shrunk to a straight line, where the asymmetry test is degenerate.
 contrast_spec <- list(
+  list(model = m_vote_gam, dat = gam_data, arm = "control"),
   list(model = m_vote_gam, dat = gam_data, arm = "Comparison"),
-  list(model = m_vote_gam_sep, dat = gam_data_sep, arm = "T3"),
-  list(model = m_vote_gam_sep, dat = gam_data_sep, arm = "T4")
+  list(model = m_vote_gam_sep_cg, dat = gam_data_sep, arm = "T2"),
+  list(model = m_vote_gam_sep_cg, dat = gam_data_sep, arm = "T3"),
+  list(model = m_vote_gam_sep_cg, dat = gam_data_sep, arm = "T4")
 )
 
-rank_0_vs_4 <- bind_rows(lapply(contrast_spec, function(s) {
-  bind_rows(lapply(c(0, 1), function(iv) {
-    contrast_0_vs_4(s$model, s$dat, s$arm, iv)
+# Symmetric points about an accurate prior. rank_gap is integer (-4..4). For
+# log_crime_gap, +-2/+-4/+-6 correspond to raw robbery-rate gaps of roughly
+# +-6, +-54 and +-402 per 100,000 (see unlog_gap).
+target_grid <- list(
+  rank_gap = c(-4, -2, 2, 4),
+  log_crime_gap = c(-6, -4, -2, 2, 4, 6)
+)
+asym_grid <- list(
+  rank_gap = c(2, 4),
+  log_crime_gap = c(2, 4, 6)
+)
+
+run_grid <- function(fun, grid) {
+  bind_rows(lapply(contrast_spec, function(s) {
+    bind_rows(lapply(gap_vars, function(v) {
+      bind_rows(lapply(c(0, 1), function(iv) {
+        bind_rows(lapply(grid[[v]], function(x) fun(s, v, iv, x)))
+      }))
+    }))
   }))
-}))
+}
+
+gap_contrasts <- run_grid(
+  function(s, v, iv, x) {
+    contrast_smooth(s$model, s$dat, s$arm, iv, v, v0 = 0, v1 = x)
+  },
+  target_grid
+)
+
+gap_asymmetry <- run_grid(
+  function(s, v, iv, x) asymmetry_smooth(s$model, s$dat, s$arm, iv, v, x),
+  asym_grid
+)
+
+# ── Support on each side of zero ─────────────────────────────────────────
+# A flat good-news half of any curve is only informative if the negative cells
+# are populated. Check this before reading any contrast as an absence of effect.
+cat("\nSupport for rank_gap by arm (pooled model):\n")
+print(
+  as.data.frame(
+    gam_data %>%
+      filter(!is.na(rank_gap)) %>%
+      count(arm_group, rank_gap) %>%
+      tidyr::pivot_wider(
+        names_from = rank_gap,
+        values_from = n,
+        values_fill = 0
+      )
+  ),
+  row.names = FALSE
+)
+
+cat("\nSupport for crime_gap by arm (sign of the gap):\n")
+print(
+  as.data.frame(
+    gam_data %>%
+      filter(!is.na(log_crime_gap)) %>%
+      mutate(
+        side = case_when(
+          crime_gap < 0 ~ "positive news (overestimated)",
+          crime_gap > 0 ~ "negative news (underestimated)",
+          TRUE ~ "exact"
+        )
+      ) %>%
+      count(arm_group, side) %>%
+      tidyr::pivot_wider(names_from = side, values_from = n, values_fill = 0)
+  ),
+  row.names = FALSE
+)
+
+cat("\nlog_crime_gap quantiles by arm:\n")
+print(
+  as.data.frame(
+    gam_data %>%
+      filter(!is.na(log_crime_gap)) %>%
+      group_by(arm_group) %>%
+      summarise(
+        n = n(),
+        p05 = quantile(log_crime_gap, 0.05),
+        p25 = quantile(log_crime_gap, 0.25),
+        p50 = quantile(log_crime_gap, 0.50),
+        p75 = quantile(log_crime_gap, 0.75),
+        p95 = quantile(log_crime_gap, 0.95),
+        .groups = "drop"
+      )
+  ),
+  row.names = FALSE,
+  digits = 3
+)
+
+# How often the two measures disagree about the direction of the news. If this is
+# large, "positive vs negative news" is not well defined without naming a measure.
+cat("\nAgreement between rank_gap and crime_gap on the sign of the news:\n")
+print(
+  as.data.frame(
+    gam_data %>%
+      filter(
+        !is.na(rank_gap),
+        !is.na(crime_gap),
+        rank_gap != 0,
+        crime_gap != 0
+      ) %>%
+      count(
+        rank_news = if_else(rank_gap > 0, "negative", "positive"),
+        crime_news = if_else(crime_gap > 0, "negative", "positive")
+      )
+  ),
+  row.names = FALSE
+)
 
 cat(
-  "\nContrast: P(incumbent vote) at rank_gap = 4 (very optimistic prior) vs 0 (accurate)\n"
+  "\nContrasts in P(incumbent vote) vs an accurate prior (gap = 0).\n",
+  "v_to > 0 = negative news (worse than believed); < 0 = positive news.\n",
+  "raw_to gives the per-100,000 robbery gap for log_crime_gap rows.\n",
+  "Prefer odds_ratio / p_value_logit: the delta-method probability SE is\n",
+  "unreliable where fitted P is near 0 or 1.\n",
+  sep = ""
 )
-print(rank_0_vs_4, row.names = FALSE, digits = 3)
+# max = 1e6 defeats the default max.print truncation: this table is ~100 rows
+# wide enough that R silently drops the tail otherwise.
+print(gap_contrasts, row.names = FALSE, digits = 3, max = 1e6)
+
+cat(
+  "\nAsymmetry test: f(r) + f(-r) - 2*f(0), zero under a symmetric response.\n",
+  "Negative => bad news costs the incumbent more than good news gains.\n",
+  "Only meaningful where the corresponding smooth has edf > 1 (see summary()).\n",
+  sep = ""
+)
+print(gap_asymmetry, row.names = FALSE, digits = 3, max = 1e6)
